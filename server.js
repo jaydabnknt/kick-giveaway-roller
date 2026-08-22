@@ -274,14 +274,15 @@ app.post("/webhooks/kick", (req, res) => {
 
   if (username) {
     broadcast({
-      type: "chat",
-      username,
-      userId: sender?.user_id || sender?.id || null,
-      messageId:
-        payload?.message_id ||
-        req.get("Kick-Event-Message-Id") ||
-        null
-    });
+  type: "chat",
+  username,
+  userId: sender?.user_id || sender?.id || null,
+  message: payload?.content || payload?.message || "",
+  messageId:
+    payload?.message_id ||
+    req.get("Kick-Event-Message-Id") ||
+    null
+});
 
     console.log("KICK chat:", username);
   }
