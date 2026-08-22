@@ -94,6 +94,8 @@ async function getKickUser() {
 app.get('/api/status',(req,res)=>res.json({connected:!!accessToken,username:kickUser?.name||null}));
 app.post('/api/logout',(req,res)=>{accessToken=null;kickUser=null;broadcast({type:'status',connected:false,username:null});res.json({ok:true});});
 
-app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+app.use((req, res) => {
+  res.sendFile(require("path").join(__dirname, "public", "index.html"));
+});
 
 server.listen(PORT,()=>console.log(`Listening on ${PORT}`));
