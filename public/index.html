@@ -1,15 +1,121 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KICK Giveaway Roller</title>
+
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Arial,sans-serif;color:#fff;background:radial-gradient(circle at 50% 0%,#3b0764,#111827 45%,#020617 100%)}.wrap{width:min(1200px,94vw);margin:auto;padding:40px 0;display:grid;grid-template-columns:300px minmax(0,1fr) 280px;gap:30px;align-items:center}.panel,.history{background:rgba(15,23,42,.9);border:1px solid #ffffff14;border-radius:22px;padding:24px;box-shadow:0 25px 70px #0007}.kick,.roll{width:100%;padding:16px;border:0;border-radius:13px;font-size:17px;font-weight:900;cursor:pointer}.kick{background:linear-gradient(135deg,#53fc18,#20c997);color:#04120a}.roll{margin-top:18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white}.kick:hover,.roll:hover{transform:translateY(-2px)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}.statusbox{margin-top:14px;padding:12px;border-radius:10px;background:#020617;color:#94a3b8;font-size:13px}.ok{color:#4ade80}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:6px}.ok .dot{background:#22c55e;box-shadow:0 0 10px #22c55e}.count{margin-top:18px;padding:14px;border-radius:12px;background:#020617;text-align:center}.count strong{display:block;font-size:32px;color:#a78bfa}.count span{color:#64748b;font-size:13px}.rollerarea{text-align:center}.title{margin-bottom:22px;font-size:18px;font-weight:bold;letter-spacing:2px;color:#c4b5fd}.frame{padding:10px;border-radius:30px;background:linear-gradient(135deg,#4f46e5,#9333ea,#4f46e5);background-size:300% 300%;animation:bg 5s ease infinite;box-shadow:0 0 60px #8b5cf659}@keyframes bg{50%{background-position:100% 50%}}.roller{position:relative;height:210px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22px;background:linear-gradient(#1e1b4b,#312e81,#1e1b4b);box-shadow:inset 0 0 60px #0009}.name{position:relative;z-index:4;width:88%;font-size:clamp(30px,5vw,62px);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 5px 25px #0009}.name.rollanim{animation:rn .15s ease}@keyframes rn{from{opacity:.3;transform:scale(.94) translateY(-5px)}to{opacity:1;transform:scale(1)}}.name.win{animation:win 1.2s cubic-bezier(.2,.8,.2,1)}@keyframes win{0%{transform:scale(.5);opacity:0}45%{transform:scale(1.18);opacity:1}70%{transform:scale(.95)}100%{transform:scale(1)}}.line{position:absolute;left:50%;top:10px;bottom:10px;width:4px;transform:translateX(-50%);background:#fff;z-index:5;border-radius:10px;box-shadow:0 0 10px #fff,0 0 30px #a78bfa,0 0 60px #6366f1;animation:pulse 1.4s infinite}@keyframes pulse{50%{opacity:.55}}.result{min-height:30px;margin-top:22px;font-size:21px;font-weight:bold}.history{max-height:600px;overflow:hidden}.list{max-height:480px;overflow:auto}.item{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;background:#020617;border-radius:11px}.num{min-width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);font-weight:bold}.hname{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:bold}.time{color:#64748b;font-size:12px;margin-top:3px}@media(max-width:1000px){.wrap{grid-template-columns:1fr}.rollerarea{order:1}.panel{order:2}.history{order:3}}
-.keyword-box{
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:Arial,sans-serif;
+  color:#fff;
+  background:radial-gradient(circle at 50% 0%,#3b0764,#111827 45%,#020617 100%)
+}
+
+.wrap{
+  width:min(1200px,94vw);
+  margin:auto;
+  padding:40px 0;
+  display:grid;
+  grid-template-columns:300px minmax(0,1fr) 280px;
+  gap:30px;
+  align-items:center
+}
+
+.panel,.history{
+  background:rgba(15,23,42,.9);
+  border:1px solid #ffffff14;
+  border-radius:22px;
+  padding:24px;
+  box-shadow:0 25px 70px #0007
+}
+
+.kick,.roll{
+  width:100%;
+  padding:16px;
+  border:0;
+  border-radius:13px;
+  font-size:17px;
+  font-weight:900;
+  cursor:pointer
+}
+
+.kick{
+  background:linear-gradient(135deg,#53fc18,#20c997);
+  color:#04120a
+}
+
+.roll{
+  margin-top:18px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  color:white
+}
+
+.kick:hover,.roll:hover{
+  transform:translateY(-2px)
+}
+
+button:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+  transform:none
+}
+
+.statusbox{
+  margin-top:14px;
+  padding:12px;
+  border-radius:10px;
+  background:#020617;
+  color:#94a3b8;
+  font-size:13px
+}
+
+.ok{
+  color:#4ade80
+}
+
+.dot{
+  display:inline-block;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#ef4444;
+  margin-right:6px
+}
+
+.ok .dot{
+  background:#22c55e;
+  box-shadow:0 0 10px #22c55e
+}
+
+.count{
   margin-top:18px;
   padding:14px;
   border-radius:12px;
   background:#020617;
+  text-align:center
+}
+
+.count strong{
+  display:block;
+  font-size:32px;
+  color:#a78bfa
+}
+
+.count span{
+  color:#64748b;
+  font-size:13px
+}
+
+.keyword-box{
+  margin-top:18px;
+  padding:14px;
+  border-radius:12px;
+  background:#020617
 }
 
 .keyword-box label{
@@ -17,7 +123,7 @@
   margin-bottom:8px;
   color:#c4b5fd;
   font-size:13px;
-  font-weight:bold;
+  font-weight:bold
 }
 
 .keyword-box input{
@@ -28,94 +134,812 @@
   background:#0f172a;
   color:#fff;
   font-size:15px;
-  outline:none;
+  outline:none
 }
 
 .keyword-box input:focus{
-  border-color:#8b5cf6;
+  border-color:#8b5cf6
 }
 
 #keywordStatus{
   margin-top:8px;
   color:#64748b;
-  font-size:12px;
+  font-size:12px
 }
-</style></head>
-<body><div class="wrap">
-<section class="panel"><h1>🎁 KICK Giveaway</h1><button class="kick" id="login">🟢 Sign in with KICK</button><div class="keyword-box">
-  <label for="keyword">Giveaway keyword</label>
-  <input
-    id="keyword"
-    type="text"
-    placeholder="e.g. !giveaway"
-    autocomplete="off"
-  >
-  <div id="keywordStatus">
-    Enter a keyword to enable entries.
-  </div>
-</div><div id="connection" class="statusbox"><span class="dot"></span>Not connected</div><div class="count"><strong id="count">0</strong><span>unique chat participants</span></div><button class="roll" id="roll" disabled>🎁 ROLL WINNER</button></section>
-<section class="rollerarea"><div class="title">✨ THE NEXT GIVEAWAY WINNER IS... ✨</div><div class="frame"><div class="roller"><div class="line"></div><div id="name" class="name">Sign in to KICK</div></div></div><div id="result" class="result"></div></section>
-<section class="history"><h2>🏆 Winners</h2><div id="history" class="list"><p style="color:#64748b">No winners yet.</p></div></section>
+
+.entries{
+  margin-top:18px;
+  padding:14px;
+  border-radius:12px;
+  background:#020617
+}
+
+.entries h3{
+  margin:0 0 10px;
+  color:#c4b5fd;
+  font-size:14px
+}
+
+.entries-list{
+  max-height:180px;
+  overflow-y:auto
+}
+
+.entry{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 10px;
+  margin-bottom:5px;
+  border-radius:8px;
+  background:#0f172a;
+  font-size:13px;
+  font-weight:bold
+}
+
+.entry-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.remove-entry{
+  flex-shrink:0;
+  width:25px;
+  height:25px;
+  padding:0;
+  border:0;
+  border-radius:7px;
+  background:#7f1d1d;
+  color:#fecaca;
+  font-size:15px;
+  font-weight:bold;
+  cursor:pointer
+}
+
+.remove-entry:hover{
+  background:#dc2626;
+  color:white
+}
+
+.empty{
+  margin:0;
+  color:#64748b;
+  font-size:12px
+}
+
+.rollerarea{
+  text-align:center
+}
+
+.title{
+  margin-bottom:22px;
+  font-size:18px;
+  font-weight:bold;
+  letter-spacing:2px;
+  color:#c4b5fd
+}
+
+.frame{
+  padding:10px;
+  border-radius:30px;
+  background:linear-gradient(135deg,#4f46e5,#9333ea,#4f46e5);
+  background-size:300% 300%;
+  animation:bg 5s ease infinite;
+  box-shadow:0 0 60px #8b5cf659
+}
+
+@keyframes bg{
+  50%{background-position:100% 50%}
+}
+
+.roller{
+  position:relative;
+  height:210px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border-radius:22px;
+  background:linear-gradient(#1e1b4b,#312e81,#1e1b4b);
+  box-shadow:inset 0 0 60px #0009
+}
+
+.name{
+  position:relative;
+  z-index:4;
+  width:88%;
+  font-size:clamp(30px,5vw,62px);
+  font-weight:900;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-shadow:0 5px 25px #0009
+}
+
+.name.rollanim{
+  animation:rn .15s ease
+}
+
+@keyframes rn{
+  from{
+    opacity:.3;
+    transform:scale(.94) translateY(-5px)
+  }
+  to{
+    opacity:1;
+    transform:scale(1)
+  }
+}
+
+.name.win{
+  animation:win 1.2s cubic-bezier(.2,.8,.2,1)
+}
+
+@keyframes win{
+  0%{
+    transform:scale(.5);
+    opacity:0
+  }
+  45%{
+    transform:scale(1.18);
+    opacity:1
+  }
+  70%{
+    transform:scale(.95)
+  }
+  100%{
+    transform:scale(1)
+  }
+}
+
+.line{
+  position:absolute;
+  left:50%;
+  top:10px;
+  bottom:10px;
+  width:4px;
+  transform:translateX(-50%);
+  background:#fff;
+  z-index:5;
+  border-radius:10px;
+  box-shadow:0 0 10px #fff,0 0 30px #a78bfa,0 0 60px #6366f1;
+  animation:pulse 1.4s infinite
+}
+
+@keyframes pulse{
+  50%{opacity:.55}
+}
+
+.result{
+  min-height:30px;
+  margin-top:22px;
+  font-size:21px;
+  font-weight:bold
+}
+
+.history{
+  max-height:600px;
+  overflow:hidden
+}
+
+.list{
+  max-height:480px;
+  overflow:auto
+}
+
+.item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px;
+  margin-bottom:8px;
+  background:#020617;
+  border-radius:11px
+}
+
+.num{
+  min-width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  font-weight:bold
+}
+
+.hname{
+  max-width:170px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:bold
+}
+
+.time{
+  color:#64748b;
+  font-size:12px;
+  margin-top:3px
+}
+
+@media(max-width:1000px){
+  .wrap{
+    grid-template-columns:1fr
+  }
+
+  .rollerarea{
+    order:1
+  }
+
+  .panel{
+    order:2
+  }
+
+  .history{
+    order:3
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+<section class="panel">
+
+<h1>🎁 KICK Giveaway</h1>
+
+<button class="kick" id="login">
+🟢 Sign in with KICK
+</button>
+
+<div class="keyword-box">
+
+<label for="keyword">
+Giveaway keyword
+</label>
+
+<input
+  id="keyword"
+  type="text"
+  placeholder="e.g. !giveaway"
+  autocomplete="off"
+>
+
+<div id="keywordStatus">
+Enter a keyword to enable entries.
 </div>
+
+</div>
+
+<div id="connection" class="statusbox">
+<span class="dot"></span>Not connected
+</div>
+
+<div class="count">
+<strong id="count">0</strong>
+<span>unique chat participants</span>
+</div>
+
+<div class="entries">
+
+<h3>👥 Giveaway Entries</h3>
+
+<div id="entriesList" class="entries-list">
+<p class="empty">No entries yet.</p>
+</div>
+
+</div>
+
+<button class="roll" id="roll" disabled>
+🎁 ROLL WINNER
+</button>
+
+</section>
+
+<section class="rollerarea">
+
+<div class="title">
+✨ THE NEXT GIVEAWAY WINNER IS... ✨
+</div>
+
+<div class="frame">
+
+<div class="roller">
+
+<div class="line"></div>
+
+<div id="name" class="name">
+Sign in to KICK
+</div>
+
+</div>
+
+</div>
+
+<div id="result" class="result"></div>
+
+</section>
+
+<section class="history">
+
+<h2>🏆 Winners</h2>
+
+<div id="history" class="list">
+
+<p style="color:#64748b">
+No winners yet.
+</p>
+
+</div>
+
+</section>
+
+</div>
+
 <script>
-const login=document.querySelector('#login'),connection=document.querySelector('#connection'),count=document.querySelector('#count'),roll=document.querySelector('#roll'),nameEl=document.querySelector('#name'),result=document.querySelector('#result'),historyEl=document.querySelector('#history');const people=new Set(),winners=[];let spinning=false;
-const esc=s=>{const d=document.createElement('div');d.textContent=s;return d.innerHTML};
-function status(on,user){connection.className='statusbox'+(on?' ok':'');connection.innerHTML=on?`<span class="dot"></span>Connected${user?' as '+esc(user):''}`:`<span class="dot"></span>Not connected`;if(on&&!people.size)nameEl.textContent='Waiting for chat...'}
+
+const login=document.querySelector('#login'),
+connection=document.querySelector('#connection'),
+count=document.querySelector('#count'),
+roll=document.querySelector('#roll'),
+nameEl=document.querySelector('#name'),
+result=document.querySelector('#result'),
+historyEl=document.querySelector('#history'),
+entriesList=document.querySelector('#entriesList');
+
+const people=new Set(),
+winners=[];
+
+let spinning=false;
+
+const esc=s=>{
+  const d=document.createElement('div');
+  d.textContent=s;
+  return d.innerHTML;
+};
+
+function status(on,user){
+
+  connection.className='statusbox'+(on?' ok':'');
+
+  connection.innerHTML=on
+    ? `<span class="dot"></span>Connected${user?' as '+esc(user):''}`
+    : `<span class="dot"></span>Not connected`;
+
+  if(on){
+
+    login.disabled=true;
+
+    login.textContent=
+      `✓ Signed in as ${user || 'KICK user'}`;
+
+    if(!people.size){
+      nameEl.textContent='Waiting for chat...';
+    }
+
+  }else{
+
+    login.disabled=false;
+
+    login.textContent=
+      '🟢 Sign in with KICK';
+
+  }
+}
+
+function renderEntries(){
+
+  if(!people.size){
+
+    entriesList.innerHTML=
+      '<p class="empty">No entries yet.</p>';
+
+    return;
+  }
+
+  entriesList.innerHTML=
+    [...people].map(username=>`
+
+      <div class="entry">
+
+        <span class="entry-name">
+          ${esc(username)}
+        </span>
+
+        <button
+          class="remove-entry"
+          title="Remove ${esc(username)}"
+          data-user="${encodeURIComponent(username)}"
+        >
+          ×
+        </button>
+
+      </div>
+
+    `).join('');
+
+}
+
 function add(name){
+
   if(!name || spinning)return;
+
+  const before=people.size;
 
   people.add(name);
 
+  if(people.size!==before){
+    renderEntries();
+  }
+
   count.textContent=people.size;
+
   nameEl.textContent=name;
+
   roll.disabled=!people.size;
+
 }
-function rnd(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return Math.floor(a[0]/4294967296*n)}
-function spin(){if(spinning||!people.size)return;spinning=true;roll.disabled=true;login.disabled=true;result.textContent='🎲 Choosing a winner...';nameEl.classList.remove('win');const names=[...people],winner=names[rnd(names.length)],duration=8000+rnd(4000),start=performance.now();let last=0,lastName='';function frame(now){const p=Math.min((now-start)/duration,1),e=1-Math.pow(1-p,4),interval=180+Math.pow(p,3)*800;if(now-last>=interval){last=now;let n;if(p<.82)n=names[Math.floor(e*7*names.length)%names.length];else{const d=Math.ceil((1-p)*names.length*2),wi=names.indexOf(winner);n=names[(wi+d)%names.length]}if(n===lastName&&names.length>1)n=names[(names.indexOf(n)+1)%names.length];nameEl.textContent=n;lastName=n;nameEl.classList.remove('rollanim');void nameEl.offsetWidth;nameEl.classList.add('rollanim')}if(p<1)requestAnimationFrame(frame);else finish(winner)}requestAnimationFrame(frame)}
-function finish(w){nameEl.textContent=w;nameEl.classList.remove('rollanim');void nameEl.offsetWidth;nameEl.classList.add('win');result.textContent='🏆 WINNER: '+w;winners.unshift({name:w,time:new Date()});render();people.delete(w);count.textContent=people.size;spinning=false;login.disabled=false;roll.disabled=!people.size}
-function render(){historyEl.innerHTML=winners.length?winners.map((w,i)=>`<div class="item"><div class="num">${i+1}</div><div><div class="hname">${esc(w.name)}</div><div class="time">${w.time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div></div></div>`).join(''):'<p style="color:#64748b">No winners yet.</p>'}
-login.onclick=()=>location.href='/auth/kick';
+
+function removePerson(name){
+
+  if(!name)return;
+
+  people.delete(name);
+
+  count.textContent=people.size;
+
+  renderEntries();
+
+  roll.disabled=!people.size;
+
+}
+
+entriesList.addEventListener('click',e=>{
+
+  const button=e.target.closest('.remove-entry');
+
+  if(!button)return;
+
+  const username=decodeURIComponent(
+    button.dataset.user
+  );
+
+  removePerson(username);
+
+});
+
+function rnd(n){
+
+  const a=new Uint32Array(1);
+
+  crypto.getRandomValues(a);
+
+  return Math.floor(
+    a[0]/4294967296*n
+  );
+
+}
+
+function spin(){
+
+  if(spinning||!people.size)return;
+
+  spinning=true;
+
+  roll.disabled=true;
+
+  login.disabled=true;
+
+  result.textContent=
+    '🎲 Choosing a winner...';
+
+  nameEl.classList.remove('win');
+
+  const names=[...people],
+
+  winner=names[rnd(names.length)],
+
+  duration=8000+rnd(4000),
+
+  start=performance.now();
+
+  let last=0,
+  lastName='';
+
+  function frame(now){
+
+    const p=Math.min(
+      (now-start)/duration,
+      1
+    ),
+
+    e=1-Math.pow(1-p,4),
+
+    interval=
+      180+Math.pow(p,3)*800;
+
+    if(now-last>=interval){
+
+      last=now;
+
+      let n;
+
+      if(p<.82){
+
+        n=
+          names[
+            Math.floor(
+              e*7*names.length
+            )%names.length
+          ];
+
+      }else{
+
+        const d=
+          Math.ceil(
+            (1-p)*names.length*2
+          ),
+
+        wi=names.indexOf(winner);
+
+        n=
+          names[
+            (wi+d)%names.length
+          ];
+
+      }
+
+      if(
+        n===lastName &&
+        names.length>1
+      ){
+
+        n=
+          names[
+            (names.indexOf(n)+1)%
+            names.length
+          ];
+
+      }
+
+      nameEl.textContent=n;
+
+      lastName=n;
+
+      nameEl.classList.remove(
+        'rollanim'
+      );
+
+      void nameEl.offsetWidth;
+
+      nameEl.classList.add(
+        'rollanim'
+      );
+
+    }
+
+    if(p<1){
+
+      requestAnimationFrame(frame);
+
+    }else{
+
+      finish(winner);
+
+    }
+
+  }
+
+  requestAnimationFrame(frame);
+
+}
+
+function finish(w){
+
+  nameEl.textContent=w;
+
+  nameEl.classList.remove(
+    'rollanim'
+  );
+
+  void nameEl.offsetWidth;
+
+  nameEl.classList.add('win');
+
+  result.textContent=
+    '🏆 WINNER: '+w;
+
+  winners.unshift({
+    name:w,
+    time:new Date()
+  });
+
+  render();
+
+  people.delete(w);
+
+  count.textContent=
+    people.size;
+
+  renderEntries();
+
+  spinning=false;
+
+  login.disabled=true;
+
+  roll.disabled=
+    !people.size;
+
+}
+
+function render(){
+
+  historyEl.innerHTML=
+    winners.length
+
+    ? winners.map((w,i)=>`
+
+      <div class="item">
+
+        <div class="num">
+          ${i+1}
+        </div>
+
+        <div>
+
+          <div class="hname">
+            ${esc(w.name)}
+          </div>
+
+          <div class="time">
+            ${w.time.toLocaleTimeString(
+              [],
+              {
+                hour:'2-digit',
+                minute:'2-digit',
+                second:'2-digit'
+              }
+            )}
+          </div>
+
+        </div>
+
+      </div>
+
+    `).join('')
+
+    : '<p style="color:#64748b">No winners yet.</p>';
+
+}
+
+login.onclick=()=>{
+  location.href='/auth/kick';
+};
+
 roll.onclick=spin;
 
-document.querySelector('#keyword').addEventListener('input',function(){
-  const value=this.value.trim();
-  const keywordStatus=document.querySelector('#keywordStatus');
+document
+.querySelector('#keyword')
+.addEventListener(
+  'input',
+  function(){
 
-  if(value){
-    keywordStatus.textContent=
-      `Type "${value}" in KICK chat to enter!`;
-  }else{
-    keywordStatus.textContent=
-      'Enter a keyword to enable entries.';
+    const value=
+      this.value.trim();
+
+    const keywordStatus=
+      document.querySelector(
+        '#keywordStatus'
+      );
+
+    if(value){
+
+      keywordStatus.textContent=
+        `Type "${value}" in KICK chat to enter!`;
+
+    }else{
+
+      keywordStatus.textContent=
+        'Enter a keyword to enable entries.';
+
+    }
+
   }
-});const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/chat`);ws.onopen=()=>fetch('/api/status').then(r=>r.json()).then(s=>status(s.connected,s.username));ws.onmessage=e=>{
+);
+
+const ws=new WebSocket(
+  `${location.protocol==='https:'?'wss':'ws'}://${location.host}/chat`
+);
+
+ws.onopen=()=>{
+
+  fetch('/api/status')
+    .then(r=>r.json())
+    .then(s=>
+      status(
+        s.connected,
+        s.username
+      )
+    );
+
+};
+
+ws.onmessage=e=>{
+
   try{
+
     const d=JSON.parse(e.data);
 
     if(d.type==='status'){
-      status(d.connected,d.username);
+
+      status(
+        d.connected,
+        d.username
+      );
+
     }
 
     if(d.type==='chat'){
-      const keywordInput=document.querySelector('#keyword');
-      const keywordStatus=document.querySelector('#keywordStatus');
 
-      const keyword=keywordInput.value.trim().toLowerCase();
-      const message=(d.message||'').trim().toLowerCase();
+      const keywordInput=
+        document.querySelector(
+          '#keyword'
+        );
+
+      const keywordStatus=
+        document.querySelector(
+          '#keywordStatus'
+        );
+
+      const keyword=
+        keywordInput.value
+        .trim()
+        .toLowerCase();
+
+      const message=
+        (d.message||'')
+        .trim()
+        .toLowerCase();
 
       if(!keyword){
-        keywordStatus.textContent='Enter a keyword to enable entries.';
+
+        keywordStatus.textContent=
+          'Enter a keyword to enable entries.';
+
         return;
+
       }
 
       if(message===keyword){
+
         add(d.username);
 
         keywordStatus.textContent=
           `✅ ${d.username} entered the giveaway!`;
+
       }
+
     }
 
   }catch{}
-};ws.onclose=()=>{connection.className='statusbox';connection.innerHTML='<span class="dot"></span>Chat connection lost'};
-</script></body></html>
+
+};
+
+ws.onclose=()=>{
+
+  connection.className=
+    'statusbox';
+
+  connection.innerHTML=
+    '<span class="dot"></span>Chat connection lost';
+
+};
+
+</script>
+
+</body>
+</html>
