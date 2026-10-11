@@ -303,30 +303,6 @@ details[open] summary { margin-bottom: 10px; }
         </details>
       </div>
 
-      <div class="card" id="botCard">
-        <h2>Chat bot <span class="pill" id="botPill">Off</span></h2>
-        <p class="hint">Posts the winner message in your Kick chat by itself after each roll. It uses a Kick developer app you create, and your keys and sign-in are saved only in this browser.</p>
-        <div class="notice" id="botFileNote" hidden>The bot only works from your website address, not from a downloaded file.</div>
-        <details id="botSetup">
-          <summary>Kick app keys</summary>
-          <div class="field">
-            <label for="botClientId">Client ID</label>
-            <input type="text" id="botClientId" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="field" style="margin-top:8px">
-            <label for="botClientSecret">Client Secret</label>
-            <input type="text" id="botClientSecret" autocomplete="off" spellcheck="false" style="-webkit-text-security: disc">
-          </div>
-          <p class="hint" style="margin-top:8px">In your Kick app, set the Redirect URL to <code id="botRedirect"></code> and tick the scopes "Read user information", "Read channel information" and "Write to chat".</p>
-        </details>
-        <div class="row">
-          <button class="btn primary" id="botSignIn" type="button">Sign in bot account</button>
-          <button class="btn ghost" id="botSignOut" type="button" hidden>Sign out</button>
-          <label class="chip-toggle"><input type="checkbox" id="botAuto" checked> Post winner automatically</label>
-        </div>
-        <div class="hint" id="botStatus"></div>
-      </div>
-
       <div class="card" id="historyCard" hidden>
         <h2>Past winners <button class="btn ghost" id="clearHistory" type="button">Clear</button></h2>
         <div class="history" id="history"></div>
@@ -651,7 +627,6 @@ function finish() {
   state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
-  if (bot.token() && $("botAuto").checked) bot.postWinner(name);
 }
 els.roll.addEventListener("click", startRoll);
 els.removeWinner.addEventListener("click", () => {
@@ -834,95 +809,6 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp
 
 // expose the simulator for anyone who wants to audit it from the console
 window.giveawayPhysics = { PHYS, H, physStep, simulate(v0, y0 = 0) { const s = { y: y0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s); return s; } };
-
-// ---------- chat bot (Kick official API, straight from the browser) ----------
-const bot = (() => {
-  const KEY = "kick-giveaway-roller-bot";
-  const here = location.origin + location.pathname;
-  let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
-  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
-  const pill = $("botPill"), status = $("botStatus"), idIn = $("botClientId"), secIn = $("botClientSecret");
-  const say = (t, cls) => { status.textContent = t; status.style.color = cls === "err" ? "var(--warn)" : ""; };
-  const corsMsg = "Kick refused to let this page talk to it directly, so the bot can't post without a server. Use Copy message for chat instead.";
-  idIn.value = st.clientId || ""; secIn.value = st.clientSecret || "";
-  idIn.addEventListener("input", () => { st.clientId = idIn.value.trim(); persist(); });
-  secIn.addEventListener("input", () => { st.clientSecret = secIn.value.trim(); persist(); });
-  $("botRedirect").textContent = here;
-  const isWeb = /^https?:$/.test(location.protocol);
-  if (!isWeb) { $("botFileNote").hidden = false; $("botSignIn").disabled = true; }
-
-  function render() {
-    const on = !!(st.token && st.token.access);
-    pill.className = "pill " + (on ? "live" : ""); pill.textContent = on ? "Signed in" : "Off";
-    $("botSignIn").hidden = on; $("botSignOut").hidden = !on;
-    $("botSetup").open = !on && !(st.clientId && st.clientSecret);
-    if (on && !status.textContent) say(`Posting as ${st.user || "your bot account"}.`);
-  }
-  async function tokenCall(params) {
-    let r;
-    try {
-      r = await fetch("https://id.kick.com/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ client_id: st.clientId, client_secret: st.clientSecret, ...params }) });
-    } catch (e) { throw new Error(corsMsg); }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.access_token) throw new Error(j.error_description || j.message || j.error || `Kick sign-in failed (${r.status})`);
-    st.token = { access: j.access_token, refresh: j.refresh_token, expiresAt: Date.now() + (j.expires_in || 3600) * 1000 }; persist();
-  }
-  async function api(path, init = {}) {
-    if (st.token.expiresAt - Date.now() < 60000 && st.token.refresh) await tokenCall({ grant_type: "refresh_token", refresh_token: st.token.refresh });
-    let r;
-    try { r = await fetch("https://api.kick.com" + path, { ...init, headers: { authorization: `Bearer ${st.token.access}`, accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) } }); }
-    catch (e) { throw new Error(corsMsg); }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.message || `Kick returned ${r.status}`);
-    return j;
-  }
-  function b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
-  function rand() { const a = new Uint8Array(32); crypto.getRandomValues(a); return b64url(a); }
-
-  $("botSignIn").addEventListener("click", async () => {
-    if (!st.clientId || !st.clientSecret) { $("botSetup").open = true; say("Paste your Kick app's Client ID and Client Secret first.", "err"); return; }
-    st.verifier = rand(); st.state = rand(); persist();
-    const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(st.verifier)));
-    const u = new URL("https://id.kick.com/oauth/authorize");
-    u.search = new URLSearchParams({ response_type: "code", client_id: st.clientId, redirect_uri: here, scope: "user:read channel:read chat:write", code_challenge: challenge, code_challenge_method: "S256", state: st.state });
-    location.href = u.toString();
-  });
-  $("botSignOut").addEventListener("click", () => { delete st.token; delete st.user; persist(); say(""); render(); });
-
-  async function finishSignIn() {
-    const q = new URLSearchParams(location.search);
-    if (!q.has("code") && !q.has("error")) return;
-    history.replaceState(null, "", location.pathname);
-    if (q.get("error")) { say("Kick sign-in was cancelled: " + (q.get("error_description") || q.get("error")), "err"); return; }
-    if (q.get("state") !== st.state) { say("That sign-in didn't come from this page. Try again.", "err"); return; }
-    try {
-      say("Finishing sign-in…");
-      await tokenCall({ grant_type: "authorization_code", code: q.get("code"), redirect_uri: here, code_verifier: st.verifier });
-      delete st.verifier; delete st.state;
-      const me = await api("/public/v1/users"); st.user = ((me.data || [])[0] || {}).name || null; persist();
-      say(`Posting as ${st.user || "your bot account"}.`);
-    } catch (e) { delete st.token; persist(); say(e.message, "err"); }
-    render();
-  }
-  async function postWinner(name) {
-    const slug = slugOf(S.channel);
-    if (!slug) { say("Type your channel name in the Kick chat box so the bot knows where to post.", "err"); return; }
-    try {
-      st.ids = st.ids || {};
-      if (!st.ids[slug]) {
-        const ch = await api(`/public/v1/channels?slug=${encodeURIComponent(slug)}`);
-        const c = (ch.data || [])[0]; if (!c) throw new Error(`Kick has no channel called ${slug}.`);
-        st.ids[slug] = c.broadcaster_user_id; persist();
-      }
-      const content = (S.winMsg || "@{winner}").replace(/@?\{winner\}/g, "@" + name).slice(0, 500);
-      await api("/public/v1/chat", { method: "POST", body: JSON.stringify({ type: "user", broadcaster_user_id: st.ids[slug], content }) });
-      say(`Posted in ${slug}'s chat: ${content}`);
-    } catch (e) { say("Couldn't post the winner: " + e.message, "err"); }
-  }
-  render(); if (isWeb) finishSignIn();
-  return { token: () => st.token && st.token.access, postWinner };
-})();
 
 renderEntries(); renderHistory(); updateRollBtn(); resize();
 if (document.fonts) document.fonts.ready.then(draw);
