@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kick Giveaway Roller</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: stage-left reel beside a control column; stacks on phones. Single dark look in Kick's palette: flat panels, square corners, green accent. */
+:root {
+  --bg: #0b0e0f;
+  --panel: #191b1f;
+  --panel-2: #24272c;
+  --line: #2f3338;
+  --fg: #ffffff;
+  --muted: #a3acb6;
+  --brass: #53fc18;          /* Kick green: the one accent */
+  --brass-deep: #3ec70f;
+  --on-accent: #0b0e0f;
+  --live: #53fc18;
+  --warn: #ff5c5c;
+  --r: 4px;
+  --display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding: 20px 16px 40px;
+}
+a { color: var(--brass); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+h1 {
+  margin: 0; font-family: var(--display); font-weight: 900; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.03em; line-height: 1.05; text-wrap: balance;
+}
+h1 span { color: var(--brass); }
+.tagline { color: var(--muted); margin: 0; max-width: 60ch; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Stage */
+.stage { display: grid; gap: 14px; min-width: 0; }
+.reel-box {
+  position: relative; border-radius: var(--r); overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  height: clamp(340px, 56vh, 520px);
+}
+.reel-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.marker {
+  position: absolute; left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
+  background: var(--brass); box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 70%, transparent);
+  pointer-events: none;
+}
+.marker::before, .marker::after {
+  content: ""; position: absolute; top: 50%; width: 0; height: 0; transform: translateY(-50%);
+  border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+}
+.marker::before { left: 0; border-left: 14px solid var(--brass); }
+.marker::after { right: 0; border-right: 14px solid var(--brass); }
+.reel-empty {
+  position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px;
+  color: var(--muted); font-size: 16px;
+}
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.roll {
+  flex: 1 1 220px; border: 0; border-radius: var(--r); cursor: pointer;
+  background: var(--brass); color: var(--on-accent);
+  font-family: var(--display); font-weight: 900; font-size: 20px; letter-spacing: 0.06em;
+  padding: 16px 20px; text-transform: uppercase;
+  transition: background .12s, transform .08s;
+}
+.roll:hover { background: #6dff38; }
+.roll:active { background: var(--brass-deep); transform: translateY(1px); }
+.roll:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; transform: none; }
+.chip-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; cursor: pointer; }
+.chip-toggle input { accent-color: var(--brass); width: 16px; height: 16px; }
+
+.result {
+  border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); padding: 16px 18px;
+  display: grid; gap: 10px;
+}
+.result .label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.winner-name {
+  font-family: var(--display); font-weight: 900;   font-size: clamp(28px, 5vw, 44px); line-height: 1.05; color: var(--brass); word-break: break-word;
+}
+.winner-name.pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { from { transform: scale(.85); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+.receipt { font-family: var(--mono); font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; font-variant-numeric: tabular-nums; }
+.receipt b { color: var(--fg); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn {
+  border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--r); padding: 8px 14px; cursor: pointer;
+  font-weight: 600; font-size: 14px;
+}
+.btn:hover { background: var(--line); }
+.btn.primary:hover { background: #6dff38; }
+.btn.primary { font-weight: 700; background: var(--brass); color: var(--on-accent); border-color: var(--brass); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--warn); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Desk */
+.desk { display: grid; gap: 16px; min-width: 0; }
+.card { border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field label, .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+input[type=text], select, textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 11px; min-width: 0;
+}
+textarea { resize: vertical; min-height: 70px; font-family: var(--mono); font-size: 13px; }
+input[type=text]:focus, select:focus, textarea:focus { border-color: var(--brass); outline: none; }
+.inline { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.inline > .field { flex: 1 1 160px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.notice { border-radius: var(--r); padding: 10px 12px; font-size: 13.5px; background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.notice.info { background: color-mix(in srgb, var(--live) 9%, var(--panel)); border-color: color-mix(in srgb, var(--live) 35%, transparent); }
+.notice code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 2px; word-break: break-all; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--body); font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 3px 10px; border-radius: 2px; border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 1px; background: currentColor; }
+.pill.live { color: var(--live); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
+.pill.live::before { animation: blink 1.4s infinite; }
+.pill.wait { color: var(--brass); border-color: color-mix(in srgb, var(--brass) 45%, transparent); }
+.pill.err { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+@keyframes blink { 50% { opacity: .25; } }
+
+.feed { max-height: 170px; overflow-y: auto; font-size: 13px; display: grid; gap: 2px; background: var(--bg); border-radius: var(--r); padding: 8px 10px; border: 1px solid var(--line); }
+.feed div { overflow-wrap: anywhere; color: var(--muted); }
+.feed div b { color: var(--fg); font-weight: 600; }
+.feed div.hit b { color: var(--live); }
+.feed div.hit::after { content: "  entered"; color: var(--live); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+
+.entries-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+.count { font-family: var(--display); font-weight: 900; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.count small { font-family: var(--body); font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.entries { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px; }
+.entry { display: inline-flex; align-items: center; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px 3px 9px; font-size: 13.5px; max-width: 100%; }
+.entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry.chat span::before { content: "●"; color: var(--live); font-size: 9px; margin-right: 6px; vertical-align: 2px; }
+.entry button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 5px; font-size: 15px; line-height: 1; border-radius: 2px; }
+.entry button:hover { color: var(--warn); background: var(--bg); }
+.example-banner { font-size: 13px; color: var(--brass); }
+
+details summary { cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 600; }
+details[open] summary { margin-bottom: 10px; }
+.history { display: grid; gap: 4px; font-size: 13.5px; }
+.history div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--line); padding: 3px 0; }
+.history time { color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+
+.how { color: var(--muted); font-size: 13.5px; display: grid; gap: 8px; max-width: 75ch; }
+.how p { margin: 0; }
+.how b { color: var(--fg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pill.live::before, .winner-name.pop { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Kick Giveaway <span>Roller</span></h1>
+    <p class="tagline">Chatters type the keyword to enter. The reel gets a random push, physics decides where it stops, and the line picks the name it lands on.</p>
+  </header>
+
+  <div class="grid">
+    <section class="stage" aria-label="Reel">
+      <div class="reel-box" id="reelBox">
+        <canvas id="reel" aria-hidden="true"></canvas>
+        <div class="marker"></div>
+        <div class="reel-empty" id="reelEmpty" hidden>Add at least two entries to roll.</div>
+      </div>
+      <div class="controls">
+        <button class="roll" id="rollBtn" type="button">Roll</button>
+        <label class="chip-toggle"><input type="checkbox" id="optSound" checked> Tick sound</label>
+        <label class="chip-toggle"><input type="checkbox" id="optAutoRemove"> Take winner out after each roll</label>
+      </div>
+      <div class="result" id="result" aria-live="polite">
+        <div class="label" id="resultLabel">Winner</div>
+        <div class="winner-name" id="winnerName">Nobody yet</div>
+        <div class="receipt" id="receipt"><span>Press Roll to draw a winner.</span></div>
+        <div class="row" id="winnerActions" hidden>
+          <button class="btn" id="copyWinner" type="button">Copy name</button>
+          <button class="btn" id="removeWinner" type="button">Remove winner from entries</button>
+        </div>
+      </div>
+      <div class="card">
+        <details>
+          <summary>How the roll stays fair</summary>
+          <div class="how">
+            <p><b>Random push.</b> The launch speed and the starting name both come from <code>crypto.getRandomValues</code>, the browser's cryptographic random source. Nothing about the result is chosen in advance.</p>
+            <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, and nothing nudges it toward a name. It can stop anywhere. Once it is at rest, the line in the middle picks whichever name it is touching. The simulation uses a fixed time step, so a slow or busy computer changes how smooth it looks but never where it stops.</p>
+            <p><b>No order bias.</b> Entries are shuffled with a crypto-seeded Fisher–Yates shuffle before every roll and the reel starts on a uniformly random name, so alphabetical order, join order or first letter cannot tilt the odds. Each person gets exactly one slot, no matter how many times they type the keyword.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="desk" aria-label="Setup">
+      <div class="card">
+        <h2>Kick chat <span class="pill" id="connPill">Not connected</span></h2>
+        <div class="inline">
+          <div class="field">
+            <label for="channel">Channel name</label>
+            <input type="text" id="channel" placeholder="e.g. trainwreckstv" autocomplete="off" spellcheck="false">
+          </div>
+          <button class="btn primary" id="connectBtn" type="button">Connect</button>
+          <button class="btn ghost" id="disconnectBtn" type="button" hidden>Disconnect</button>
+        </div>
+        <div class="notice info" id="lookupHelp" hidden>
+          <div id="lookupMsg"></div>
+          <p class="hint" style="margin-top:8px">Open <a id="lookupLink" href="https://kick.com/api/v2/channels/" target="_blank" rel="noopener">this page on kick.com</a>, then copy the number after <code>"chatroom":{"id":</code> and paste it below. You can also paste the whole page and the number is picked out for you.</p>
+          <div class="inline" style="margin-top:8px">
+            <div class="field">
+              <label for="chatroomId">Chatroom ID</label>
+              <input type="text" id="chatroomId" placeholder="e.g. 668" autocomplete="off" spellcheck="false">
+            </div>
+            <button class="btn primary" id="useIdBtn" type="button">Use this ID</button>
+          </div>
+        </div>
+        <div class="notice" id="connError" hidden></div>
+        <div class="inline">
+          <div class="field">
+            <label for="keyword">Entry keyword</label>
+            <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="matchMode">Counts when the message</label>
+            <select id="matchMode">
+              <option value="exact">is exactly the keyword</option>
+              <option value="word">contains the keyword</option>
+              <option value="starts">starts with the keyword</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label class="chip-toggle"><input type="checkbox" id="optOpen" checked> Entries open</label>
+          <label class="chip-toggle"><input type="checkbox" id="optSubs"> Subscribers only</label>
+        </div>
+        <div>
+          <div class="lbl" style="margin-bottom:5px">Live chat</div>
+          <div class="feed" id="feed"><div>Connect to a channel to see chat here. Matching messages are marked as entered.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="entries-head">
+          <div class="count" id="count">0<small>entries</small></div>
+          <div class="row">
+            <button class="btn ghost danger" id="clearBtn" type="button">Clear all</button>
+          </div>
+        </div>
+        <div class="example-banner" id="exampleBanner" hidden>These are example names so you can try the reel. Clear them before a real giveaway.</div>
+        <div class="entries" id="entries"></div>
+        <div class="inline">
+          <div class="field">
+            <label for="manualAdd">Add names by hand</label>
+            <textarea id="manualAdd" placeholder="One per line, or separated by spaces or commas"></textarea>
+          </div>
+        </div>
+        <div class="row"><button class="btn" id="addBtn" type="button">Add names</button></div>
+        <details>
+          <summary>Never enter these accounts</summary>
+          <div class="field">
+            <label for="blocked">Blocked names (bots, the streamer, mods)</label>
+            <textarea id="blocked" placeholder="botrix kicklet"></textarea>
+          </div>
+        </details>
+      </div>
+
+      <div class="card" id="historyCard" hidden>
+        <h2>Past winners <button class="btn ghost" id="clearHistory" type="button">Clear</button></h2>
+        <div class="history" id="history"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- crypto randomness ----------
+function randU32() { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; }
+function randFloat() { // uniform in [0, 1) with 53 bits
+  const a = new Uint32Array(2); crypto.getRandomValues(a);
+  return ((a[0] >>> 5) * 67108864 + (a[1] >>> 6)) / 9007199254740992;
+}
+function randInt(n) { // unbiased integer in [0, n) via rejection sampling
+  const limit = Math.floor(4294967296 / n) * n;
+  let x; do { x = randU32(); } while (x >= limit);
+  return x % n;
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// ---------- physics ----------
+const H = 64;                       // height of one name slot, in px
+const PHYS = {
+  dt: 1 / 480,                      // fixed step: result never depends on frame rate
+  drag: 0.3,                        // linear air drag, 1/s
+  quad: 0.00005,                    // quadratic air drag, 1/px
+  friction: 90,                     // rolling (Coulomb) friction, px/s^2
+  vMin: 2600, vMax: 5600            // range of the random launch speed, px/s
+};
+function physStep(s) {
+  const v = s.v;
+  const a = -PHYS.drag * v - PHYS.quad * v * Math.abs(v) - PHYS.friction * Math.sign(v);
+  let nv = v + a * PHYS.dt;
+  if (Math.sign(nv) !== Math.sign(v)) { nv = 0; s.done = true; }   // friction brought it to rest
+  s.v = nv; s.y += nv * PHYS.dt; s.t += PHYS.dt;
+}
+const mod = (a, n) => ((a % n) + n) % n;
+
+// ---------- state ----------
+const LS = "kick-giveaway-roller-v1";
+const state = {
+  entries: new Map(),               // lowercase name -> { name, src }
+  example: false,
+  history: [],
+  settings: { channel: "", keyword: "!join", matchMode: "exact", open: true, subs: false, sound: true, autoRemove: false, blocked: "" },
+  chatroomIds: {}
+};
+function save() {
+  try {
+    localStorage.setItem(LS, JSON.stringify({
+      entries: [...state.entries.values()], example: state.example, history: state.history.slice(0, 50),
+      settings: state.settings, chatroomIds: state.chatroomIds
+    }));
+  } catch (e) {}
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(LS); if (!raw) return false;
+    const d = JSON.parse(raw);
+    (d.entries || []).forEach(e => state.entries.set(e.name.toLowerCase(), e));
+    state.example = !!d.example; state.history = d.history || [];
+    Object.assign(state.settings, d.settings || {}); state.chatroomIds = d.chatroomIds || {};
+    return true;
+  } catch (e) { return false; }
+}
+const EXAMPLES = ["ZestyLlama", "aaron_plays", "midnightmarlo", "Xx_Kappa_xX", "brickbybrick", "Quokka77", "sunny_daze", "Nebulite", "OldManWinter", "pixelpriya", "tacoTuesday", "Wobbleton"];
+if (!load()) { EXAMPLES.forEach(n => state.entries.set(n.toLowerCase(), { name: n, src: "example" })); state.example = true; }
+
+// ---------- dom ----------
+const $ = id => document.getElementById(id);
+const els = {
+  canvas: $("reel"), box: $("reelBox"), empty: $("reelEmpty"), roll: $("rollBtn"),
+  sound: $("optSound"), autoRemove: $("optAutoRemove"),
+  winner: $("winnerName"), receipt: $("receipt"), resultLabel: $("resultLabel"), winnerActions: $("winnerActions"),
+  copyWinner: $("copyWinner"), removeWinner: $("removeWinner"),
+  channel: $("channel"), connect: $("connectBtn"), disconnect: $("disconnectBtn"), pill: $("connPill"),
+  lookupHelp: $("lookupHelp"), lookupMsg: $("lookupMsg"), lookupLink: $("lookupLink"), chatroomId: $("chatroomId"), useId: $("useIdBtn"),
+  connError: $("connError"), keyword: $("keyword"), matchMode: $("matchMode"), open: $("optOpen"), subs: $("optSubs"),
+  feed: $("feed"), count: $("count"), entries: $("entries"), clear: $("clearBtn"), exampleBanner: $("exampleBanner"),
+  manual: $("manualAdd"), add: $("addBtn"), blocked: $("blocked"),
+  historyCard: $("historyCard"), history: $("history"), clearHistory: $("clearHistory")
+};
+const S = state.settings;
+els.channel.value = S.channel; els.keyword.value = S.keyword; els.matchMode.value = S.matchMode;
+els.open.checked = S.open; els.subs.checked = S.subs; els.sound.checked = S.sound; els.autoRemove.checked = S.autoRemove;
+els.blocked.value = S.blocked;
+const bindSetting = (el, key, prop = "value") => el.addEventListener(prop === "checked" ? "change" : "input", () => { S[key] = el[prop]; save(); });
+bindSetting(els.channel, "channel"); bindSetting(els.keyword, "keyword"); bindSetting(els.matchMode, "matchMode");
+bindSetting(els.open, "open", "checked"); bindSetting(els.subs, "subs", "checked"); bindSetting(els.sound, "sound", "checked");
+bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked");
+
+const blockedSet = () => new Set(S.blocked.split(/[\s,;]+/).map(s => s.replace(/^@/, "").toLowerCase()).filter(Boolean));
+function cleanName(s) { return String(s || "").trim().replace(/^@/, "").replace(/[^\w.-]/g, ""); }
+
+// ---------- entries ----------
+function addEntry(name, src) {
+  name = cleanName(name); if (!name) return false;
+  const key = name.toLowerCase();
+  if (state.entries.has(key) || blockedSet().has(key)) return false;
+  if (state.example) { state.entries.clear(); state.example = false; }
+  state.entries.set(key, { name, src });
+  return true;
+}
+function removeEntry(key) { state.entries.delete(key); }
+function renderEntries() {
+  const list = [...state.entries.entries()];
+  els.count.innerHTML = `${list.length}<small>${list.length === 1 ? "entry" : "entries"}</small>`;
+  els.exampleBanner.hidden = !state.example;
+  const frag = document.createDocumentFragment();
+  for (const [key, e] of list) {
+    const d = document.createElement("div"); d.className = "entry" + (e.src === "chat" ? " chat" : "");
+    const sp = document.createElement("span"); sp.textContent = e.name; sp.title = e.src === "chat" ? "Entered from chat" : "Added by hand";
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "×"; b.setAttribute("aria-label", `Remove ${e.name}`);
+    b.addEventListener("click", () => { removeEntry(key); changed(); });
+    d.append(sp, b); frag.append(d);
+  }
+  els.entries.replaceChildren(frag);
+  if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No entries yet. Connect to a channel and have chat type the keyword, or add names by hand."; els.entries.append(p); }
+}
+function changed() { save(); renderEntries(); if (!rolling) { idleOrder = [...state.entries.values()].map(e => e.name); draw(); } updateRollBtn(); }
+
+els.add.addEventListener("click", () => {
+  const names = els.manual.value.split(/[\s,;]+/).filter(Boolean);
+  names.forEach(n => addEntry(n, "manual")); els.manual.value = ""; changed();
+});
+let clearArmed = null;
+els.clear.addEventListener("click", () => {
+  if (!clearArmed) {
+    els.clear.textContent = "Click again to clear"; clearArmed = setTimeout(() => { els.clear.textContent = "Clear all"; clearArmed = null; }, 2500); return;
+  }
+  clearTimeout(clearArmed); clearArmed = null; els.clear.textContent = "Clear all";
+  state.entries.clear(); state.example = false; changed();
+});
+
+// ---------- reel drawing ----------
+const ctx = els.canvas.getContext("2d");
+let idleOrder = [...state.entries.values()].map(e => e.name);
+let order = idleOrder, sim = { y: 0, v: 0, t: 0, done: true }, rolling = false, winnerIdx = -1;
+const css = getComputedStyle(document.documentElement);
+const C = { fg: css.getPropertyValue("--fg").trim(), muted: css.getPropertyValue("--muted").trim(), brass: css.getPropertyValue("--brass").trim(), bg: css.getPropertyValue("--bg").trim() };
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W = 0, Ht = 0, dpr = 1;
+function resize() {
+  const r = els.box.getBoundingClientRect(); dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = r.width; Ht = r.height; els.canvas.width = Math.round(W * dpr); els.canvas.height = Math.round(Ht * dpr); draw();
+}
+function fitFont(name, maxW, base) {
+  let size = base; ctx.font = `800 ${size}px ${css.getPropertyValue("--display")}`;
+  const w = ctx.measureText(name).width; if (w > maxW) size = Math.max(14, Math.floor(base * maxW / w));
+  return size;
+}
+function drawPass(y, alpha) {
+  const N = order.length; const mid = Ht / 2;
+  const first = Math.floor((y - mid) / H) - 1, last = Math.ceil((y + mid) / H) + 1;
+  for (let i = first; i <= last; i++) {
+    const sy = mid + (i * H - y);
+    const dist = Math.abs(sy - mid) / mid;               // 0 at marker, 1 at edge
+    const name = order[mod(i, N)];
+    const atMarker = Math.abs(sy - mid) < H / 2;          // the line falls inside this name's slot
+    const picked = atMarker && sim.done && winnerIdx >= 0;
+    const size = fitFont(name, W - 80, picked ? 34 : 30);
+    ctx.font = `${picked ? 900 : 700} ${size}px ${css.getPropertyValue("--display")}`;
+    ctx.globalAlpha = alpha * Math.max(0, 1 - dist * dist * 0.92);
+    ctx.fillStyle = picked ? C.brass : (atMarker ? C.fg : C.muted);
+    ctx.fillText(name, W / 2, sy);
+    if (alpha === 1) {                                    // faint divider so it's clear which slot the line is in
+      ctx.globalAlpha = 0.35 * Math.max(0, 1 - dist * dist);
+      ctx.fillStyle = C.muted; ctx.fillRect(W * 0.2, Math.round(sy + H / 2), W * 0.6, 1);
+    }
+  }
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Ht);
+  const N = order.length;
+  els.empty.hidden = N >= 2;
+  if (!N) return;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const speed = Math.abs(sim.v);
+  if (rolling && !reduceMotion && speed > 900) {          // cheap motion blur at speed
+    const spread = Math.min(26, speed / 140);
+    for (let k = -2; k <= 2; k++) drawPass(sim.y + k * spread / 2, 0.28);
+  } else drawPass(sim.y, 1);
+  ctx.globalAlpha = 1;
+}
+new ResizeObserver(resize).observe(els.box);
+
+// ---------- sound ----------
+// Sounds like a prize wheel's plastic flapper hitting a peg: one short click synthesised once
+// (a soft transient, a quick plastic ring and a little body) and replayed for every name that
+// crosses the line, at the moment it crosses. Fast spins blur into a quiet purr; the last slow clicks stand out.
+let audio = null, master = null, clackBuf = null;
+function ensureAudio() {
+  if (audio) return audio;
+  audio = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = audio.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+  const soft = audio.createBiquadFilter(); soft.type = "lowpass"; soft.frequency.value = 5200;
+  master = audio.createGain(); master.gain.value = 0.5;
+  master.connect(soft).connect(comp).connect(audio.destination);
+  const sr = audio.sampleRate, len = Math.floor(sr * 0.04);
+  clackBuf = audio.createBuffer(1, len, sr);
+  const d = clackBuf.getChannelData(0); let peak = 0, prev = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    const noise = (Math.random() * 2 - 1); const hp = noise - prev; prev = noise;     // crude high-pass for a crisp edge
+    d[i] = 0.50 * hp * Math.exp(-t / 0.0008)
+         + 0.30 * Math.sin(2 * Math.PI * 2300 * t) * Math.exp(-t / 0.0022)
+         + 0.35 * Math.sin(2 * Math.PI * 520 * t) * Math.exp(-t / 0.005);
+    peak = Math.max(peak, Math.abs(d[i]));
+  }
+  for (let i = 0; i < len; i++) d[i] /= peak;
+  return audio;
+}
+function clack(when, speed) {
+  if (!S.sound || !audio) return;
+  const sp = Math.min(1, speed / 3000);
+  const src = audio.createBufferSource(), g = audio.createGain();
+  src.buffer = clackBuf;
+  src.playbackRate.value = 0.96 + 0.08 * sp + (Math.random() - 0.5) * 0.06;     // small variation, like real pegs
+  g.gain.value = 0.08 + 0.32 * (1 - sp) * (1 - sp);                             // quiet when fast, clear when slow
+  src.connect(g).connect(master); src.start(Math.max(audio.currentTime, when));
+}
+// ---------- roll ----------
+let launch = null, lastFrame = 0, acc = 0, lastSlot = 0;
+function updateRollBtn() { els.roll.disabled = rolling || state.entries.size < 2; els.roll.textContent = rolling ? "Rolling…" : "Roll"; }
+function startRoll() {
+  if (rolling || state.entries.size < 2) return;
+  order = shuffle([...state.entries.values()].map(e => e.name));
+  const N = order.length;
+  const startIdx = randInt(N);
+  const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
+  sim = { y: startIdx * H, v: v0, t: 0, done: false };
+  launch = { v0, startIdx, N, at: new Date() };
+  rolling = true; winnerIdx = -1; lastSlot = startIdx; acc = 0; lastFrame = performance.now();
+  els.resultLabel.textContent = "Rolling"; els.winner.textContent = "…"; els.winner.classList.remove("pop");
+  els.receipt.innerHTML = `<span>launch <b>${Math.round(v0).toLocaleString()} px/s</b></span><span>start slot <b>${startIdx + 1} of ${N}</b></span>`;
+  els.winnerActions.hidden = true;
+  if (S.sound) { try { ensureAudio().resume(); } catch (e) {} }
+  updateRollBtn(); requestAnimationFrame(frame);
+}
+function frame(now) {
+  if (!rolling) return;
+  acc += Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;   // pausing the tab pauses the reel; it never skips ahead
+  const audioNow = audio ? audio.currentTime + 0.02 : 0; let k = 0;
+  while (acc >= PHYS.dt && !sim.done) {
+    physStep(sim); acc -= PHYS.dt; k++;
+    const slot = Math.round(sim.y / H);                 // changes exactly when a divider passes the line
+    if (slot !== lastSlot) { lastSlot = slot; clack(audioNow + k * PHYS.dt, Math.abs(sim.v)); }
+  }
+  draw();
+  if (sim.done) finish(); else requestAnimationFrame(frame);
+}
+function finish() {
+  rolling = false;
+  const N = order.length, slot = Math.round(sim.y / H);
+  winnerIdx = mod(slot, N);
+  const name = order[winnerIdx];
+  const travelled = (sim.y - launch.startIdx * H) / H;
+  draw();
+  els.resultLabel.textContent = "Winner";
+  els.winner.textContent = name; void els.winner.offsetWidth; els.winner.classList.add("pop");
+  els.receipt.innerHTML =
+    `<span>launch <b>${Math.round(launch.v0).toLocaleString()} px/s</b></span>` +
+    `<span>start slot <b>${launch.startIdx + 1} of ${N}</b></span>` +
+    `<span>travelled <b>${travelled.toFixed(1)} names</b></span>` +
+    `<span>settled in <b>${sim.t.toFixed(2)} s</b></span>`;
+  els.winnerActions.hidden = false;
+  els.winnerActions.dataset.name = name;
+  state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
+  if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
+  save(); updateRollBtn();
+}
+els.roll.addEventListener("click", startRoll);
+els.removeWinner.addEventListener("click", () => {
+  const n = els.winnerActions.dataset.name; if (!n) return;
+  removeEntry(n.toLowerCase()); changed(); els.removeWinner.textContent = "Removed"; setTimeout(() => (els.removeWinner.textContent = "Remove winner from entries"), 1500);
+});
+els.copyWinner.addEventListener("click", () => {
+  const n = els.winnerActions.dataset.name || "";
+  navigator.clipboard.writeText(n).then(() => { els.copyWinner.textContent = "Copied"; setTimeout(() => (els.copyWinner.textContent = "Copy name"), 1400); })
+    .catch(() => { const r = document.createRange(); r.selectNodeContents(els.winner); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+});
+function renderHistory() {
+  els.historyCard.hidden = !state.history.length;
+  els.history.replaceChildren(...state.history.slice(0, 20).map(h => {
+    const d = document.createElement("div"); const n = document.createElement("span"); n.textContent = `${h.name}  ·  1 of ${h.of}`;
+    const t = document.createElement("time"); const dt = new Date(h.at); t.dateTime = h.at; t.textContent = dt.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    d.append(n, t); return d;
+  }));
+}
+els.clearHistory.addEventListener("click", () => { state.history = []; save(); renderHistory(); });
+
+// ---------- Kick chat ----------
+// Kick's own site reads chat over a public Pusher websocket. No login is needed to listen.
+const PUSHER_URL = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
+let ws = null, wantConnected = false, retry = 0, retryTimer = null, currentRoom = null;
+function setPill(cls, text) { els.pill.className = "pill " + cls; els.pill.textContent = text; }
+function showError(html) { els.connError.innerHTML = html; els.connError.hidden = !html; }
+function slugOf(v) { return String(v || "").trim().replace(/^https?:\/\/(www\.)?kick\.com\//i, "").replace(/[/?#].*$/, "").replace(/^@/, "").toLowerCase(); }
+
+// Kick's API doesn't allow other websites to read it directly, so if the direct try fails we
+// go through public relay services that fetch the page and pass it back. Only the channel name is sent.
+const RELAYS = [
+  u => u,
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`
+];
+function chatroomFromText(t) {
+  const m = String(t).match(/"chatroom"\s*:\s*\{[^{}]*?"id"\s*:\s*(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+async function fetchWithTimeout(url, ms) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { credentials: "omit", signal: ctl.signal }); } finally { clearTimeout(timer); }
+}
+async function lookupChatroom(slug) {
+  if (state.chatroomIds[slug]) return state.chatroomIds[slug];
+  const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
+  for (let i = 0; i < RELAYS.length; i++) {
+    try {
+      const r = await fetchWithTimeout(RELAYS[i](target), 7000);
+      if (i === 0 && r.status === 404) throw Object.assign(new Error("notfound"), { notFound: true });
+      if (!r.ok) continue;
+      const id = chatroomFromText(await r.text());
+      if (id) { state.chatroomIds[slug] = id; save(); return id; }
+    } catch (e) { if (e.notFound) throw e; }
+  }
+  return null;
+}
+els.connect.addEventListener("click", async () => {
+  const slug = slugOf(els.channel.value); if (!slug) { els.channel.focus(); return; }
+  els.channel.value = slug; S.channel = slug; save();
+  showError(""); els.lookupHelp.hidden = true; setPill("wait", "Finding chat"); els.connect.disabled = true;
+  let id = null;
+  try { id = await lookupChatroom(slug); }
+  catch (e) { setPill("err", "Not found"); showError(`Kick has no channel called <b>${escapeHtml(slug)}</b>. Check the spelling.`); return; }
+  finally { els.connect.disabled = false; }
+  if (id) { connect(id); return; }
+  setPill("wait", "Need chatroom ID");
+  els.lookupMsg.innerHTML = `Couldn't look up <b>${escapeHtml(slug)}</b> automatically this time. Kick blocked both the direct lookup and the relay services. You only need to do this once per channel, because the page remembers the ID:`;
+  els.lookupLink.href = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
+  els.lookupHelp.hidden = false; els.chatroomId.focus();
+});
+els.useId.addEventListener("click", () => {
+  const raw = els.chatroomId.value;
+  const plain = raw.match(/^\s*(\d+)\s*$/);
+  const found = chatroomFromText(raw) || (plain && Number(plain[1]));
+  if (!found) { els.chatroomId.setCustomValidity("Paste the chatroom number, or the whole page from kick.com"); els.chatroomId.reportValidity(); return; }
+  els.chatroomId.setCustomValidity("");
+  const id = found; const slug = slugOf(els.channel.value);
+  if (slug) { state.chatroomIds[slug] = id; save(); }
+  els.chatroomId.value = String(id); els.lookupHelp.hidden = true; connect(id);
+});
+els.chatroomId.addEventListener("input", () => els.chatroomId.setCustomValidity(""));
+els.disconnect.addEventListener("click", () => disconnect(true));
+
+function connect(roomId) {
+  disconnect(false); wantConnected = true; currentRoom = roomId; openSocket();
+  els.connect.hidden = true; els.disconnect.hidden = false;
+}
+function openSocket() {
+  setPill("wait", "Connecting");
+  try { ws = new WebSocket(PUSHER_URL); }
+  catch (e) { socketBlocked(); return; }
+  let opened = false;
+  ws.onopen = () => { opened = true; };
+  ws.onmessage = ev => {
+    let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    if (msg.event === "pusher:connection_established") {
+      for (const ch of [`chatrooms.${currentRoom}.v2`, `chatrooms.${currentRoom}`, `chatroom_${currentRoom}`])
+        ws.send(JSON.stringify({ event: "pusher:subscribe", data: { auth: "", channel: ch } }));
+    } else if (msg.event === "pusher_internal:subscription_succeeded") {
+      if (els.pill.textContent === "Connected") return;
+      retry = 0; setPill("live", "Connected"); showError("");
+      feedLine(null, `Connected to ${S.channel || "chatroom " + currentRoom}. This works whether or not the stream is live. New messages will show here as people type.`);
+    } else if (msg.event === "pusher:ping") {
+      ws.send(JSON.stringify({ event: "pusher:pong", data: {} }));
+    } else if (msg.event === "pusher:error") {
+      setPill("err", "Error"); showError(`Kick's chat server said: ${escapeHtml((msg.data && msg.data.message) || "unknown error")}`);
+    } else if (msg.event === "App\\Events\\ChatMessageEvent") {
+      let d; try { d = typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data; } catch (e) { return; }
+      onChat(d);
+    }
+  };
+  ws.onclose = () => {
+    if (!wantConnected) return;
+    if (!opened && retry >= 1) { socketBlocked(); return; }
+    retry++; setPill("wait", "Reconnecting");
+    retryTimer = setTimeout(openSocket, Math.min(15000, 1000 * 2 ** Math.min(retry, 4)));
+  };
+}
+function socketBlocked() {
+  wantConnected = false; setPill("err", "Blocked");
+  els.connect.hidden = false; els.disconnect.hidden = true;
+  showError("This page couldn't open a connection to Kick's chat server. If you're viewing it inside a preview or an embedded frame, that frame blocks outside connections. Open <b>giveaway-roller.html</b> directly in Chrome, Edge or Firefox and connect from there. Adding names by hand works everywhere.");
+}
+function disconnect(user) {
+  wantConnected = false; clearTimeout(retryTimer); retry = 0;
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
+  if (user) { setPill("", "Not connected"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); }
+}
+
+function messageText(content) { return String(content || "").replace(/\[emote:\d+:[^\]]*\]/g, " ").replace(/\s+/g, " ").trim(); }
+function matches(text) {
+  const kw = S.keyword.trim().toLowerCase(); if (!kw) return false;
+  const t = text.toLowerCase();
+  if (S.matchMode === "exact") return t === kw;
+  if (S.matchMode === "starts") return t === kw || t.startsWith(kw + " ");
+  return (" " + t + " ").includes(" " + kw + " ");
+}
+function isSub(sender) {
+  const badges = (sender && sender.identity && sender.identity.badges) || [];
+  return badges.some(b => ["subscriber", "founder", "og", "broadcaster"].includes(b.type));
+}
+const seenMsgIds = new Set();
+function onChat(d) {
+  if (d.id) {                                             // the same message can arrive on more than one channel
+    if (seenMsgIds.has(d.id)) return;
+    seenMsgIds.add(d.id); if (seenMsgIds.size > 500) seenMsgIds.delete(seenMsgIds.values().next().value);
+  }
+  const sender = d.sender || {}; const name = sender.username || sender.slug; if (!name) return;
+  const text = messageText(d.content);
+  let hit = false;
+  if (S.open && matches(text) && (!S.subs || isSub(sender))) {
+    hit = addEntry(name, "chat"); if (hit) changed();
+  }
+  feedLine(name, text, hit);
+}
+function feedLine(name, text, hit) {
+  const d = document.createElement("div"); if (hit) d.className = "hit";
+  if (name) { const b = document.createElement("b"); b.textContent = name; d.append(b, document.createTextNode(": " + text)); }
+  else d.textContent = text;
+  const atBottom = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 30;
+  if (els.feed.dataset.started !== "1") { els.feed.replaceChildren(); els.feed.dataset.started = "1"; }
+  els.feed.append(d);
+  while (els.feed.childElementCount > 200) els.feed.firstElementChild.remove();
+  if (atBottom) els.feed.scrollTop = els.feed.scrollHeight;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+// expose the simulator for anyone who wants to audit it from the console
+window.giveawayPhysics = { PHYS, H, physStep, simulate(v0, y0 = 0) { const s = { y: y0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s); return s; } };
+
+renderEntries(); renderHistory(); updateRollBtn(); resize();
+if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>
