@@ -197,6 +197,7 @@ details[open] summary { margin-bottom: 10px; }
         <div class="winner-name" id="winnerName">Nobody yet</div>
         <div class="receipt" id="receipt"><span>Press Roll to draw a winner.</span></div>
         <div class="row" id="winnerActions" hidden>
+          <button class="btn primary" id="copyMsg" type="button">Copy message for chat</button>
           <button class="btn" id="copyWinner" type="button">Copy name</button>
           <button class="btn" id="removeWinner" type="button">Remove winner from entries</button>
         </div>
@@ -249,6 +250,10 @@ details[open] summary { margin-bottom: 10px; }
               <option value="starts">starts with the keyword</option>
             </select>
           </div>
+        </div>
+        <div class="field">
+          <label for="winMsg">Winner message ({winner} becomes their @name)</label>
+          <input type="text" id="winMsg" autocomplete="off">
         </div>
         <div class="row">
           <label class="chip-toggle"><input type="checkbox" id="optOpen" checked> Entries open</label>
@@ -338,7 +343,7 @@ const state = {
   entries: new Map(),               // lowercase name -> { name, src }
   example: false,
   history: [],
-  settings: { channel: "", keyword: "!join", matchMode: "exact", open: true, subs: false, sound: true, autoRemove: false, blocked: "" },
+  settings: { channel: "", keyword: "!join", matchMode: "exact", open: true, subs: false, sound: true, autoRemove: false, blocked: "", winMsg: "Congrats @{winner}, you won the giveaway! 🎉" },
   chatroomIds: {}
 };
 function save() {
@@ -379,11 +384,11 @@ const els = {
 const S = state.settings;
 els.channel.value = S.channel; els.keyword.value = S.keyword; els.matchMode.value = S.matchMode;
 els.open.checked = S.open; els.subs.checked = S.subs; els.sound.checked = S.sound; els.autoRemove.checked = S.autoRemove;
-els.blocked.value = S.blocked;
+els.blocked.value = S.blocked; $("winMsg").value = S.winMsg;
 const bindSetting = (el, key, prop = "value") => el.addEventListener(prop === "checked" ? "change" : "input", () => { S[key] = el[prop]; save(); });
 bindSetting(els.channel, "channel"); bindSetting(els.keyword, "keyword"); bindSetting(els.matchMode, "matchMode");
 bindSetting(els.open, "open", "checked"); bindSetting(els.subs, "subs", "checked"); bindSetting(els.sound, "sound", "checked");
-bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked");
+bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked"); bindSetting($("winMsg"), "winMsg");
 
 const blockedSet = () => new Set(S.blocked.split(/[\s,;]+/).map(s => s.replace(/^@/, "").toLowerCase()).filter(Boolean));
 function cleanName(s) { return String(s || "").trim().replace(/^@/, "").replace(/[^\w.-]/g, ""); }
@@ -569,6 +574,12 @@ els.roll.addEventListener("click", startRoll);
 els.removeWinner.addEventListener("click", () => {
   const n = els.winnerActions.dataset.name; if (!n) return;
   removeEntry(n.toLowerCase()); changed(); els.removeWinner.textContent = "Removed"; setTimeout(() => (els.removeWinner.textContent = "Remove winner from entries"), 1500);
+});
+$("copyMsg").addEventListener("click", () => {
+  const n = els.winnerActions.dataset.name || ""; const btn = $("copyMsg");
+  const msg = (S.winMsg || "@{winner}").replace(/@?\{winner\}/g, "@" + n);
+  navigator.clipboard.writeText(msg).then(() => { btn.textContent = "Copied, paste it in Kick chat"; setTimeout(() => (btn.textContent = "Copy message for chat"), 2000); })
+    .catch(() => { btn.textContent = msg; });
 });
 els.copyWinner.addEventListener("click", () => {
   const n = els.winnerActions.dataset.name || "";
