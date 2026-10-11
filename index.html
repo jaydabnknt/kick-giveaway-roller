@@ -208,7 +208,7 @@ details[open] summary { margin-bottom: 10px; }
           <div class="how">
             <p><b>Random push.</b> The launch speed and the starting name both come from <code>crypto.getRandomValues</code>, the browser's cryptographic random source. Nothing about the result is chosen in advance.</p>
             <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, and nothing nudges it toward a name. It can stop anywhere. Once it is at rest, the line in the middle picks whichever name it is touching. The simulation uses a fixed time step, so a slow or busy computer changes how smooth it looks but never where it stops.</p>
-            <p><b>No order bias.</b> Entries are shuffled with a crypto-seeded Fisher–Yates shuffle before every roll and the reel starts on a uniformly random name, so alphabetical order, join order or first letter cannot tilt the odds. Each person gets exactly one slot, no matter how many times they type the keyword.</p>
+            <p><b>No order bias.</b> Entries are shuffled with a crypto-seeded Fisher–Yates shuffle before every roll and the reel starts on a uniformly random name, so alphabetical order, join order or first letter cannot tilt the odds. Each person gets exactly one slot, no matter how many times they type the keyword. With subscriber luck on, subscribers get a second slot, placed randomly but never right next to their first one unless there's no other way.</p>
           </div>
         </details>
       </div>
@@ -237,7 +237,14 @@ details[open] summary { margin-bottom: 10px; }
           </div>
         </div>
         <div class="notice" id="connError" hidden></div>
-        <div class="inline">
+        <div class="field">
+          <label for="entryMode">Who gets entered</label>
+          <select id="entryMode">
+            <option value="keyword">People who type the keyword</option>
+            <option value="active">Anyone who chats</option>
+          </select>
+        </div>
+        <div class="inline" id="keywordRow">
           <div class="field">
             <label for="keyword">Entry keyword</label>
             <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false">
@@ -258,6 +265,12 @@ details[open] summary { margin-bottom: 10px; }
         <div class="row">
           <label class="chip-toggle"><input type="checkbox" id="optOpen" checked> Entries open</label>
           <label class="chip-toggle"><input type="checkbox" id="optSubs"> Subscribers only</label>
+          <label class="chip-toggle"><input type="checkbox" id="optLuck"> Subscriber luck (2 entries)</label>
+        </div>
+        <div class="row" style="align-items:center">
+          <label class="chip-toggle"><input type="checkbox" id="optExpire" checked> Remove people who stop chatting after</label>
+          <input type="number" id="expireMins" min="1" max="240" step="1" value="5" aria-label="Minutes" style="width:70px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px">
+          <span class="hint">minutes</span>
         </div>
         <div>
           <div class="lbl" style="margin-bottom:5px">Live chat</div>
@@ -364,10 +377,10 @@ const mod = (a, n) => ((a % n) + n) % n;
 // ---------- state ----------
 const LS = "kick-giveaway-roller-v1";
 const state = {
-  entries: new Map(),               // lowercase name -> { name, src }
+  entries: new Map(),               // lowercase name -> { name, src, sub, seen }
   example: false,
   history: [],
-  settings: { channel: "", keyword: "!join", matchMode: "exact", open: true, subs: false, sound: true, autoRemove: false, blocked: "", winMsg: "Congrats @{winner}, you won the giveaway! 🎉" },
+  settings: { channel: "", keyword: "!join", matchMode: "exact", open: true, subs: false, sound: true, autoRemove: false, blocked: "", winMsg: "Congrats @{winner}, you won the giveaway! 🎉", entryMode: "keyword", expire: true, expireMins: 5, luck: false },
   chatroomIds: {}
 };
 function save() {
@@ -382,7 +395,7 @@ function load() {
   try {
     const raw = localStorage.getItem(LS); if (!raw) return false;
     const d = JSON.parse(raw);
-    (d.entries || []).forEach(e => state.entries.set(e.name.toLowerCase(), e));
+    (d.entries || []).forEach(e => state.entries.set(e.name.toLowerCase(), { seen: Date.now(), ...e }));
     state.example = !!d.example; state.history = d.history || [];
     Object.assign(state.settings, d.settings || {}); state.chatroomIds = d.chatroomIds || {};
     return true;
@@ -413,28 +426,56 @@ const bindSetting = (el, key, prop = "value") => el.addEventListener(prop === "c
 bindSetting(els.channel, "channel"); bindSetting(els.keyword, "keyword"); bindSetting(els.matchMode, "matchMode");
 bindSetting(els.open, "open", "checked"); bindSetting(els.subs, "subs", "checked"); bindSetting(els.sound, "sound", "checked");
 bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked"); bindSetting($("winMsg"), "winMsg");
+$("entryMode").value = S.entryMode; $("optExpire").checked = S.expire; $("expireMins").value = S.expireMins; $("optLuck").checked = S.luck;
+function syncModeUI() { $("keywordRow").hidden = S.entryMode === "active"; }
+$("entryMode").addEventListener("change", () => { S.entryMode = $("entryMode").value; syncModeUI(); save(); });
+$("optExpire").addEventListener("change", () => { S.expire = $("optExpire").checked; save(); sweepInactive(); renderEntries(); });
+$("expireMins").addEventListener("input", () => { const v = Math.round(Number($("expireMins").value)); if (v >= 1) { S.expireMins = Math.min(240, v); save(); } });
+$("optLuck").addEventListener("change", () => { S.luck = $("optLuck").checked; save(); changed(); });
+syncModeUI();
 
 const blockedSet = () => new Set(S.blocked.split(/[\s,;]+/).map(s => s.replace(/^@/, "").toLowerCase()).filter(Boolean));
 function cleanName(s) { return String(s || "").trim().replace(/^@/, "").replace(/[^\w.-]/g, ""); }
 
 // ---------- entries ----------
-function addEntry(name, src) {
+function addEntry(name, src, sub = false) {
   name = cleanName(name); if (!name) return false;
   const key = name.toLowerCase();
   if (state.entries.has(key) || blockedSet().has(key)) return false;
   if (state.example) { state.entries.clear(); state.example = false; }
-  state.entries.set(key, { name, src });
+  state.entries.set(key, { name, src, sub: !!sub, seen: Date.now() });
   return true;
+}
+// Chat entrants who go quiet for longer than the set time drop out. Names added by hand stay.
+function sweepInactive() {
+  if (!S.expire || rolling) return false;
+  const cutoff = Date.now() - S.expireMins * 60000; let removed = false;
+  for (const [k, e] of state.entries) if (e.src === "chat" && (e.seen || 0) < cutoff) { state.entries.delete(k); removed = true; }
+  if (removed) changed();
+  return removed;
+}
+setInterval(() => { if (!sweepInactive()) refreshIdleLabels(); }, 5000);
+function idleLabel(e) {
+  if (e.src !== "chat") return "Added by hand";
+  const mins = Math.floor((Date.now() - (e.seen || 0)) / 60000);
+  const last = mins < 1 ? "active just now" : `last chatted ${mins} min ago`;
+  if (!S.expire) return "Entered from chat, " + last;
+  const left = Math.max(0, Math.ceil(((e.seen || 0) + S.expireMins * 60000 - Date.now()) / 60000));
+  return `Entered from chat, ${last}. Drops out in ${left} min unless they chat.`;
+}
+function refreshIdleLabels() {
+  els.entries.querySelectorAll(".entry span[data-key]").forEach(sp => { const e = state.entries.get(sp.dataset.key); if (e) sp.title = idleLabel(e); });
 }
 function removeEntry(key) { state.entries.delete(key); }
 function renderEntries() {
   const list = [...state.entries.entries()];
-  els.count.innerHTML = `${list.length}<small>${list.length === 1 ? "entry" : "entries"}</small>`;
+  const lucky = S.luck ? list.filter(([, e]) => e.sub).length : 0;
+  els.count.innerHTML = `${list.length}<small>${list.length === 1 ? "person" : "people"}${lucky ? ` · ${list.length + lucky} entries with subscriber luck` : ""}</small>`;
   els.exampleBanner.hidden = !state.example;
   const frag = document.createDocumentFragment();
   for (const [key, e] of list) {
     const d = document.createElement("div"); d.className = "entry" + (e.src === "chat" ? " chat" : "");
-    const sp = document.createElement("span"); sp.textContent = e.name; sp.title = e.src === "chat" ? "Entered from chat" : "Added by hand";
+    const sp = document.createElement("span"); sp.textContent = e.name + (S.luck && e.sub ? "  ×2" : ""); sp.dataset.key = key; sp.title = idleLabel(e);
     const b = document.createElement("button"); b.type = "button"; b.textContent = "×"; b.setAttribute("aria-label", `Remove ${e.name}`);
     b.addEventListener("click", () => { removeEntry(key); changed(); });
     d.append(sp, b); frag.append(d);
@@ -547,9 +588,26 @@ function clack(when, speed) {
 // ---------- roll ----------
 let launch = null, lastFrame = 0, acc = 0, lastSlot = 0;
 function updateRollBtn() { els.roll.disabled = rolling || state.entries.size < 2; els.roll.textContent = rolling ? "Rolling…" : "Roll"; }
+// Every entry gets one slot on the reel; with subscriber luck, subscribers get a second slot.
+// Slots are crypto-shuffled and reshuffled until no one's two slots touch (the reel wraps around),
+// unless that's impossible, in which case the arrangement with the fewest touching pairs is used.
+// The reel starts on a uniformly random slot, so every slot has the same chance to win.
+function buildReel(entries) {
+  const slots = [];
+  for (const e of entries) { slots.push(e.name); if (S.luck && e.sub) slots.push(e.name); }
+  if (slots.length === entries.length) return shuffle(slots);
+  const touching = a => { let n = 0; for (let i = 0; i < a.length; i++) if (a[i] === a[(i + 1) % a.length]) n++; return n; };
+  let best = null, bestN = Infinity;
+  for (let t = 0; t < 400; t++) {
+    const a = shuffle(slots), n = touching(a);
+    if (n < bestN) { best = a; bestN = n; }
+    if (n === 0) break;
+  }
+  return best;
+}
 function startRoll() {
   if (rolling || state.entries.size < 2) return;
-  order = shuffle([...state.entries.values()].map(e => e.name));
+  order = buildReel([...state.entries.values()]);
   const N = order.length;
   const startIdx = randInt(N);
   const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
@@ -753,8 +811,12 @@ function onChat(d) {
   const sender = d.sender || {}; const name = sender.username || sender.slug; if (!name) return;
   const text = messageText(d.content);
   let hit = false;
-  if (S.open && matches(text) && (!S.subs || isSub(sender))) {
-    hit = addEntry(name, "chat"); if (hit) changed();
+  const key = cleanName(name).toLowerCase(), existing = state.entries.get(key);
+  if (existing && existing.src === "chat") {             // already in: any message keeps them active
+    const wasSub = existing.sub; existing.seen = Date.now(); existing.sub = isSub(sender); save();
+    if (wasSub !== existing.sub) renderEntries();
+  } else if (S.open && (S.entryMode === "active" || matches(text)) && (!S.subs || isSub(sender))) {
+    hit = addEntry(name, "chat", isSub(sender)); if (hit) changed();
   }
   feedLine(name, text, hit);
 }
