@@ -150,9 +150,9 @@ input[type=text]:focus, select:focus, textarea:focus { border-color: var(--brass
 .count { font-family: var(--display); font-weight: 900; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
 .count small { font-family: var(--body); font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .entries { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px; }
-.entry { display: inline-flex; align-items: center; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px 3px 9px; font-size: 13.5px; max-width: 100%; }
+.entry { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px 3px 5px; font-size: 13.5px; max-width: 100%; }
+.entry .chip-av { flex: none; width: 18px; height: 18px; border-radius: 50%; background-size: cover; background-position: center; color: #0b0e0f; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entry.chat span::before { content: "●"; color: var(--live); font-size: 9px; margin-right: 6px; vertical-align: 2px; }
 .entry button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 5px; font-size: 15px; line-height: 1; border-radius: 2px; }
 .entry button:hover { color: var(--warn); background: var(--bg); }
 .example-banner { font-size: 13px; color: var(--brass); }
@@ -449,12 +449,16 @@ function renderEntries() {
     const sp = document.createElement("span"); sp.textContent = e.name + (S.luck && e.sub ? "  ×2" : ""); sp.dataset.key = key; sp.title = idleLabel(e);
     const b = document.createElement("button"); b.type = "button"; b.textContent = "×"; b.setAttribute("aria-label", `Remove ${e.name}`);
     b.addEventListener("click", () => { removeEntry(key); changed(); });
-    d.append(sp, b); frag.append(d);
+    const ai = document.createElement("span"); ai.className = "chip-av"; const a = avatarFor(e.name);
+    if (a.url) ai.style.backgroundImage = `url("${a.url.replace(/"/g, "")}")`; else { ai.style.background = a.color; ai.textContent = e.name[0].toUpperCase(); }
+    d.append(ai, sp, b); frag.append(d);
   }
   els.entries.replaceChildren(frag);
   if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No entries yet. Connect to a channel and have chat type the keyword, or add names by hand."; els.entries.append(p); }
 }
-function changed() { save(); renderEntries(); if (!rolling) { idleOrder = [...state.entries.values()].map(e => e.name); draw(); } updateRollBtn(); }
+function changed() { save(); renderEntries(); if (!rolling) { idleOrder = [...state.entries.values()].map(e => e.name); const w = winnerIdx >= 0 ? order[winnerIdx] : null;
+    if (!w || !state.entries.has(w.toLowerCase())) { winnerIdx = -1; order = idleOrder; }   // keep a shown result until its winner is removed
+    draw(); } updateRollBtn(); }
 
 els.add.addEventListener("click", () => {
   const names = els.manual.value.split(/[\s,;]+/).filter(Boolean);
@@ -486,6 +490,18 @@ function fitFont(name, maxW, base) {
   const w = ctx.measureText(name).width; if (w > maxW) size = Math.max(14, Math.floor(base * maxW / w));
   return size;
 }
+function drawAvatar(name, x, y, size, picked) {
+  const a = avatarFor(name), r = size / 2;
+  ctx.save(); ctx.beginPath(); ctx.arc(x + r, y + r, r, 0, Math.PI * 2); ctx.closePath();
+  if (a.img) { ctx.clip(); ctx.drawImage(a.img, x, y, size, size); }
+  else {
+    ctx.fillStyle = a.color; ctx.fill();
+    ctx.fillStyle = "#0b0e0f"; ctx.font = `800 ${Math.round(size * 0.48)}px ${css.getPropertyValue("--display")}`;
+    ctx.textAlign = "center"; ctx.fillText(name[0].toUpperCase(), x + r, y + r + 1);
+  }
+  ctx.restore();
+  if (picked) { ctx.save(); ctx.strokeStyle = C.brass; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x + r, y + r, r + 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+}
 function drawPass(y, alpha) {
   const N = order.length; const mid = Ht / 2;
   const first = Math.floor((y - mid) / H) - 1, last = Math.ceil((y + mid) / H) + 1;
@@ -495,11 +511,14 @@ function drawPass(y, alpha) {
     const name = order[mod(i, N)];
     const atMarker = Math.abs(sy - mid) < H / 2;          // the line falls inside this name's slot
     const picked = atMarker && sim.done && winnerIdx >= 0;
-    const size = fitFont(name, W - 80, picked ? 34 : 30);
+    const av = picked ? 42 : 36, gap = 12;               // profile picture to the left of the name
+    const size = fitFont(name, W - 80 - av - gap, picked ? 34 : 30);
     ctx.font = `${picked ? 900 : 700} ${size}px ${css.getPropertyValue("--display")}`;
+    const tw = ctx.measureText(name).width, x0 = W / 2 - (av + gap + tw) / 2;
     ctx.globalAlpha = alpha * Math.max(0, 1 - dist * dist * 0.92);
+    drawAvatar(name, x0, sy - av / 2, av, picked);
     ctx.fillStyle = picked ? C.brass : (atMarker ? C.fg : C.muted);
-    ctx.fillText(name, W / 2, sy);
+    ctx.textAlign = "left"; ctx.fillText(name, x0 + av + gap, sy); ctx.textAlign = "center";
     if (alpha === 1) {                                    // faint divider so it's clear which slot the line is in
       ctx.globalAlpha = 0.35 * Math.max(0, 1 - dist * dist);
       ctx.fillStyle = C.muted; ctx.fillRect(W * 0.2, Math.round(sy + H / 2), W * 0.6, 1);
@@ -667,6 +686,58 @@ async function fetchWithTimeout(url, ms) {
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), ms);
   try { return await fetch(url, { credentials: "omit", signal: ctl.signal }); } finally { clearTimeout(timer); }
 }
+// ---------- profile pictures ----------
+// Kick's chat messages don't include profile pictures, so each entrant's picture is looked up
+// once from their Kick channel page (same route as the chatroom lookup) and remembered.
+const AV_KEY = "kick-giveaway-roller-avatars";
+let avatarUrls = {}; try { avatarUrls = JSON.parse(localStorage.getItem(AV_KEY) || "{}"); } catch (e) {}
+const avatarImgs = new Map(), avatarQueue = [], avatarPending = new Set();
+let avatarActive = 0;
+function colorFor(name) { let h = 0; for (const c of name.toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `hsl(${h % 360} 70% 62%)`; }
+function avatarFor(name) {
+  const key = name.toLowerCase(), url = avatarUrls[key];
+  if (url === undefined) requestAvatar(key);
+  const img = url ? avatarImgs.get(key) : null;
+  if (url && !img) loadAvatarImg(key, url);
+  return { url: url || null, img: img && img.complete && img.naturalWidth ? img : null, color: colorFor(name) };
+}
+function loadAvatarImg(key, url) {
+  const img = new Image(); avatarImgs.set(key, img);
+  img.onload = () => { if (!rolling) draw(); };
+  img.onerror = () => { avatarUrls[key] = null; };
+  img.referrerPolicy = "no-referrer"; img.src = url;
+}
+function requestAvatar(key) {
+  if (avatarPending.has(key)) return;
+  if (state.example && EXAMPLES.some(n => n.toLowerCase() === key)) return;   // example names have no Kick account
+  avatarPending.add(key); avatarQueue.push(key); pumpAvatars();
+}
+async function pumpAvatars() {
+  while (avatarActive < 2 && avatarQueue.length) {
+    const key = avatarQueue.shift(); avatarActive++;
+    fetchAvatarUrl(key).then(url => {
+      avatarUrls[key] = url; try { localStorage.setItem(AV_KEY, JSON.stringify(avatarUrls)); } catch (e) {}
+      if (url) loadAvatarImg(key, url);
+      renderEntries();
+    }).finally(() => { avatarActive--; pumpAvatars(); });
+  }
+}
+async function fetchAvatarUrl(slug) {
+  const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug.replace(/_/g, "-"))}`;
+  for (const relay of RELAYS) {
+    try {
+      const r = await fetchWithTimeout(relay(target), 7000);
+      if (r.status === 404) return null;
+      if (!r.ok) continue;
+      const t = await r.text();
+      const m = t.match(/"profile_pic"\s*:\s*"([^"]+)"/);
+      if (m) return m[1].replace(/\\\//g, "/");
+      if (/"user"\s*:/.test(t)) return null;            // valid page, the user just has no picture
+    } catch (e) {}
+  }
+  return undefined;                                     // couldn't reach Kick; try again next load
+}
+
 async function lookupChatroom(slug) {
   if (state.chatroomIds[slug]) return state.chatroomIds[slug];
   const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
