@@ -8,22 +8,23 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: stage-left reel beside a control column; stacks on phones. Single dark look in Kick's palette: flat panels, square corners, green accent. */
+/* Layout: reel stage on the left, setup panels on the right; on phones it becomes one column with
+   the reel and Roll button first and the panels as collapsible sections. Kick's palette: near-black,
+   flat graphite panels, small radii, Kick green as the only accent. */
 :root {
   --bg: #0b0e0f;
-  --panel: #191b1f;
-  --panel-2: #24272c;
-  --line: #2f3338;
+  --panel: #16181c;
+  --panel-2: #202328;
+  --line: #2a2e34;
   --fg: #ffffff;
-  --muted: #a3acb6;
-  --brass: #53fc18;          /* Kick green: the one accent */
-  --brass-deep: #3ec70f;
+  --muted: #9aa3ad;
+  --accent: #53fc18;
+  --accent-hi: #74ff42;
+  --accent-deep: #3ec70f;
   --on-accent: #0b0e0f;
-  --live: #53fc18;
   --warn: #ff5c5c;
-  --r: 4px;
-  --display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 6px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   color-scheme: dark;
 }
@@ -32,141 +33,179 @@
 html, body { min-height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
-  font-family: var(--body); font-size: 15px; line-height: 1.5;
-  padding: 20px 16px 40px;
+  background-image: radial-gradient(900px 420px at 15% -10%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+  background-repeat: no-repeat;
+  font-family: var(--font); font-size: 15px; line-height: 1.5;
+  padding: 18px 16px 40px; -webkit-tap-highlight-color: transparent;
 }
-a { color: var(--brass); }
+a { color: var(--accent); }
 button, input, select, textarea { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 3px; word-break: break-all; }
 
-.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
-header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
-h1 {
-  margin: 0; font-family: var(--display); font-weight: 900; font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.03em; line-height: 1.05; text-wrap: balance;
-}
-h1 span { color: var(--brass); }
-.tagline { color: var(--muted); margin: 0; max-width: 60ch; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 18px; }
 
-.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mark { flex: none; width: 34px; height: 34px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+.mark svg { width: 20px; height: 20px; }
+h1 { margin: 0; font-weight: 900; font-size: clamp(20px, 3.2vw, 28px); letter-spacing: -0.03em; line-height: 1; white-space: nowrap; }
+h1 span { color: var(--accent); }
+
+.pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .05em; padding: 5px 11px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.live { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.pill.live::before { box-shadow: 0 0 8px var(--accent); animation: blink 1.6s infinite; }
+.pill.wait { color: #ffd166; border-color: color-mix(in srgb, #ffd166 40%, transparent); }
+.pill.err { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+@keyframes blink { 50% { opacity: .3; } }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 
 /* Stage */
-.stage { display: grid; gap: 14px; min-width: 0; }
+.stage { display: grid; gap: 12px; min-width: 0; }
+@media (min-width: 861px) { .stage { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
 .reel-box {
-  position: relative; border-radius: var(--r); overflow: hidden;
-  background: var(--panel);
+  position: relative; border-radius: 12px; overflow: hidden;
+  background: linear-gradient(180deg, var(--panel) 0%, #121418 50%, var(--panel) 100%);
   border: 1px solid var(--line);
-  height: clamp(340px, 56vh, 520px);
+  height: clamp(320px, 58vh, 540px);
 }
 .reel-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.reel-box::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, var(--panel) 0%, transparent 22%, transparent 78%, var(--panel) 100%); }
 .marker {
-  position: absolute; left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
-  background: var(--brass); box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 70%, transparent);
+  position: absolute; left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%); z-index: 1;
+  background: var(--accent); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 80%, transparent);
   pointer-events: none;
 }
 .marker::before, .marker::after {
   content: ""; position: absolute; top: 50%; width: 0; height: 0; transform: translateY(-50%);
   border-top: 9px solid transparent; border-bottom: 9px solid transparent;
 }
-.marker::before { left: 0; border-left: 14px solid var(--brass); }
-.marker::after { right: 0; border-right: 14px solid var(--brass); }
-.reel-empty {
-  position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px;
-  color: var(--muted); font-size: 16px;
-}
+.marker::before { left: 0; border-left: 14px solid var(--accent); }
+.marker::after { right: 0; border-right: 14px solid var(--accent); }
+.reel-empty { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); font-size: 16px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
 
-.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .roll {
-  flex: 1 1 220px; border: 0; border-radius: var(--r); cursor: pointer;
-  background: var(--brass); color: var(--on-accent);
-  font-family: var(--display); font-weight: 900; font-size: 20px; letter-spacing: 0.06em;
-  padding: 16px 20px; text-transform: uppercase;
-  transition: background .12s, transform .08s;
+  width: 100%; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--accent); color: var(--on-accent);
+  font-weight: 900; font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 18px 20px; min-height: 64px;
+  box-shadow: 0 8px 28px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: background .12s, transform .08s, box-shadow .2s;
 }
-.roll:hover { background: #6dff38; }
-.roll:active { background: var(--brass-deep); transform: translateY(1px); }
-.roll:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; transform: none; }
-.chip-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; cursor: pointer; }
-.chip-toggle input { accent-color: var(--brass); width: 16px; height: 16px; }
+.roll:hover { background: var(--accent-hi); }
+.roll:active { background: var(--accent-deep); transform: translateY(1px); }
+.roll:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+.roll kbd { font: 600 11px var(--mono); letter-spacing: 0; opacity: .55; margin-left: 10px; vertical-align: 3px; }
+@media (hover: none) { .roll kbd { display: none; } }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 
-.result {
-  border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); padding: 16px 18px;
-  display: grid; gap: 10px;
-}
-.result .label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
-.winner-name {
-  font-family: var(--display); font-weight: 900;   font-size: clamp(28px, 5vw, 44px); line-height: 1.05; color: var(--brass); word-break: break-word;
-}
+/* Switch-style checkboxes */
+.sw { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; cursor: pointer; min-height: 32px; user-select: none; }
+.sw input { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; margin: 0; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background .15s, border-color .15s; }
+.sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.sw input:checked { background: var(--accent); border-color: var(--accent); }
+.sw input:checked::after { transform: translateX(14px); background: var(--on-accent); }
+.sw:has(input:checked) { color: var(--fg); }
+
+/* Winner */
+.result { border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: center; }
+.result.won { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent), 0 10px 40px -18px color-mix(in srgb, var(--accent) 60%, transparent); }
+.win-av { grid-row: span 2; width: 52px; height: 52px; border-radius: 50%; background: var(--panel-2) center / cover no-repeat; display: grid; place-items: center; font-weight: 900; font-size: 22px; color: var(--on-accent); }
+.result.won .win-av { box-shadow: 0 0 0 2px var(--accent); }
+.result .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.winner-name { font-weight: 900; font-size: clamp(24px, 4.4vw, 38px); line-height: 1.05; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.result.won .winner-name { color: var(--accent); }
 .winner-name.pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes pop { from { transform: scale(.85); opacity: .3; } to { transform: scale(1); opacity: 1; } }
-.receipt { font-family: var(--mono); font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; font-variant-numeric: tabular-nums; }
+.receipt { grid-column: 1 / -1; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; font-variant-numeric: tabular-nums; margin-top: 6px; }
 .receipt b { color: var(--fg); font-weight: 600; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.result .row { grid-column: 1 / -1; margin-top: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
-.btn {
-  border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--r); padding: 8px 14px; cursor: pointer;
-  font-weight: 600; font-size: 14px;
-}
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--r); padding: 8px 14px; min-height: 38px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background .12s, border-color .12s; }
 .btn:hover { background: var(--line); }
-.btn.primary:hover { background: #6dff38; }
-.btn.primary { font-weight: 700; background: var(--brass); color: var(--on-accent); border-color: var(--brass); }
+.btn.primary { font-weight: 800; background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.primary:hover { background: var(--accent-hi); }
 .btn.ghost { background: transparent; }
 .btn.danger { color: var(--warn); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-/* Desk */
-.desk { display: grid; gap: 16px; min-width: 0; }
-.card { border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); padding: 16px; display: grid; gap: 12px; min-width: 0; }
-.card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
-.field { display: grid; gap: 5px; min-width: 0; }
-.field label, .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
-input[type=text], select, textarea {
-  width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 11px; min-width: 0;
-}
-textarea { resize: vertical; min-height: 70px; font-family: var(--mono); font-size: 13px; }
-input[type=text]:focus, select:focus, textarea:focus { border-color: var(--brass); outline: none; }
+/* Panels */
+.desk { display: grid; gap: 12px; min-width: 0; }
+.panel { border-radius: 12px; border: 1px solid var(--line); background: var(--panel); min-width: 0; }
+.panel > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+.panel > summary::-webkit-details-marker { display: none; }
+.panel > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: -4px 4px 0 auto; transition: transform .15s; }
+.panel[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+.panel > summary .meta { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.panel-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+input[type=text], input[type=number], select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 11px; min-height: 40px; min-width: 0; }
+textarea { resize: vertical; min-height: 64px; font-family: var(--mono); font-size: 13px; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .inline { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
-.inline > .field { flex: 1 1 160px; }
+.inline > .field { flex: 1 1 150px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; }
 .notice { border-radius: var(--r); padding: 10px 12px; font-size: 13.5px; background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
-.notice.info { background: color-mix(in srgb, var(--live) 9%, var(--panel)); border-color: color-mix(in srgb, var(--live) 35%, transparent); }
-.notice code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 2px; word-break: break-all; }
+.notice.info { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.mins { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.mins input { width: 64px; min-height: 32px; padding: 4px 8px; text-align: center; }
 
-.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--body); font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 3px 10px; border-radius: 2px; border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; }
-.pill::before { content: ""; width: 7px; height: 7px; border-radius: 1px; background: currentColor; }
-.pill.live { color: var(--live); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
-.pill.live::before { animation: blink 1.4s infinite; }
-.pill.wait { color: var(--brass); border-color: color-mix(in srgb, var(--brass) 45%, transparent); }
-.pill.err { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-@keyframes blink { 50% { opacity: .25; } }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; color: var(--muted); border-radius: 4px; padding: 8px 10px; min-height: 36px; font-weight: 700; font-size: 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
 
-.feed { max-height: 170px; overflow-y: auto; font-size: 13px; display: grid; gap: 2px; background: var(--bg); border-radius: var(--r); padding: 8px 10px; border: 1px solid var(--line); }
+.feed { max-height: 160px; overflow-y: auto; font-size: 13px; display: grid; gap: 2px; background: var(--bg); border-radius: var(--r); padding: 8px 10px; border: 1px solid var(--line); overscroll-behavior: contain; }
 .feed div { overflow-wrap: anywhere; color: var(--muted); }
 .feed div b { color: var(--fg); font-weight: 600; }
-.feed div.hit b { color: var(--live); }
-.feed div.hit::after { content: "  entered"; color: var(--live); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.feed div.hit b { color: var(--accent); }
+.feed div.hit::after { content: "  entered"; color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 
-.entries-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
-.count { font-family: var(--display); font-weight: 900; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
-.count small { font-family: var(--body); font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
-.entries { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px; }
-.entry { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px 3px 5px; font-size: 13.5px; max-width: 100%; }
-.entry .chip-av { flex: none; width: 18px; height: 18px; border-radius: 50%; background-size: cover; background-position: center; color: #0b0e0f; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.entries { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; padding: 1px; overscroll-behavior: contain; }
+.entry { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 3px 3px 3px 4px; font-size: 13.5px; max-width: 100%; }
+.entry .chip-av { flex: none; width: 20px; height: 20px; border-radius: 50%; background-size: cover; background-position: center; color: var(--on-accent); font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entry button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 5px; font-size: 15px; line-height: 1; border-radius: 2px; }
+.entry .x2 { flex: none; font-size: 10px; font-weight: 800; color: var(--on-accent); background: var(--accent); border-radius: 99px; padding: 1px 5px; }
+.entry button { flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; width: 24px; height: 24px; font-size: 15px; line-height: 1; border-radius: 50%; }
 .entry button:hover { color: var(--warn); background: var(--bg); }
-.example-banner { font-size: 13px; color: var(--brass); }
+.example-banner { font-size: 13px; color: var(--accent); }
 
-details summary { cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 600; }
-details[open] summary { margin-bottom: 10px; }
-.history { display: grid; gap: 4px; font-size: 13.5px; }
-.history div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--line); padding: 3px 0; }
+details.sub > summary { cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 600; }
+details.sub[open] > summary { margin-bottom: 10px; }
+.history { display: grid; font-size: 14px; }
+.history div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding: 7px 0; }
+.history div:last-child { border-bottom: 0; }
 .history time { color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
 
 .how { color: var(--muted); font-size: 13.5px; display: grid; gap: 8px; max-width: 75ch; }
 .how p { margin: 0; }
 .how b { color: var(--fg); }
+footer { padding-top: 4px; }
 
+/* Phones: one column, bigger touch targets, 16px inputs so iOS doesn't zoom in. */
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .reel-box { height: clamp(260px, 44vh, 420px); }
+}
+@media (max-width: 560px) {
+  body { padding-top: 12px; }
+  .wrap { gap: 14px; }
+  h1 { font-size: 21px; }
+  .mark { width: 30px; height: 30px; }
+  input[type=text], input[type=number], select, textarea, .seg button { font-size: 16px; min-height: 44px; }
+  .btn { min-height: 44px; }
+  .sw { font-size: 15px; min-height: 40px; }
+  .result { padding: 12px 14px; }
+  .win-av { width: 44px; height: 44px; font-size: 19px; }
+  .result .row .btn { flex: 1 1 0; }
+  .roll { font-size: 21px; min-height: 60px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .pill.live::before, .winner-name.pop { animation: none; }
 }
@@ -176,8 +215,11 @@ details[open] summary { margin-bottom: 10px; }
 
 <div class="wrap">
   <header class="top">
-    <h1>Kick Giveaway <span>Roller</span></h1>
-    <p class="tagline">Chatters type the keyword to enter. The reel gets a random push, physics decides where it stops, and the line picks the name it lands on.</p>
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></div>
+      <h1>Giveaway <span>Roller</span></h1>
+    </div>
+    <span class="pill" id="connPill">Offline</span>
   </header>
 
   <div class="grid">
@@ -187,123 +229,129 @@ details[open] summary { margin-bottom: 10px; }
         <div class="marker"></div>
         <div class="reel-empty" id="reelEmpty" hidden>Add at least two entries to roll.</div>
       </div>
-      <div class="controls">
-        <button class="roll" id="rollBtn" type="button">Roll</button>
-        <label class="chip-toggle"><input type="checkbox" id="optSound" checked> Tick sound</label>
-        <label class="chip-toggle"><input type="checkbox" id="optAutoRemove"> Take winner out after each roll</label>
+      <button class="roll" id="rollBtn" type="button">Roll</button>
+      <div class="toggles">
+        <label class="sw"><input type="checkbox" id="optSound" checked> Tick sound</label>
+        <label class="sw"><input type="checkbox" id="optAutoRemove"> Take winner out after each roll</label>
       </div>
       <div class="result" id="result" aria-live="polite">
+        <div class="win-av" id="winnerAv" aria-hidden="true">?</div>
         <div class="label" id="resultLabel">Winner</div>
         <div class="winner-name" id="winnerName">Nobody yet</div>
         <div class="receipt" id="receipt"><span>Press Roll to draw a winner.</span></div>
         <div class="row" id="winnerActions" hidden>
           <button class="btn" id="copyWinner" type="button">Copy name</button>
-          <button class="btn" id="removeWinner" type="button">Remove winner from entries</button>
+          <button class="btn" id="removeWinner" type="button">Remove from entries</button>
         </div>
-      </div>
-      <div class="card">
-        <details>
-          <summary>How the roll stays fair</summary>
-          <div class="how">
-            <p><b>Random push.</b> The launch speed and the starting name both come from <code>crypto.getRandomValues</code>, the browser's cryptographic random source. Nothing about the result is chosen in advance.</p>
-            <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, and nothing nudges it toward a name. It can stop anywhere. Once it is at rest, the line in the middle picks whichever name it is touching. The simulation uses a fixed time step, so a slow or busy computer changes how smooth it looks but never where it stops.</p>
-            <p><b>No order bias.</b> Entries are shuffled with a crypto-seeded Fisher–Yates shuffle before every roll and the reel starts on a uniformly random name, so alphabetical order, join order or first letter cannot tilt the odds. Each person gets exactly one slot, no matter how many times they type the keyword. With subscriber luck on, subscribers get a second slot, placed randomly but never right next to their first one unless there's no other way.</p>
-          </div>
-        </details>
       </div>
     </section>
 
     <section class="desk" aria-label="Setup">
-      <div class="card">
-        <h2>Kick chat <span class="pill" id="connPill">Not connected</span></h2>
-        <div class="inline">
-          <div class="field">
-            <label for="channel">Channel name</label>
-            <input type="text" id="channel" placeholder="e.g. trainwreckstv" autocomplete="off" spellcheck="false">
-          </div>
-          <button class="btn primary" id="connectBtn" type="button">Connect</button>
-          <button class="btn ghost" id="disconnectBtn" type="button" hidden>Disconnect</button>
-        </div>
-        <div class="notice info" id="lookupHelp" hidden>
-          <div id="lookupMsg"></div>
-          <p class="hint" style="margin-top:8px">Open <a id="lookupLink" href="https://kick.com/api/v2/channels/" target="_blank" rel="noopener">this page on kick.com</a>, then copy the number after <code>"chatroom":{"id":</code> and paste it below. You can also paste the whole page and the number is picked out for you.</p>
-          <div class="inline" style="margin-top:8px">
+      <details class="panel" open>
+        <summary>Kick chat</summary>
+        <div class="panel-body">
+          <div class="inline">
             <div class="field">
-              <label for="chatroomId">Chatroom ID</label>
-              <input type="text" id="chatroomId" placeholder="e.g. 668" autocomplete="off" spellcheck="false">
+              <label for="channel">Channel</label>
+              <input type="text" id="channel" placeholder="e.g. trainwreckstv" autocomplete="off" spellcheck="false" autocapitalize="off">
             </div>
-            <button class="btn primary" id="useIdBtn" type="button">Use this ID</button>
+            <button class="btn primary" id="connectBtn" type="button">Connect</button>
+            <button class="btn" id="disconnectBtn" type="button" hidden>Disconnect</button>
           </div>
-        </div>
-        <div class="notice" id="connError" hidden></div>
-        <div class="field">
-          <label for="entryMode">Who gets entered</label>
-          <select id="entryMode">
-            <option value="keyword">People who type the keyword</option>
-            <option value="active">Anyone who chats</option>
-          </select>
-        </div>
-        <div class="inline" id="keywordRow">
-          <div class="field">
-            <label for="keyword">Entry keyword</label>
-            <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false">
+          <div class="notice info" id="lookupHelp" hidden>
+            <div id="lookupMsg"></div>
+            <p class="hint" style="margin-top:8px">Open <a id="lookupLink" href="https://kick.com/api/v2/channels/" target="_blank" rel="noopener">this page on kick.com</a>, copy the number after <code>"chatroom":{"id":</code> and paste it below. Pasting the whole page works too.</p>
+            <div class="inline" style="margin-top:8px">
+              <div class="field">
+                <label for="chatroomId">Chatroom ID</label>
+                <input type="text" id="chatroomId" placeholder="e.g. 668" autocomplete="off" spellcheck="false" inputmode="numeric">
+              </div>
+              <button class="btn primary" id="useIdBtn" type="button">Use this ID</button>
+            </div>
           </div>
-          <div class="field">
-            <label for="matchMode">Counts when the message</label>
-            <select id="matchMode">
-              <option value="exact">is exactly the keyword</option>
-              <option value="word">contains the keyword</option>
-              <option value="starts">starts with the keyword</option>
-            </select>
-          </div>
+          <div class="notice" id="connError" hidden></div>
+          <div class="feed" id="feed"><div>Chat shows up here once you connect. Messages that enter someone are marked.</div></div>
         </div>
-        <div class="row">
-          <label class="chip-toggle"><input type="checkbox" id="optOpen" checked> Entries open</label>
-          <label class="chip-toggle"><input type="checkbox" id="optSubs"> Subscribers only</label>
-          <label class="chip-toggle"><input type="checkbox" id="optLuck"> Subscriber luck (2 entries)</label>
-        </div>
-        <div class="row" style="align-items:center">
-          <label class="chip-toggle"><input type="checkbox" id="optExpire" checked> Remove people who stop chatting after</label>
-          <input type="number" id="expireMins" min="1" max="240" step="1" value="5" aria-label="Minutes" style="width:70px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px">
-          <span class="hint">minutes</span>
-        </div>
-        <div>
-          <div class="lbl" style="margin-bottom:5px">Live chat</div>
-          <div class="feed" id="feed"><div>Connect to a channel to see chat here. Matching messages are marked as entered.</div></div>
-        </div>
-      </div>
+      </details>
 
-      <div class="card">
-        <div class="entries-head">
-          <div class="count" id="count">0<small>entries</small></div>
+      <details class="panel" open>
+        <summary>Entry rules</summary>
+        <div class="panel-body">
+          <div class="seg" role="group" aria-label="Who gets entered">
+            <button type="button" data-mode="keyword" aria-pressed="true">Keyword</button>
+            <button type="button" data-mode="active" aria-pressed="false">Anyone chatting</button>
+          </div>
+          <div class="inline" id="keywordRow">
+            <div class="field">
+              <label for="keyword">Keyword</label>
+              <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label for="matchMode">Counts when the message</label>
+              <select id="matchMode">
+                <option value="exact">is exactly the keyword</option>
+                <option value="word">contains the keyword</option>
+                <option value="starts">starts with the keyword</option>
+              </select>
+            </div>
+          </div>
+          <div class="toggles">
+            <label class="sw"><input type="checkbox" id="optOpen" checked> Entries open</label>
+            <label class="sw"><input type="checkbox" id="optSubs"> Subscribers only</label>
+            <label class="sw"><input type="checkbox" id="optLuck"> Subscriber luck (2 entries)</label>
+          </div>
           <div class="row">
-            <button class="btn ghost danger" id="clearBtn" type="button">Clear all</button>
+            <label class="sw"><input type="checkbox" id="optExpire" checked> Drop people who go quiet</label>
+            <span class="mins"><input type="number" id="expireMins" min="1" max="240" step="1" value="5" inputmode="numeric" aria-label="Minutes before a quiet person drops out"> min</span>
           </div>
         </div>
-        <div class="example-banner" id="exampleBanner" hidden>These are example names so you can try the reel. Clear them before a real giveaway.</div>
-        <div class="entries" id="entries"></div>
-        <div class="inline">
-          <div class="field">
-            <label for="manualAdd">Add names by hand</label>
-            <textarea id="manualAdd" placeholder="One per line, or separated by spaces or commas"></textarea>
-          </div>
-        </div>
-        <div class="row"><button class="btn" id="addBtn" type="button">Add names</button></div>
-        <details>
-          <summary>Never enter these accounts</summary>
-          <div class="field">
-            <label for="blocked">Blocked names (bots, the streamer, mods)</label>
-            <textarea id="blocked" placeholder="botrix kicklet"></textarea>
-          </div>
-        </details>
-      </div>
+      </details>
 
-      <div class="card" id="historyCard" hidden>
-        <h2>Past winners <button class="btn ghost" id="clearHistory" type="button">Clear</button></h2>
-        <div class="history" id="history"></div>
-      </div>
+      <details class="panel" open>
+        <summary>Entries <span class="meta" id="count">0 people</span></summary>
+        <div class="panel-body">
+          <div class="example-banner" id="exampleBanner" hidden>These are example names so you can try the reel. They disappear when the first real entry arrives.</div>
+          <div class="entries" id="entries"></div>
+          <div class="inline">
+            <div class="field">
+              <label for="manualAdd">Add names by hand</label>
+              <textarea id="manualAdd" placeholder="One per line, or separated by spaces or commas" autocapitalize="off"></textarea>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" id="addBtn" type="button">Add names</button>
+            <button class="btn ghost danger" id="clearBtn" type="button" style="margin-left:auto">Clear all</button>
+          </div>
+          <details class="sub">
+            <summary>Never enter these accounts</summary>
+            <div class="field">
+              <label for="blocked">Blocked names (bots, the streamer, mods)</label>
+              <textarea id="blocked" placeholder="botrix kicklet" autocapitalize="off"></textarea>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="panel" id="historyCard" hidden>
+        <summary>Past winners</summary>
+        <div class="panel-body">
+          <div class="history" id="history"></div>
+          <div class="row"><button class="btn ghost" id="clearHistory" type="button">Clear history</button></div>
+        </div>
+      </details>
     </section>
   </div>
+
+  <footer>
+    <details class="sub">
+      <summary>How the roll stays fair</summary>
+      <div class="how">
+        <p><b>Random push.</b> The launch speed and the starting slot both come from <code>crypto.getRandomValues</code>, the browser's cryptographic random source. Nothing about the result is chosen in advance.</p>
+        <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, and nothing nudges it toward a name. It stops wherever it stops, and the line picks the name it's touching. The fixed time step means a slow device changes how smooth it looks, never where it lands.</p>
+        <p><b>No order bias.</b> Entries are reshuffled before every roll and the reel starts on a uniformly random slot, so join order or first letter can't tilt the odds. Each person gets one slot however often they type. With subscriber luck, subscribers get a second slot, placed randomly and kept apart from their first whenever possible.</p>
+      </div>
+    </details>
+  </footer>
 </div>
 
 <script>
@@ -397,9 +445,13 @@ const bindSetting = (el, key, prop = "value") => el.addEventListener(prop === "c
 bindSetting(els.channel, "channel"); bindSetting(els.keyword, "keyword"); bindSetting(els.matchMode, "matchMode");
 bindSetting(els.open, "open", "checked"); bindSetting(els.subs, "subs", "checked"); bindSetting(els.sound, "sound", "checked");
 bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked");
-$("entryMode").value = S.entryMode; $("optExpire").checked = S.expire; $("expireMins").value = S.expireMins; $("optLuck").checked = S.luck;
-function syncModeUI() { $("keywordRow").hidden = S.entryMode === "active"; }
-$("entryMode").addEventListener("change", () => { S.entryMode = $("entryMode").value; syncModeUI(); save(); });
+$("optExpire").checked = S.expire; $("expireMins").value = S.expireMins; $("optLuck").checked = S.luck;
+const modeBtns = document.querySelectorAll(".seg [data-mode]");
+function syncModeUI() {
+  $("keywordRow").hidden = S.entryMode === "active";
+  modeBtns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === S.entryMode)));
+}
+modeBtns.forEach(b => b.addEventListener("click", () => { S.entryMode = b.dataset.mode; syncModeUI(); save(); }));
 $("optExpire").addEventListener("change", () => { S.expire = $("optExpire").checked; save(); sweepInactive(); renderEntries(); });
 $("expireMins").addEventListener("input", () => { const v = Math.round(Number($("expireMins").value)); if (v >= 1) { S.expireMins = Math.min(240, v); save(); } });
 $("optLuck").addEventListener("change", () => { S.luck = $("optLuck").checked; save(); changed(); });
@@ -441,20 +493,22 @@ function removeEntry(key) { state.entries.delete(key); }
 function renderEntries() {
   const list = [...state.entries.entries()];
   const lucky = S.luck ? list.filter(([, e]) => e.sub).length : 0;
-  els.count.innerHTML = `${list.length}<small>${list.length === 1 ? "person" : "people"}${lucky ? ` · ${list.length + lucky} entries with subscriber luck` : ""}</small>`;
+  els.count.textContent = `${list.length} ${list.length === 1 ? "person" : "people"}${lucky ? ` · ${list.length + lucky} entries` : ""}`;
   els.exampleBanner.hidden = !state.example;
   const frag = document.createDocumentFragment();
   for (const [key, e] of list) {
     const d = document.createElement("div"); d.className = "entry" + (e.src === "chat" ? " chat" : "");
-    const sp = document.createElement("span"); sp.textContent = e.name + (S.luck && e.sub ? "  ×2" : ""); sp.dataset.key = key; sp.title = idleLabel(e);
+    const sp = document.createElement("span"); sp.textContent = e.name; sp.dataset.key = key; sp.title = idleLabel(e);
     const b = document.createElement("button"); b.type = "button"; b.textContent = "×"; b.setAttribute("aria-label", `Remove ${e.name}`);
     b.addEventListener("click", () => { removeEntry(key); changed(); });
     const ai = document.createElement("span"); ai.className = "chip-av"; const a = avatarFor(e.name);
     if (a.url) ai.style.backgroundImage = `url("${a.url.replace(/"/g, "")}")`; else { ai.style.background = a.color; ai.textContent = e.name[0].toUpperCase(); }
-    d.append(ai, sp, b); frag.append(d);
+    d.append(ai, sp);
+    if (S.luck && e.sub) { const x = document.createElement("span"); x.className = "x2"; x.textContent = "×2"; x.title = "Subscriber luck: 2 entries"; d.append(x); }
+    d.append(b); frag.append(d);
   }
   els.entries.replaceChildren(frag);
-  if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No entries yet. Connect to a channel and have chat type the keyword, or add names by hand."; els.entries.append(p); }
+  if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No one yet. Connect to your chat or add names by hand."; els.entries.append(p); }
 }
 function changed() { save(); renderEntries(); if (!rolling) { idleOrder = [...state.entries.values()].map(e => e.name); const w = winnerIdx >= 0 ? order[winnerIdx] : null;
     if (!w || !state.entries.has(w.toLowerCase())) { winnerIdx = -1; order = idleOrder; }   // keep a shown result until its winner is removed
@@ -478,7 +532,7 @@ const ctx = els.canvas.getContext("2d");
 let idleOrder = [...state.entries.values()].map(e => e.name);
 let order = idleOrder, sim = { y: 0, v: 0, t: 0, done: true }, rolling = false, winnerIdx = -1;
 const css = getComputedStyle(document.documentElement);
-const C = { fg: css.getPropertyValue("--fg").trim(), muted: css.getPropertyValue("--muted").trim(), brass: css.getPropertyValue("--brass").trim(), bg: css.getPropertyValue("--bg").trim() };
+const C = { fg: css.getPropertyValue("--fg").trim(), muted: css.getPropertyValue("--muted").trim(), accent: css.getPropertyValue("--accent").trim() };
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let W = 0, Ht = 0, dpr = 1;
 function resize() {
@@ -486,7 +540,7 @@ function resize() {
   W = r.width; Ht = r.height; els.canvas.width = Math.round(W * dpr); els.canvas.height = Math.round(Ht * dpr); draw();
 }
 function fitFont(name, maxW, base) {
-  let size = base; ctx.font = `800 ${size}px ${css.getPropertyValue("--display")}`;
+  let size = base; ctx.font = `800 ${size}px ${css.getPropertyValue("--font")}`;
   const w = ctx.measureText(name).width; if (w > maxW) size = Math.max(14, Math.floor(base * maxW / w));
   return size;
 }
@@ -496,11 +550,11 @@ function drawAvatar(name, x, y, size, picked) {
   if (a.img) { ctx.clip(); ctx.drawImage(a.img, x, y, size, size); }
   else {
     ctx.fillStyle = a.color; ctx.fill();
-    ctx.fillStyle = "#0b0e0f"; ctx.font = `800 ${Math.round(size * 0.48)}px ${css.getPropertyValue("--display")}`;
+    ctx.fillStyle = "#0b0e0f"; ctx.font = `800 ${Math.round(size * 0.48)}px ${css.getPropertyValue("--font")}`;
     ctx.textAlign = "center"; ctx.fillText(name[0].toUpperCase(), x + r, y + r + 1);
   }
   ctx.restore();
-  if (picked) { ctx.save(); ctx.strokeStyle = C.brass; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x + r, y + r, r + 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+  if (picked) { ctx.save(); ctx.strokeStyle = C.accent; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x + r, y + r, r + 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
 }
 function drawPass(y, alpha) {
   const N = order.length; const mid = Ht / 2;
@@ -513,11 +567,11 @@ function drawPass(y, alpha) {
     const picked = atMarker && sim.done && winnerIdx >= 0;
     const av = picked ? 42 : 36, gap = 12;               // profile picture to the left of the name
     const size = fitFont(name, W - 80 - av - gap, picked ? 34 : 30);
-    ctx.font = `${picked ? 900 : 700} ${size}px ${css.getPropertyValue("--display")}`;
+    ctx.font = `${picked ? 900 : 700} ${size}px ${css.getPropertyValue("--font")}`;
     const tw = ctx.measureText(name).width, x0 = W / 2 - (av + gap + tw) / 2;
     ctx.globalAlpha = alpha * Math.max(0, 1 - dist * dist * 0.92);
     drawAvatar(name, x0, sy - av / 2, av, picked);
-    ctx.fillStyle = picked ? C.brass : (atMarker ? C.fg : C.muted);
+    ctx.fillStyle = picked ? C.accent : (atMarker ? C.fg : C.muted);
     ctx.textAlign = "left"; ctx.fillText(name, x0 + av + gap, sy); ctx.textAlign = "center";
     if (alpha === 1) {                                    // faint divider so it's clear which slot the line is in
       ctx.globalAlpha = 0.35 * Math.max(0, 1 - dist * dist);
@@ -577,7 +631,7 @@ function clack(when, speed) {
 }
 // ---------- roll ----------
 let launch = null, lastFrame = 0, acc = 0, lastSlot = 0;
-function updateRollBtn() { els.roll.disabled = rolling || state.entries.size < 2; els.roll.textContent = rolling ? "Rolling…" : "Roll"; }
+function updateRollBtn() { els.roll.disabled = rolling || state.entries.size < 2; els.roll.innerHTML = rolling ? "Rolling…" : "Roll<kbd>Space</kbd>"; }
 // Every entry gets one slot on the reel; with subscriber luck, subscribers get a second slot.
 // Slots are crypto-shuffled and reshuffled until no one's two slots touch (the reel wraps around),
 // unless that's impossible, in which case the arrangement with the fewest touching pairs is used.
@@ -605,6 +659,7 @@ function startRoll() {
   launch = { v0, startIdx, N, at: new Date() };
   rolling = true; winnerIdx = -1; lastSlot = startIdx; acc = 0; lastFrame = performance.now();
   els.resultLabel.textContent = "Rolling"; els.winner.textContent = "…"; els.winner.classList.remove("pop");
+  $("result").classList.remove("won"); setWinnerAv(null);
   els.receipt.innerHTML = `<span>launch <b>${Math.round(v0).toLocaleString()} px/s</b></span><span>start slot <b>${startIdx + 1} of ${N}</b></span>`;
   els.winnerActions.hidden = true;
   if (S.sound) { try { ensureAudio().resume(); } catch (e) {} }
@@ -630,6 +685,7 @@ function finish() {
   const travelled = (sim.y - launch.startIdx * H) / H;
   draw();
   els.resultLabel.textContent = "Winner";
+  $("result").classList.add("won"); setWinnerAv(name);
   els.winner.textContent = name; void els.winner.offsetWidth; els.winner.classList.add("pop");
   els.receipt.innerHTML =
     `<span>launch <b>${Math.round(launch.v0).toLocaleString()} px/s</b></span>` +
@@ -642,10 +698,23 @@ function finish() {
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
 }
+function setWinnerAv(name) {
+  const el = $("winnerAv");
+  if (!name) { el.style.backgroundImage = ""; el.style.backgroundColor = ""; el.textContent = "?"; return; }
+  const a = avatarFor(name);
+  el.style.backgroundColor = a.url ? "" : a.color;
+  el.style.backgroundImage = a.url ? `url("${a.url.replace(/"/g, "")}")` : "";
+  el.textContent = a.url ? "" : name[0].toUpperCase();
+}
 els.roll.addEventListener("click", startRoll);
+// Space rolls, unless you're typing in a field
+document.addEventListener("keydown", e => {
+  if (e.code !== "Space" || e.repeat || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName)) return;
+  e.preventDefault(); startRoll();
+});
 els.removeWinner.addEventListener("click", () => {
   const n = els.winnerActions.dataset.name; if (!n) return;
-  removeEntry(n.toLowerCase()); changed(); els.removeWinner.textContent = "Removed"; setTimeout(() => (els.removeWinner.textContent = "Remove winner from entries"), 1500);
+  removeEntry(n.toLowerCase()); changed(); els.removeWinner.textContent = "Removed"; setTimeout(() => (els.removeWinner.textContent = "Remove from entries"), 1500);
 });
 els.copyWinner.addEventListener("click", () => {
   const n = els.winnerActions.dataset.name || "";
@@ -722,34 +791,36 @@ async function pumpAvatars() {
     }).finally(() => { avatarActive--; pumpAvatars(); });
   }
 }
-async function fetchAvatarUrl(slug) {
-  const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug.replace(/_/g, "-"))}`;
-  for (const relay of RELAYS) {
-    try {
-      const r = await fetchWithTimeout(relay(target), 7000);
-      if (r.status === 404) return null;
-      if (!r.ok) continue;
-      const t = await r.text();
-      const m = t.match(/"profile_pic"\s*:\s*"([^"]+)"/);
-      if (m) return m[1].replace(/\\\//g, "/");
-      if (/"user"\s*:/.test(t)) return null;            // valid page, the user just has no picture
-    } catch (e) {}
-  }
-  return undefined;                                     // couldn't reach Kick; try again next load
+// One request per channel page, shared by the chatroom lookup and the profile-picture lookup.
+// Resolves to the page text, null if Kick says the channel doesn't exist, or undefined if unreachable.
+const channelPages = new Map();
+function fetchKickChannel(slug) {
+  if (!channelPages.has(slug)) channelPages.set(slug, (async () => {
+    const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
+    for (let i = 0; i < RELAYS.length; i++) {
+      try {
+        const r = await fetchWithTimeout(RELAYS[i](target), 7000);
+        if (i === 0 && r.status === 404) return null;
+        if (r.ok) return await r.text();
+      } catch (e) {}
+    }
+    channelPages.delete(slug);                          // let a later attempt try again
+    return undefined;
+  })());
+  return channelPages.get(slug);
 }
-
+async function fetchAvatarUrl(name) {
+  const t = await fetchKickChannel(name.replace(/_/g, "-"));
+  if (typeof t !== "string") return t;
+  const m = t.match(/"profile_pic"\s*:\s*"([^"]+)"/);
+  return m ? m[1].replace(/\\\//g, "/") : null;
+}
 async function lookupChatroom(slug) {
   if (state.chatroomIds[slug]) return state.chatroomIds[slug];
-  const target = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
-  for (let i = 0; i < RELAYS.length; i++) {
-    try {
-      const r = await fetchWithTimeout(RELAYS[i](target), 7000);
-      if (i === 0 && r.status === 404) throw Object.assign(new Error("notfound"), { notFound: true });
-      if (!r.ok) continue;
-      const id = chatroomFromText(await r.text());
-      if (id) { state.chatroomIds[slug] = id; save(); return id; }
-    } catch (e) { if (e.notFound) throw e; }
-  }
+  const t = await fetchKickChannel(slug);
+  if (t === null) throw Object.assign(new Error("notfound"), { notFound: true });
+  const id = t && chatroomFromText(t);
+  if (id) { state.chatroomIds[slug] = id; save(); return id; }
   return null;
 }
 els.connect.addEventListener("click", async () => {
@@ -797,7 +868,7 @@ function openSocket() {
     } else if (msg.event === "pusher_internal:subscription_succeeded") {
       if (els.pill.textContent === "Connected") return;
       retry = 0; setPill("live", "Connected"); showError("");
-      feedLine(null, `Connected to ${S.channel || "chatroom " + currentRoom}. This works whether or not the stream is live. New messages will show here as people type.`);
+      feedLine(null, `Connected to ${S.channel || "chatroom " + currentRoom}. Works whether or not you're live.`);
     } else if (msg.event === "pusher:ping") {
       ws.send(JSON.stringify({ event: "pusher:pong", data: {} }));
     } else if (msg.event === "pusher:error") {
@@ -822,7 +893,7 @@ function socketBlocked() {
 function disconnect(user) {
   wantConnected = false; clearTimeout(retryTimer); retry = 0;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
-  if (user) { setPill("", "Not connected"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); }
+  if (user) { setPill("", "Offline"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); }
 }
 
 function messageText(content) { return String(content || "").replace(/\[emote:\d+:[^\]]*\]/g, " ").replace(/\s+/g, " ").trim(); }
