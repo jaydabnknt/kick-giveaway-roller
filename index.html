@@ -204,6 +204,7 @@ footer { padding-top: 4px; }
 .gtb-state .big::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .gtb-state.open .big::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 1.6s infinite; }
 .gtb-state .hint { flex-basis: 100%; }
+.gtb-btns { display: flex; gap: 8px; }
 .gtb-state .btn { min-height: 44px; padding: 8px 18px; }
 .final-row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .final-row .field { flex: 1 1 180px; }
@@ -248,7 +249,9 @@ footer { padding-top: 4px; }
   .roll { font-size: 21px; min-height: 60px; }
   .tabs { width: 100%; }
   .tabs button { flex: 1 1 0; justify-content: center; padding: 9px 8px; min-height: 44px; font-size: 15px; }
-  .gtb-state .btn, .final-row .btn.primary { flex: 1 1 100%; }
+  .gtb-btns { flex: 1 1 100%; }
+  .gtb-btns .btn { flex: 1 1 0; }
+  .final-row .btn.primary { flex: 1 1 100%; }
   .guess { grid-template-columns: 22px 26px minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px; }
   .guess .av { width: 26px; height: 26px; }
   .guess .del { width: 32px; height: 32px; }
@@ -410,7 +413,10 @@ footer { padding-top: 4px; }
       <div class="card">
         <div class="gtb-state" id="gtbState">
           <div class="big" id="gtbStateText">Guesses open</div>
-          <button class="btn" id="gtbToggle" type="button">Stop guesses</button>
+          <div class="gtb-btns">
+            <button class="btn primary" id="gtbStart" type="button">Start guessing</button>
+            <button class="btn" id="gtbStop" type="button">Stop guesses</button>
+          </div>
           <p class="hint" id="gtbHow">Chat types <code id="gtbExample">!gtb 1250</code>. One guess per person, and their first one counts.</p>
         </div>
       </div>
@@ -1158,11 +1164,11 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp
 // Chat types "!gtb 1250". Each username gets one guess (the first one sticks). Once the real
 // balance is in, the closest guess wins and the list is ranked from highest to lowest.
 const GTB_KEY = "kick-giveaway-gtb-v1";
-const gtb = { cmd: "!gtb", open: true, rule: "closest", subs: false, final: "", picked: false, guesses: [] };
+const gtb = { cmd: "!gtb", open: false, rule: "closest", subs: false, final: "", picked: false, guesses: [] };
 try { Object.assign(gtb, JSON.parse(localStorage.getItem(GTB_KEY) || "{}")); } catch (e) {}
 const saveGtb = () => { try { localStorage.setItem(GTB_KEY, JSON.stringify(gtb)); } catch (e) {} };
 const gEl = {
-  state: $("gtbState"), stateText: $("gtbStateText"), toggle: $("gtbToggle"), example: $("gtbExample"),
+  state: $("gtbState"), stateText: $("gtbStateText"), start: $("gtbStart"), stop: $("gtbStop"), example: $("gtbExample"),
   final: $("gtbFinal"), pick: $("gtbPick"), result: $("gtbResult"), winAv: $("gtbWinAv"), winLabel: $("gtbWinLabel"),
   winName: $("gtbWinName"), receipt: $("gtbReceipt"), copy: $("gtbCopy"), list: $("gtbList"), title: $("gtbListTitle"),
   meta: $("gtbMeta"), cmd: $("gtbCmd"), rule: $("gtbRule"), subs: $("gtbSubs"), badge: $("gtbBadge"),
@@ -1215,9 +1221,9 @@ function setOpen(open) { gtb.open = open; saveGtb(); renderGtb(); }
 function renderGtb() {
   const n = gtb.guesses.length;
   gEl.state.classList.toggle("open", gtb.open);
-  gEl.stateText.textContent = gtb.open ? "Guesses open" : "Guesses closed";
-  gEl.toggle.textContent = gtb.open ? "Stop guesses" : "Reopen guesses";
-  gEl.toggle.className = gtb.open ? "btn" : "btn primary";
+  gEl.stateText.textContent = gtb.open ? "Guesses open" : n ? "Guesses closed" : "Not started";
+  gEl.start.disabled = gtb.open; gEl.stop.disabled = !gtb.open;
+  gEl.start.className = gtb.open ? "btn" : "btn primary"; gEl.stop.className = gtb.open ? "btn primary" : "btn";
   gEl.example.textContent = `${gtb.cmd.trim() || "!gtb"} 1250`;
   gEl.badge.textContent = n ? String(n) : "";
 
@@ -1264,7 +1270,8 @@ function renderGtb() {
   gEl.list.replaceChildren(frag);
   if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No guesses yet. Connect to your chat and have people type ${gtb.cmd.trim() || "!gtb"} followed by their guess.`; gEl.list.append(p); }
 }
-gEl.toggle.addEventListener("click", () => { if (!gtb.open) gtb.picked = false; setOpen(!gtb.open); });
+gEl.start.addEventListener("click", () => { gtb.picked = false; setOpen(true); });
+gEl.stop.addEventListener("click", () => setOpen(false));
 gEl.final.addEventListener("input", () => { gtb.final = gEl.final.value; gEl.final.setCustomValidity(""); saveGtb(); if (gtb.picked) renderGtb(); });
 function pickGtb() {
   if (parseAmount(gtb.final) === null) { gEl.final.setCustomValidity("Type the final balance, like 1250 or 1,250.50"); gEl.final.reportValidity(); return; }
@@ -1293,7 +1300,7 @@ let resetArmed = null;
 gEl.reset.addEventListener("click", () => {
   if (!resetArmed) { gEl.reset.textContent = "Click again to clear every guess"; resetArmed = setTimeout(() => { gEl.reset.textContent = "New round (clear guesses)"; resetArmed = null; }, 2500); return; }
   clearTimeout(resetArmed); resetArmed = null; gEl.reset.textContent = "New round (clear guesses)";
-  gtb.guesses = []; gtb.picked = false; gtb.final = ""; gtb.open = true; gEl.final.value = ""; saveGtb(); renderGtb();
+  gtb.guesses = []; gtb.picked = false; gtb.final = ""; gtb.open = false; gEl.final.value = ""; saveGtb(); renderGtb();
 });
 
 // ---------- tabs ----------
