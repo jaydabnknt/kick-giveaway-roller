@@ -428,6 +428,7 @@ footer { padding-top: 4px; }
           </div>
           <button class="btn primary" id="gtbPick" type="button">Pick winner</button>
         </div>
+        <p class="hint" id="gtbFinalRead" hidden></p>
       </div>
       <div class="result" id="gtbResult" hidden aria-live="polite">
         <div class="win-av" id="gtbWinAv" aria-hidden="true">?</div>
@@ -1177,10 +1178,22 @@ const gEl = {
 gEl.cmd.value = gtb.cmd; gEl.rule.value = gtb.rule; gEl.subs.checked = gtb.subs; gEl.final.value = gtb.final;
 
 // "1250", "$1,250.50", "1.2k", "2m" -> number, or null if it isn't a usable amount
+// Dots and commas are read the way people actually type money: "1.500" and "1,500" are both
+// fifteen hundred, "1500,50" and "1500.50" both have cents, and "1.234,56" works too.
 function parseAmount(s) {
-  const m = String(s || "").trim().replace(/[\s$]/g, "").match(/^(\d[\d,]*(?:\.\d+)?|\.\d+)([km])?$/i);
+  const m = String(s || "").trim().replace(/[\s$€£']/g, "").match(/^(\d[\d.,]*|[.,]\d+)([km])?$/i);
   if (!m) return null;
-  let v = Number(m[1].replace(/,/g, "")); if (!isFinite(v)) return null;
+  let t = m[1];
+  const lastDot = t.lastIndexOf("."), lastComma = t.lastIndexOf(",");
+  let dec = -1;                                            // index of the decimal separator, if any
+  if (lastDot >= 0 && lastComma >= 0) dec = Math.max(lastDot, lastComma);
+  else {
+    const i = Math.max(lastDot, lastComma), sep = t[i];
+    if (i >= 0 && t.split(sep).length === 2 && !(t.length - i - 1 === 3 && i > 0)) dec = i;   // one separator, not followed by exactly 3 digits
+  }
+  const whole = (dec >= 0 ? t.slice(0, dec) : t).replace(/[.,]/g, ""), frac = dec >= 0 ? t.slice(dec + 1) : "";
+  if (/[.,]/.test(frac)) return null;
+  let v = Number((whole || "0") + (frac ? "." + frac : "")); if (!isFinite(v)) return null;
   if (m[2]) v *= m[2].toLowerCase() === "k" ? 1e3 : 1e6;
   return Math.round(v * 100) / 100;
 }
@@ -1272,7 +1285,12 @@ function renderGtb() {
 }
 gEl.start.addEventListener("click", () => { gtb.picked = false; setOpen(true); });
 gEl.stop.addEventListener("click", () => setOpen(false));
-gEl.final.addEventListener("input", () => { gtb.final = gEl.final.value; gEl.final.setCustomValidity(""); saveGtb(); if (gtb.picked) renderGtb(); });
+function showFinalRead() {
+  const el = $("gtbFinalRead"), v = parseAmount(gtb.final);
+  el.hidden = !gtb.final.trim();
+  el.textContent = v === null ? "That isn't a number yet." : `Reads as ${money(v)}`;
+}
+gEl.final.addEventListener("input", () => { gtb.final = gEl.final.value; showFinalRead(); gEl.final.setCustomValidity(""); saveGtb(); if (gtb.picked) renderGtb(); });
 function pickGtb() {
   if (parseAmount(gtb.final) === null) { gEl.final.setCustomValidity("Type the final balance, like 1250 or 1,250.50"); gEl.final.reportValidity(); return; }
   gtb.picked = true; gtb.open = false; saveGtb(); renderGtb();
@@ -1321,7 +1339,7 @@ tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 let startTab = location.hash.slice(1); if (startTab !== "gtb" && startTab !== "roller") { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
 showTab(startTab);
-renderGtb();
+renderGtb(); showFinalRead();
 
 // expose the simulator for anyone who wants to audit it from the console
 window.giveawayPhysics = { PHYS, H, physStep, simulate(v0, y0 = 0) { const s = { y: y0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s); return s; } };
