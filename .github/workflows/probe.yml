@@ -1,0 +1,21 @@
+name: kick-key-probe
+on:
+  push:
+    branches: [kick-key-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Kick for its realtime chat connection
+        run: |
+          BODY='{"client":{"id":"6f1c2b9e-3c1a-4d7e-9a51-2b8f0a4c1d23","type":"web"},"capabilities":{"accepted_providers":[{"provider":"pusher"}]}}'
+          for ORIGIN in https://kick.com https://jaydabnknt.github.io; do
+            echo "=== origin $ORIGIN"
+            curl -sS -m 20 -X POST https://web.kick.com/api/v1/realtime/connection \
+              -H 'Content-Type: application/json' -H 'Accept: application/json' \
+              -H "Origin: $ORIGIN" -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36' \
+              -D - -d "$BODY" | head -c 3000; echo
+          done
+          echo "=== preflight"
+          curl -sS -m 20 -X OPTIONS https://web.kick.com/api/v1/realtime/connection -H 'Origin: https://jaydabnknt.github.io' \
+            -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' -D - -o /dev/null
