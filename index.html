@@ -881,6 +881,9 @@ els.clearHistory.addEventListener("click", () => { state.history = []; save(); r
 const PUSHER_LS = "kick-giveaway-pusher";
 const PUSHER_QS = "protocol=7&client=js&version=8.4.0&flash=false";
 let pusherCfg = null; try { pusherCfg = JSON.parse(localStorage.getItem(PUSHER_LS) || "null"); } catch (e) {}
+// Last key Kick handed out (checked 2026-10-15). Used when the page can't ask Kick itself, which is
+// most of the time: Kick only lets kick.com read that endpoint from a browser.
+const PUSHER_DEFAULT = { key: "34bf7a0ff419a2a775b9", cluster: "us2" };
 const pusherUrl = c => `wss://ws-${c.cluster}.pusher.com/app/${c.key}?${PUSHER_QS}`;
 function setPusherCfg(c) { pusherCfg = c; try { localStorage.setItem(PUSHER_LS, JSON.stringify(c)); } catch (e) {} }
 function cfgFrom(key, cluster) {
@@ -1027,17 +1030,23 @@ els.useId.addEventListener("click", () => {
 els.chatroomId.addEventListener("input", () => els.chatroomId.setCustomValidity(""));
 els.disconnect.addEventListener("click", () => disconnect(true));
 
-let connectSeq = 0, keyRefreshed = false;
+// Keys to try, best first: what Kick just handed out, the last one that worked, the built-in one.
+let connectSeq = 0, keyQueue = [];
 async function connect(roomId) {
-  disconnect(false); wantConnected = true; currentRoom = roomId; keyRefreshed = false;
+  disconnect(false); wantConnected = true; currentRoom = roomId;
   els.connect.hidden = true; els.disconnect.hidden = false; $("keyHelp").hidden = true;
   const seq = ++connectSeq;
   setPill("wait", "Connecting");
   const fresh = await negotiatePusher();
   if (seq !== connectSeq || !wantConnected) return;
-  if (fresh) { setPusherCfg(fresh); keyRefreshed = true; }
-  if (!pusherCfg) { needKey(); return; }
-  openSocket();
+  keyQueue = [];
+  for (const c of [fresh, pusherCfg, PUSHER_DEFAULT]) if (c && !keyQueue.some(k => k.key === c.key)) keyQueue.push(c);
+  tryNextKey();
+}
+function tryNextKey() {
+  const c = keyQueue.shift();
+  if (!c) { needKey(); return; }
+  pusherCfg = c; wantConnected = true; openSocket();
 }
 function needKey() {
   wantConnected = false; setPill("err", "Need chat key");
@@ -1048,7 +1057,7 @@ $("useKeyBtn").addEventListener("click", () => {
   const inp = $("pusherKeyIn"), cfg = cfgFromText(inp.value);
   if (!cfg) { inp.setCustomValidity("Paste the wss://ws-... address from the Network tab"); inp.reportValidity(); return; }
   inp.setCustomValidity(""); setPusherCfg(cfg); $("keyHelp").hidden = true; showError("");
-  if (currentRoom) { disconnect(false); wantConnected = true; keyRefreshed = true; els.connect.hidden = true; els.disconnect.hidden = false; openSocket(); }
+  if (currentRoom) { disconnect(false); keyQueue = [cfg]; els.connect.hidden = true; els.disconnect.hidden = false; tryNextKey(); }
   else els.connect.click();
 });
 $("pusherKeyIn").addEventListener("input", () => $("pusherKeyIn").setCustomValidity(""));
@@ -1065,7 +1074,7 @@ function openSocket() {
         ws.send(JSON.stringify({ event: "pusher:subscribe", data: { auth: "", channel: ch } }));
     } else if (msg.event === "pusher_internal:subscription_succeeded") {
       if (els.pill.textContent === "Connected") return;
-      retry = 0; setPill("live", "Connected"); showError("");
+      retry = 0; setPill("live", "Connected"); showError(""); setPusherCfg(pusherCfg);
       feedLine(null, `Connected to ${S.channel || "chatroom " + currentRoom}. Works whether or not you're live.`);
     } else if (msg.event === "pusher:ping") {
       ws.send(JSON.stringify({ event: "pusher:pong", data: {} }));
@@ -1073,9 +1082,8 @@ function openSocket() {
       let ed = msg.data; if (typeof ed === "string") { try { ed = JSON.parse(ed); } catch (e) { ed = { message: ed }; } }
       const code = ed && ed.code, text = (ed && ed.message) || "unknown error";
       if ((code >= 4000 && code < 4100) || /app key|cluster/i.test(text)) {   // the key we have is no longer valid
-        try { localStorage.removeItem(PUSHER_LS); } catch (e) {}
-        pusherCfg = null; disconnect(false);
-        if (!keyRefreshed) { const room = currentRoom; connect(room); } else needKey();
+        try { if (pusherCfg && JSON.parse(localStorage.getItem(PUSHER_LS) || "null")?.key === pusherCfg.key) localStorage.removeItem(PUSHER_LS); } catch (e) {}
+        disconnect(false); tryNextKey();
         return;
       }
       setPill("err", "Error"); showError(`Kick's chat server said: ${escapeHtml(text)}`);
