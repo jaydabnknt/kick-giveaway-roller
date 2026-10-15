@@ -321,6 +321,17 @@ footer { padding-top: 4px; }
               <button class="btn primary" id="useIdBtn" type="button">Use this ID</button>
             </div>
           </div>
+          <div class="notice info" id="keyHelp" hidden>
+            <div>Kick changed its chat key and the page couldn't fetch the new one automatically. You can grab it yourself once and the page remembers it:</div>
+            <p class="hint" style="margin-top:8px">On a computer, open any channel on kick.com, press <b>F12</b>, go to the <b>Network</b> tab, type <code>pusher</code> in the filter box and reload. Copy the address that starts with <code>wss://ws-</code> and paste it below.</p>
+            <div class="inline" style="margin-top:8px">
+              <div class="field">
+                <label for="pusherKeyIn">Chat address or key</label>
+                <input type="text" id="pusherKeyIn" placeholder="wss://ws-us2.pusher.com/app/..." autocomplete="off" spellcheck="false" autocapitalize="off">
+              </div>
+              <button class="btn primary" id="useKeyBtn" type="button">Use this</button>
+            </div>
+          </div>
           <div class="notice" id="connError" hidden></div>
           <div class="feed" id="feed"><div>Chat shows up here once you connect. Messages that enter someone are marked.</div></div>
         </div>
@@ -865,7 +876,41 @@ els.clearHistory.addEventListener("click", () => { state.history = []; save(); r
 
 // ---------- Kick chat ----------
 // Kick's own site reads chat over a public Pusher websocket. No login is needed to listen.
-const PUSHER_URL = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
+// Kick hands out the Pusher app key and cluster from its "realtime connection" endpoint, and the
+// key changes now and then, so the page asks for it on every connect and remembers the last good one.
+const PUSHER_LS = "kick-giveaway-pusher";
+const PUSHER_QS = "protocol=7&client=js&version=8.4.0&flash=false";
+let pusherCfg = null; try { pusherCfg = JSON.parse(localStorage.getItem(PUSHER_LS) || "null"); } catch (e) {}
+const pusherUrl = c => `wss://ws-${c.cluster}.pusher.com/app/${c.key}?${PUSHER_QS}`;
+function setPusherCfg(c) { pusherCfg = c; try { localStorage.setItem(PUSHER_LS, JSON.stringify(c)); } catch (e) {} }
+function cfgFrom(key, cluster) {
+  key = String(key || ""); cluster = String(cluster || "us2").toLowerCase();
+  if (!/^[A-Za-z0-9]{8,64}$/.test(key)) return null;
+  return { key, cluster: /^[a-z0-9-]{1,20}$/.test(cluster) ? cluster : "us2" };
+}
+// Accepts a full wss://ws-us2.pusher.com/app/KEY address, or just the key.
+function cfgFromText(t) {
+  t = String(t || "").trim();
+  const m = t.match(/ws-([a-z0-9-]+)\.pusher(?:app)?\.com\/app\/([A-Za-z0-9]+)/i);
+  return m ? cfgFrom(m[2], m[1]) : cfgFrom(t, "us2");
+}
+async function negotiatePusher() {
+  const target = "https://web.kick.com/api/v1/realtime/connection";
+  const body = JSON.stringify({ client: { id: crypto.randomUUID ? crypto.randomUUID() : String(randU32()) + randU32(), type: "web" },
+    capabilities: { accepted_providers: [{ provider: "pusher" }] } });
+  for (const url of [target, `https://corsproxy.io/?url=${encodeURIComponent(target)}`]) {
+    try {
+      const r = await fetchWithTimeout(url, 7000, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body });
+      if (!r.ok) continue;
+      const j = await r.json(); const d = j.data || j;
+      for (const c of d.connections || d.endpoints || []) {
+        const cr = c.credentials || c;
+        if (String(c.provider || "").toLowerCase() === "pusher") { const cfg = cfgFrom(cr.app_key || cr.key, cr.cluster); if (cfg) return cfg; }
+      }
+    } catch (e) {}
+  }
+  return null;
+}
 let ws = null, wantConnected = false, retry = 0, retryTimer = null, currentRoom = null;
 function setPill(cls, text) { els.pill.className = "pill " + cls; els.pill.textContent = text; }
 function showError(html) { els.connError.innerHTML = html; els.connError.hidden = !html; }
@@ -883,9 +928,9 @@ function chatroomFromText(t) {
   const m = String(t).match(/"chatroom"\s*:\s*\{[^{}]*?"id"\s*:\s*(\d+)/);
   return m ? Number(m[1]) : null;
 }
-async function fetchWithTimeout(url, ms) {
+async function fetchWithTimeout(url, ms, opts = {}) {
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), ms);
-  try { return await fetch(url, { credentials: "omit", signal: ctl.signal }); } finally { clearTimeout(timer); }
+  try { return await fetch(url, { ...opts, credentials: "omit", signal: ctl.signal }); } finally { clearTimeout(timer); }
 }
 // ---------- profile pictures ----------
 // Kick's chat messages don't include profile pictures, so each entrant's picture is looked up
@@ -982,13 +1027,34 @@ els.useId.addEventListener("click", () => {
 els.chatroomId.addEventListener("input", () => els.chatroomId.setCustomValidity(""));
 els.disconnect.addEventListener("click", () => disconnect(true));
 
-function connect(roomId) {
-  disconnect(false); wantConnected = true; currentRoom = roomId; openSocket();
-  els.connect.hidden = true; els.disconnect.hidden = false;
+let connectSeq = 0, keyRefreshed = false;
+async function connect(roomId) {
+  disconnect(false); wantConnected = true; currentRoom = roomId; keyRefreshed = false;
+  els.connect.hidden = true; els.disconnect.hidden = false; $("keyHelp").hidden = true;
+  const seq = ++connectSeq;
+  setPill("wait", "Connecting");
+  const fresh = await negotiatePusher();
+  if (seq !== connectSeq || !wantConnected) return;
+  if (fresh) { setPusherCfg(fresh); keyRefreshed = true; }
+  if (!pusherCfg) { needKey(); return; }
+  openSocket();
 }
+function needKey() {
+  wantConnected = false; setPill("err", "Need chat key");
+  els.connect.hidden = false; els.disconnect.hidden = true;
+  $("keyHelp").hidden = false;
+}
+$("useKeyBtn").addEventListener("click", () => {
+  const inp = $("pusherKeyIn"), cfg = cfgFromText(inp.value);
+  if (!cfg) { inp.setCustomValidity("Paste the wss://ws-... address from the Network tab"); inp.reportValidity(); return; }
+  inp.setCustomValidity(""); setPusherCfg(cfg); $("keyHelp").hidden = true; showError("");
+  if (currentRoom) { disconnect(false); wantConnected = true; keyRefreshed = true; els.connect.hidden = true; els.disconnect.hidden = false; openSocket(); }
+  else els.connect.click();
+});
+$("pusherKeyIn").addEventListener("input", () => $("pusherKeyIn").setCustomValidity(""));
 function openSocket() {
   setPill("wait", "Connecting");
-  try { ws = new WebSocket(PUSHER_URL); }
+  try { ws = new WebSocket(pusherUrl(pusherCfg)); }
   catch (e) { socketBlocked(); return; }
   let opened = false;
   ws.onopen = () => { opened = true; };
@@ -1004,7 +1070,15 @@ function openSocket() {
     } else if (msg.event === "pusher:ping") {
       ws.send(JSON.stringify({ event: "pusher:pong", data: {} }));
     } else if (msg.event === "pusher:error") {
-      setPill("err", "Error"); showError(`Kick's chat server said: ${escapeHtml((msg.data && msg.data.message) || "unknown error")}`);
+      let ed = msg.data; if (typeof ed === "string") { try { ed = JSON.parse(ed); } catch (e) { ed = { message: ed }; } }
+      const code = ed && ed.code, text = (ed && ed.message) || "unknown error";
+      if ((code >= 4000 && code < 4100) || /app key|cluster/i.test(text)) {   // the key we have is no longer valid
+        try { localStorage.removeItem(PUSHER_LS); } catch (e) {}
+        pusherCfg = null; disconnect(false);
+        if (!keyRefreshed) { const room = currentRoom; connect(room); } else needKey();
+        return;
+      }
+      setPill("err", "Error"); showError(`Kick's chat server said: ${escapeHtml(text)}`);
     } else if (msg.event === "App\\Events\\ChatMessageEvent") {
       let d; try { d = typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data; } catch (e) { return; }
       onChat(d);
@@ -1023,6 +1097,7 @@ function socketBlocked() {
   showError("This page couldn't open a connection to Kick's chat server. If you're viewing it inside a preview or an embedded frame, that frame blocks outside connections. Open <b>giveaway-roller.html</b> directly in Chrome, Edge or Firefox and connect from there. Adding names by hand works everywhere.");
 }
 function disconnect(user) {
+  if (user) connectSeq++;
   wantConnected = false; clearTimeout(retryTimer); retry = 0;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
   if (user) { setPill("", "Offline"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); }
