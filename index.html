@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Kick Giveaway Roller</title>
+<title>Kick Giveaway Tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -165,7 +165,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .feed div { overflow-wrap: anywhere; color: var(--muted); }
 .feed div b { color: var(--fg); font-weight: 600; }
 .feed div.hit b { color: var(--accent); }
-.feed div.hit::after { content: "  entered"; color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.feed div.hit::after { content: "  " attr(data-tag); color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.feed div.miss::after { content: "  " attr(data-tag); color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 
 .entries { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; padding: 1px; overscroll-behavior: contain; }
 .entry { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 3px 3px 3px 4px; font-size: 13.5px; max-width: 100%; }
@@ -188,6 +189,46 @@ details.sub[open] > summary { margin-bottom: 10px; }
 .how b { color: var(--fg); }
 footer { padding-top: 4px; }
 
+/* Tabs */
+.tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; width: max-content; max-width: 100%; }
+.tabs button { border: 0; background: transparent; color: var(--muted); border-radius: 7px; padding: 9px 16px; min-height: 40px; font-weight: 800; font-size: 14.5px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; transition: background .12s, color .12s; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.tabs .badge { font: 700 11px var(--mono); background: color-mix(in srgb, currentColor 16%, transparent); border-radius: 99px; padding: 1px 7px; }
+.tabs .badge:empty { display: none; }
+
+/* Guess the balance */
+.card { border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; display: grid; gap: 12px; min-width: 0; }
+.gtb-state { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gtb-state .big { font-weight: 900; font-size: clamp(20px, 3vw, 26px); letter-spacing: -0.02em; line-height: 1.1; display: flex; align-items: center; gap: 10px; }
+.gtb-state .big::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.gtb-state.open .big::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 1.6s infinite; }
+.gtb-state .hint { flex-basis: 100%; }
+.gtb-state .btn { min-height: 44px; padding: 8px 18px; }
+.final-row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.final-row .field { flex: 1 1 180px; }
+.money { position: relative; }
+.money::before { content: "$"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 700; pointer-events: none; }
+.money input { padding-left: 26px; font-family: var(--mono); font-weight: 600; font-size: 18px; min-height: 48px; }
+.final-row .btn.primary { min-height: 48px; padding: 8px 22px; font-size: 16px; }
+.guesses { display: grid; gap: 2px; max-height: 520px; overflow-y: auto; overscroll-behavior: contain; margin: 0 -6px; padding: 0 6px; }
+.guess { display: grid; grid-template-columns: 28px 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; font-size: 14.5px; }
+.guess:nth-child(odd) { background: color-mix(in srgb, var(--panel-2) 55%, transparent); }
+.guess .rank { font: 600 12px var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.guess .av { width: 28px; height: 28px; border-radius: 50%; background: var(--panel-2) center / cover no-repeat; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: var(--on-accent); }
+.guess .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.guess .amt { font: 600 14.5px var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.guess .off { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.guess .del { border: 0; background: none; color: var(--muted); cursor: pointer; width: 26px; height: 26px; border-radius: 50%; font-size: 15px; line-height: 1; }
+.guess .del:hover { color: var(--warn); background: var(--bg); }
+.guess.win { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.guess.win .who, .guess.win .amt { color: var(--accent); }
+.guess.win .av { box-shadow: 0 0 0 2px var(--accent); }
+.guess.out { opacity: .45; }
+.list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.list-head h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.list-head .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* Phones: one column, bigger touch targets, 16px inputs so iOS doesn't zoom in. */
 @media (max-width: 860px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
@@ -205,9 +246,15 @@ footer { padding-top: 4px; }
   .win-av { width: 44px; height: 44px; font-size: 19px; }
   .result .row .btn { flex: 1 1 0; }
   .roll { font-size: 21px; min-height: 60px; }
+  .tabs { width: 100%; }
+  .tabs button { flex: 1 1 0; justify-content: center; padding: 9px 8px; min-height: 44px; font-size: 15px; }
+  .gtb-state .btn, .final-row .btn.primary { flex: 1 1 100%; }
+  .guess { grid-template-columns: 22px 26px minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px; }
+  .guess .av { width: 26px; height: 26px; }
+  .guess .del { width: 32px; height: 32px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pill.live::before, .winner-name.pop { animation: none; }
+  .pill.live::before, .winner-name.pop, .gtb-state.open .big::before { animation: none; }
 }
 </style>
 </head>
@@ -217,12 +264,17 @@ footer { padding-top: 4px; }
   <header class="top">
     <div class="brand">
       <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></div>
-      <h1>Giveaway <span>Roller</span></h1>
+      <h1>Giveaway <span>Tools</span></h1>
     </div>
     <span class="pill" id="connPill">Offline</span>
   </header>
 
-  <div class="grid">
+  <nav class="tabs" role="tablist" aria-label="Giveaway type">
+    <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
+    <button type="button" role="tab" data-tab="gtb" aria-selected="false">Guess the Balance <span class="badge" id="gtbBadge"></span></button>
+  </nav>
+
+  <div class="grid" data-view="roller">
     <section class="stage" aria-label="Reel">
       <div class="reel-box" id="reelBox">
         <canvas id="reel" aria-hidden="true"></canvas>
@@ -247,7 +299,7 @@ footer { padding-top: 4px; }
     </section>
 
     <section class="desk" aria-label="Setup">
-      <details class="panel" open>
+      <details class="panel" id="chatPanel" open>
         <summary>Kick chat</summary>
         <div class="panel-body">
           <div class="inline">
@@ -342,7 +394,87 @@ footer { padding-top: 4px; }
     </section>
   </div>
 
-  <footer>
+  <div class="grid" data-view="gtb" hidden>
+    <section class="stage" aria-label="Guess the balance">
+      <div class="card">
+        <div class="gtb-state" id="gtbState">
+          <div class="big" id="gtbStateText">Guesses open</div>
+          <button class="btn" id="gtbToggle" type="button">Stop guesses</button>
+          <p class="hint" id="gtbHow">Chat types <code id="gtbExample">!gtb 1250</code>. One guess per person, and their first one counts.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="final-row">
+          <div class="field">
+            <label for="gtbFinal">Final balance</label>
+            <div class="money"><input type="text" id="gtbFinal" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+          </div>
+          <button class="btn primary" id="gtbPick" type="button">Pick winner</button>
+        </div>
+      </div>
+      <div class="result" id="gtbResult" hidden aria-live="polite">
+        <div class="win-av" id="gtbWinAv" aria-hidden="true">?</div>
+        <div class="label" id="gtbWinLabel">Closest guess</div>
+        <div class="winner-name" id="gtbWinName"></div>
+        <div class="receipt" id="gtbReceipt"></div>
+        <div class="row">
+          <button class="btn" id="gtbCopy" type="button">Copy name</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="list-head">
+          <h2 id="gtbListTitle">Guesses</h2>
+          <span class="meta" id="gtbMeta">None yet</span>
+        </div>
+        <div class="guesses" id="gtbList"></div>
+      </div>
+    </section>
+
+    <section class="desk" aria-label="Guess the balance setup" id="gtbDesk">
+      <details class="panel" open>
+        <summary>Guess rules</summary>
+        <div class="panel-body">
+          <div class="inline">
+            <div class="field">
+              <label for="gtbCmd">Command</label>
+              <input type="text" id="gtbCmd" value="!gtb" autocomplete="off" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label for="gtbRule">Winner is</label>
+              <select id="gtbRule">
+                <option value="closest">the closest guess</option>
+                <option value="under">closest without going over</option>
+              </select>
+            </div>
+          </div>
+          <label class="sw"><input type="checkbox" id="gtbSubs"> Subscribers only</label>
+          <p class="hint">Amounts like <code>1250</code>, <code>$1,250.50</code> or <code>1.2k</code> all work. If two people guess the same, whoever guessed first wins. Blocked names from the Roller tab can't guess either.</p>
+        </div>
+      </details>
+      <details class="panel">
+        <summary>Add a guess by hand</summary>
+        <div class="panel-body">
+          <div class="inline">
+            <div class="field">
+              <label for="gtbManName">Name</label>
+              <input type="text" id="gtbManName" autocomplete="off" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label for="gtbManAmt">Guess</label>
+              <input type="text" id="gtbManAmt" inputmode="decimal" autocomplete="off">
+            </div>
+            <button class="btn" id="gtbManAdd" type="button">Add</button>
+          </div>
+          <p class="hint" id="gtbManMsg"></p>
+        </div>
+      </details>
+      <div class="row">
+        <button class="btn ghost danger" id="gtbReset" type="button">New round (clear guesses)</button>
+      </div>
+    </section>
+  </div>
+
+  <footer data-view="roller">
     <details class="sub">
       <summary>How the roll stays fair</summary>
       <div class="how">
@@ -698,8 +830,7 @@ function finish() {
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
 }
-function setWinnerAv(name) {
-  const el = $("winnerAv");
+function setWinnerAv(name, el = $("winnerAv")) {
   if (!name) { el.style.backgroundImage = ""; el.style.backgroundColor = ""; el.textContent = "?"; return; }
   const a = avatarFor(name);
   el.style.backgroundColor = a.url ? "" : a.color;
@@ -709,6 +840,7 @@ function setWinnerAv(name) {
 els.roll.addEventListener("click", startRoll);
 // Space rolls, unless you're typing in a field
 document.addEventListener("keydown", e => {
+  if (activeTab !== "roller") return;
   if (e.code !== "Space" || e.repeat || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName)) return;
   e.preventDefault(); startRoll();
 });
@@ -787,7 +919,7 @@ async function pumpAvatars() {
     fetchAvatarUrl(key).then(url => {
       avatarUrls[key] = url; try { localStorage.setItem(AV_KEY, JSON.stringify(avatarUrls)); } catch (e) {}
       if (url) loadAvatarImg(key, url);
-      renderEntries();
+      renderEntries(); renderGtb();
     }).finally(() => { avatarActive--; pumpAvatars(); });
   }
 }
@@ -924,10 +1056,11 @@ function onChat(d) {
   } else if (S.open && (S.entryMode === "active" || matches(text)) && (!S.subs || isSub(sender))) {
     hit = addEntry(name, "chat", isSub(sender)); if (hit) changed();
   }
-  feedLine(name, text, hit);
+  const g = gtbOnChat(name, text, sender);
+  feedLine(name, text, g ? g.tag : hit ? "entered" : "", g && !g.ok);
 }
-function feedLine(name, text, hit) {
-  const d = document.createElement("div"); if (hit) d.className = "hit";
+function feedLine(name, text, tag, miss) {
+  const d = document.createElement("div"); if (tag) { d.className = miss ? "miss" : "hit"; d.dataset.tag = tag; }
   if (name) { const b = document.createElement("b"); b.textContent = name; d.append(b, document.createTextNode(": " + text)); }
   else d.textContent = text;
   const atBottom = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 30;
@@ -937,6 +1070,168 @@ function feedLine(name, text, hit) {
   if (atBottom) els.feed.scrollTop = els.feed.scrollHeight;
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+// ---------- guess the balance ----------
+// Chat types "!gtb 1250". Each username gets one guess (the first one sticks). Once the real
+// balance is in, the closest guess wins and the list is ranked from highest to lowest.
+const GTB_KEY = "kick-giveaway-gtb-v1";
+const gtb = { cmd: "!gtb", open: true, rule: "closest", subs: false, final: "", picked: false, guesses: [] };
+try { Object.assign(gtb, JSON.parse(localStorage.getItem(GTB_KEY) || "{}")); } catch (e) {}
+const saveGtb = () => { try { localStorage.setItem(GTB_KEY, JSON.stringify(gtb)); } catch (e) {} };
+const gEl = {
+  state: $("gtbState"), stateText: $("gtbStateText"), toggle: $("gtbToggle"), example: $("gtbExample"),
+  final: $("gtbFinal"), pick: $("gtbPick"), result: $("gtbResult"), winAv: $("gtbWinAv"), winLabel: $("gtbWinLabel"),
+  winName: $("gtbWinName"), receipt: $("gtbReceipt"), copy: $("gtbCopy"), list: $("gtbList"), title: $("gtbListTitle"),
+  meta: $("gtbMeta"), cmd: $("gtbCmd"), rule: $("gtbRule"), subs: $("gtbSubs"), badge: $("gtbBadge"),
+  manName: $("gtbManName"), manAmt: $("gtbManAmt"), manAdd: $("gtbManAdd"), manMsg: $("gtbManMsg"), reset: $("gtbReset")
+};
+gEl.cmd.value = gtb.cmd; gEl.rule.value = gtb.rule; gEl.subs.checked = gtb.subs; gEl.final.value = gtb.final;
+
+// "1250", "$1,250.50", "1.2k", "2m" -> number, or null if it isn't a usable amount
+function parseAmount(s) {
+  const m = String(s || "").trim().replace(/[\s$]/g, "").match(/^(\d[\d,]*(?:\.\d+)?|\.\d+)([km])?$/i);
+  if (!m) return null;
+  let v = Number(m[1].replace(/,/g, "")); if (!isFinite(v)) return null;
+  if (m[2]) v *= m[2].toLowerCase() === "k" ? 1e3 : 1e6;
+  return Math.round(v * 100) / 100;
+}
+const moneyWhole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }), moneyCents = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = v => "$" + (Number.isInteger(v) ? moneyWhole : moneyCents).format(v);
+
+function gtbAdd(name, amount, sub, src) {
+  name = cleanName(name); const key = name.toLowerCase();
+  if (!name) return "bad";
+  if (blockedSet().has(key)) return "blocked";
+  if (gtb.guesses.some(g => g.name.toLowerCase() === key)) return "dup";
+  gtb.guesses.push({ name, amount, sub: !!sub, src, at: Date.now() });
+  saveGtb(); renderGtb(); return "ok";
+}
+function gtbOnChat(name, text, sender) {
+  const cmd = gtb.cmd.trim().toLowerCase(); if (!cmd) return null;
+  const t = text.toLowerCase();
+  if (t !== cmd && !t.startsWith(cmd + " ")) return null;
+  if (!gtb.open) return { tag: "guesses closed", ok: false };
+  if (gtb.subs && !isSub(sender)) return { tag: "subs only", ok: false };
+  const amount = parseAmount(text.slice(cmd.length));
+  if (amount === null) return { tag: "no amount", ok: false };
+  const r = gtbAdd(name, amount, isSub(sender), "chat");
+  if (r === "ok") return { tag: "guessed " + money(amount), ok: true };
+  return { tag: r === "dup" ? "already guessed" : "blocked", ok: false };
+}
+// Closest guess wins; with "under", only guesses at or below the balance count. Ties go to whoever guessed first.
+function gtbWinner(final) {
+  let best = null;
+  for (const g of gtb.guesses) {
+    if (gtb.rule === "under" && g.amount > final) continue;
+    const d = Math.abs(g.amount - final);
+    if (!best || d < best.d || (d === best.d && g.at < best.g.at)) best = { g, d };
+  }
+  return best && best.g;
+}
+function setOpen(open) { gtb.open = open; saveGtb(); renderGtb(); }
+function renderGtb() {
+  const n = gtb.guesses.length;
+  gEl.state.classList.toggle("open", gtb.open);
+  gEl.stateText.textContent = gtb.open ? "Guesses open" : "Guesses closed";
+  gEl.toggle.textContent = gtb.open ? "Stop guesses" : "Reopen guesses";
+  gEl.toggle.className = gtb.open ? "btn" : "btn primary";
+  gEl.example.textContent = `${gtb.cmd.trim() || "!gtb"} 1250`;
+  gEl.badge.textContent = n ? String(n) : "";
+
+  const final = parseAmount(gtb.final);
+  const showWin = gtb.picked && final !== null;
+  const win = showWin ? gtbWinner(final) : null;
+  gEl.result.hidden = !showWin;
+  if (showWin) {
+    gEl.result.classList.toggle("won", !!win);
+    gEl.winLabel.textContent = gtb.rule === "under" ? "Closest without going over" : "Closest guess";
+    gEl.winName.textContent = win ? win.name : "Nobody";
+    setWinnerAv(win && win.name, gEl.winAv);
+    gEl.receipt.replaceChildren();
+    const bits = win
+      ? [["Balance", money(final)], ["Guessed", money(win.amount)], ["Off by", money(Math.abs(win.amount - final))], ["Out of", `${n} guesses`]]
+      : [["Balance", money(final)], ["", "Every guess went over."]];
+    for (const [k, v] of bits) { const sp = document.createElement("span"); if (k) { const b = document.createElement("b"); b.textContent = v; sp.append(k + " ", b); } else sp.textContent = v; gEl.receipt.append(sp); }
+    gEl.copy.dataset.name = win ? win.name : ""; gEl.copy.hidden = !win;
+  }
+
+  // Before a winner is picked: newest guess on top. After: highest guess on top.
+  const list = showWin ? gtb.guesses.slice().sort((a, b) => b.amount - a.amount || a.at - b.at) : gtb.guesses.slice().reverse();
+  gEl.title.textContent = showWin ? "Guesses, highest first" : "Guesses, newest first";
+  if (n) {
+    let lo = Infinity, hi = -Infinity; for (const g of gtb.guesses) { lo = Math.min(lo, g.amount); hi = Math.max(hi, g.amount); }
+    gEl.meta.textContent = `${n} ${n === 1 ? "guess" : "guesses"} · ${money(lo)} to ${money(hi)}`;
+  } else gEl.meta.textContent = "None yet";
+  const frag = document.createDocumentFragment();
+  list.forEach((g, i) => {
+    const row = document.createElement("div");
+    row.className = "guess" + (g === win ? " win" : showWin && gtb.rule === "under" && g.amount > final ? " out" : "");
+    const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = showWin ? i + 1 : n - i;
+    const av = document.createElement("span"); av.className = "av"; const a = avatarFor(g.name);
+    if (a.url) av.style.backgroundImage = `url("${a.url.replace(/"/g, "")}")`; else { av.style.backgroundColor = a.color; av.textContent = g.name[0].toUpperCase(); }
+    const who = document.createElement("span"); who.className = "who"; who.textContent = g.name;
+    who.title = g.src === "chat" ? "Guessed in chat at " + new Date(g.at).toLocaleTimeString() : "Added by hand";
+    const amt = document.createElement("span"); amt.className = "amt"; amt.textContent = money(g.amount);
+    if (showWin) { const off = document.createElement("span"); off.className = "off"; const d = g.amount - final; off.textContent = d === 0 ? "exact" : (d > 0 ? "+" : "−") + money(Math.abs(d)); amt.prepend(off); }
+    const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", `Remove ${g.name}'s guess`);
+    del.addEventListener("click", () => { gtb.guesses = gtb.guesses.filter(x => x !== g); saveGtb(); renderGtb(); });
+    amt.append(del);
+    row.append(rank, av, who, amt); frag.append(row);
+  });
+  gEl.list.replaceChildren(frag);
+  if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No guesses yet. Connect to your chat and have people type ${gtb.cmd.trim() || "!gtb"} followed by their guess.`; gEl.list.append(p); }
+}
+gEl.toggle.addEventListener("click", () => { if (!gtb.open) gtb.picked = false; setOpen(!gtb.open); });
+gEl.final.addEventListener("input", () => { gtb.final = gEl.final.value; gEl.final.setCustomValidity(""); saveGtb(); if (gtb.picked) renderGtb(); });
+function pickGtb() {
+  if (parseAmount(gtb.final) === null) { gEl.final.setCustomValidity("Type the final balance, like 1250 or 1,250.50"); gEl.final.reportValidity(); return; }
+  gtb.picked = true; gtb.open = false; saveGtb(); renderGtb();
+  gEl.winName.classList.remove("pop"); void gEl.winName.offsetWidth; gEl.winName.classList.add("pop");
+  if (window.innerWidth <= 860) gEl.result.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+}
+gEl.pick.addEventListener("click", pickGtb);
+gEl.final.addEventListener("keydown", e => { if (e.key === "Enter") pickGtb(); });
+gEl.cmd.addEventListener("input", () => { gtb.cmd = gEl.cmd.value; saveGtb(); renderGtb(); });
+gEl.rule.addEventListener("change", () => { gtb.rule = gEl.rule.value; saveGtb(); renderGtb(); });
+gEl.subs.addEventListener("change", () => { gtb.subs = gEl.subs.checked; saveGtb(); });
+gEl.copy.addEventListener("click", () => {
+  navigator.clipboard.writeText(gEl.copy.dataset.name || "").then(() => { gEl.copy.textContent = "Copied"; setTimeout(() => (gEl.copy.textContent = "Copy name"), 1400); }).catch(() => {});
+});
+gEl.manAdd.addEventListener("click", () => {
+  const amount = parseAmount(gEl.manAmt.value);
+  if (!cleanName(gEl.manName.value)) { gEl.manName.focus(); return; }
+  if (amount === null) { gEl.manMsg.textContent = "That guess isn't a number."; gEl.manAmt.focus(); return; }
+  const r = gtbAdd(gEl.manName.value, amount, false, "manual");
+  gEl.manMsg.textContent = r === "ok" ? "" : r === "dup" ? "That person already has a guess. Remove it first to change it." : "That name is on the blocked list.";
+  if (r === "ok") { gEl.manName.value = ""; gEl.manAmt.value = ""; gEl.manName.focus(); }
+});
+gEl.manAmt.addEventListener("keydown", e => { if (e.key === "Enter") gEl.manAdd.click(); });
+let resetArmed = null;
+gEl.reset.addEventListener("click", () => {
+  if (!resetArmed) { gEl.reset.textContent = "Click again to clear every guess"; resetArmed = setTimeout(() => { gEl.reset.textContent = "New round (clear guesses)"; resetArmed = null; }, 2500); return; }
+  clearTimeout(resetArmed); resetArmed = null; gEl.reset.textContent = "New round (clear guesses)";
+  gtb.guesses = []; gtb.picked = false; gtb.final = ""; gtb.open = true; gEl.final.value = ""; saveGtb(); renderGtb();
+});
+
+// ---------- tabs ----------
+// One chat connection serves both tabs; the Kick chat panel moves to whichever tab is showing.
+const TAB_KEY = "kick-giveaway-tab";
+let activeTab = "roller";
+const tabBtns = document.querySelectorAll(".tabs [data-tab]");
+function showTab(name) {
+  activeTab = name === "gtb" ? "gtb" : "roller";
+  tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
+  document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
+  const desk = document.querySelector(`[data-view="${activeTab}"] .desk`), chat = $("chatPanel");
+  if (chat.parentElement !== desk) desk.prepend(chat);
+  try { localStorage.setItem(TAB_KEY, activeTab); } catch (e) {}
+  if (location.hash !== "#" + activeTab) history.replaceState(null, "", "#" + activeTab);
+}
+tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+let startTab = location.hash.slice(1); if (startTab !== "gtb" && startTab !== "roller") { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
+showTab(startTab);
+renderGtb();
 
 // expose the simulator for anyone who wants to audit it from the console
 window.giveawayPhysics = { PHYS, H, physStep, simulate(v0, y0 = 0) { const s = { y: y0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s); return s; } };
