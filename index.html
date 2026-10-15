@@ -119,7 +119,7 @@ h1 span { color: var(--accent); }
 .result .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
 .winner-name { font-weight: 900; font-size: clamp(24px, 4.4vw, 38px); line-height: 1.05; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .result.won .winner-name { color: var(--accent); }
-.winner-name.pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+.winner-name.pop, .slot.pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes pop { from { transform: scale(.85); opacity: .3; } to { transform: scale(1); opacity: 1; } }
 .receipt { grid-column: 1 / -1; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; font-variant-numeric: tabular-nums; margin-top: 6px; }
 .receipt b { color: var(--fg); font-weight: 600; }
@@ -230,6 +230,68 @@ footer { padding-top: 4px; }
 .list-head h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
 .list-head .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
+/* Slot calls */
+.now { display: grid; gap: 4px; }
+.now .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.now .slot { font-weight: 900; font-size: clamp(24px, 4.4vw, 36px); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; color: var(--accent); }
+.now .slot.empty { color: var(--muted); font-size: 20px; }
+.now .by { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.now .by .av { width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2) center / cover no-repeat; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--on-accent); }
+.now .by b { color: var(--fg); }
+.call { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; font-size: 14.5px; }
+.call:nth-child(odd) { background: color-mix(in srgb, var(--panel-2) 55%, transparent); }
+.call .rank { font: 600 12px var(--mono); color: var(--muted); text-align: right; }
+.call .what { min-width: 0; display: grid; }
+.call .what .s { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call .what .n { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call .acts { display: flex; align-items: center; gap: 6px; }
+.call .x { width: 84px; min-height: 34px; padding: 4px 8px; font: 600 14px var(--mono); text-align: right; }
+.call .play { border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 6px; min-height: 34px; padding: 4px 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.call .play:hover { border-color: var(--accent); }
+.call .del { border: 0; background: none; color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 50%; font-size: 15px; line-height: 1; }
+.call .del:hover { color: var(--warn); background: var(--bg); }
+.call.current { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.call.current .s { color: var(--accent); }
+.call.done .s { color: var(--muted); }
+.call.best { box-shadow: inset 0 0 0 1px #ffd166; }
+.call.best .rank::after { content: "★"; color: #ffd166; margin-left: 2px; }
+.best-line { font-size: 14px; color: var(--muted); }
+.best-line b { color: #ffd166; }
+
+/* OBS overlay mode (?overlay=giveaway or ?overlay=calls): transparent page, only the show parts */
+.ov-info, .ov-calls { display: none; }
+html:has(body.ov), body.ov { background: transparent !important; background-image: none !important; }
+html:has(body.ov) { color-scheme: normal; }
+body.ov { padding: 8px; overflow: hidden; }
+body.ov .top, body.ov .tabs, body.ov .desk, body.ov footer, body.ov .toggles, body.ov #rollBtn, body.ov #winnerActions, body.ov .receipt { display: none !important; }
+body.ov .wrap { max-width: none; }
+body.ov .grid { grid-template-columns: minmax(0, 1fr); }
+body.ov .stage { position: static; }
+body.ov .reel-box { height: calc(100vh - 170px); min-height: 240px; }
+body.ovm-giveaway .ov-info { display: block; text-align: center; font-weight: 800; font-size: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.ov-info b { color: var(--accent); }
+.ov-info:empty { display: none !important; }
+body.ovm-calls .grid { display: none !important; }
+body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.ovc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ovc-title { font-weight: 900; font-size: 22px; letter-spacing: -0.02em; text-transform: uppercase; color: var(--accent); }
+.ovc-state { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ovc-state.open { color: var(--accent); }
+.ovc-how { font-size: 15px; color: var(--muted); }
+.ovc-how b { color: var(--fg); font-family: var(--mono); }
+.ovc-now { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; padding: 10px 14px; }
+.ovc-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.ovc-slot { font-weight: 900; font-size: 30px; line-height: 1.1; color: var(--accent); overflow-wrap: anywhere; }
+.ovc-by { font-size: 14px; color: var(--muted); }
+.ovc-by b { color: var(--fg); }
+.ovc-list { display: grid; gap: 4px; }
+.ovc-list div { display: flex; justify-content: space-between; gap: 10px; font-size: 16px; padding: 5px 8px; border-radius: 6px; background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
+.ovc-list div span:first-child { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ovc-list div span:last-child { color: var(--muted); white-space: nowrap; }
+.ovc-best { font-size: 15px; color: var(--muted); }
+.ovc-best b { color: #ffd166; }
+.ov-link { font-family: var(--mono); font-size: 12px !important; }
+
 /* Phones: one column, bigger touch targets, 16px inputs so iOS doesn't zoom in. */
 @media (max-width: 860px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
@@ -248,7 +310,11 @@ footer { padding-top: 4px; }
   .result .row .btn { flex: 1 1 0; }
   .roll { font-size: 21px; min-height: 60px; }
   .tabs { width: 100%; }
-  .tabs button { flex: 1 1 0; justify-content: center; padding: 9px 8px; min-height: 44px; font-size: 15px; }
+  .tabs button { flex: 1 1 0; justify-content: center; padding: 9px 6px; min-height: 44px; font-size: 14.5px; gap: 6px; }
+  .tabs .long { display: none; }
+  .call { grid-template-columns: 22px minmax(0, 1fr); }
+  .call .acts { grid-column: 2; }
+  .call .x { flex: 1 1 auto; }
   .gtb-btns { flex: 1 1 100%; }
   .gtb-btns .btn { flex: 1 1 0; }
   .final-row .btn.primary { flex: 1 1 100%; }
@@ -257,7 +323,7 @@ footer { padding-top: 4px; }
   .guess .del { width: 32px; height: 32px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pill.live::before, .winner-name.pop, .gtb-state.open .big::before { animation: none; }
+  .pill.live::before, .winner-name.pop, .slot.pop, .gtb-state.open .big::before { animation: none; }
 }
 </style>
 </head>
@@ -274,11 +340,13 @@ footer { padding-top: 4px; }
 
   <nav class="tabs" role="tablist" aria-label="Giveaway type">
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
-    <button type="button" role="tab" data-tab="gtb" aria-selected="false">Guess the Balance <span class="badge" id="gtbBadge"></span></button>
+    <button type="button" role="tab" data-tab="gtb" aria-selected="false"><span><span class="long">Guess the </span>Balance</span> <span class="badge" id="gtbBadge"></span></button>
+    <button type="button" role="tab" data-tab="calls" aria-selected="false">Slot Calls <span class="badge" id="callsBadge"></span></button>
   </nav>
 
   <div class="grid" data-view="roller">
     <section class="stage" aria-label="Reel">
+      <div class="ov-info" id="ovInfo"></div>
       <div class="reel-box" id="reelBox">
         <canvas id="reel" aria-hidden="true"></canvas>
         <div class="marker"></div>
@@ -398,6 +466,20 @@ footer { padding-top: 4px; }
         </div>
       </details>
 
+      <details class="panel" id="ovPanelG">
+        <summary>OBS overlay</summary>
+        <div class="panel-body">
+          <label class="sw"><input type="checkbox" class="ov-on"> Send the reel and winner to the overlay</label>
+          <div class="inline">
+            <div class="field">
+              <label>Browser source link</label>
+              <input type="text" class="ov-link" readonly>
+            </div>
+            <button class="btn ov-copy" type="button">Copy link</button>
+          </div>
+          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 600 × 640. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
+        </div>
+      </details>
       <details class="panel" id="historyCard" hidden>
         <summary>Past winners</summary>
         <div class="panel-body">
@@ -492,6 +574,105 @@ footer { padding-top: 4px; }
     </section>
   </div>
 
+  <div class="grid" data-view="calls" hidden>
+    <section class="stage" aria-label="Slot calls">
+      <div class="card">
+        <div class="gtb-state" id="callsState">
+          <div class="big" id="callsStateText">Not started</div>
+          <div class="gtb-btns">
+            <button class="btn primary" id="callsStart" type="button">Start calls</button>
+            <button class="btn" id="callsStop" type="button">Stop calls</button>
+          </div>
+          <p class="hint">Chat types <code id="callsExample">!call Gates of Olympus</code>. Each person can call <b id="callsMaxText">1 slot</b>.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="now">
+          <div class="label">Playing now</div>
+          <div class="slot empty" id="callsNowSlot">Nothing yet</div>
+          <div class="by" id="callsNowBy" hidden></div>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="callsNext" type="button">Next call</button>
+          <button class="btn" id="callsRandom" type="button">Random call</button>
+          <span class="meta hint" id="callsLeft" style="margin-left:auto"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="list-head">
+          <h2>Calls</h2>
+          <span class="meta" id="callsMeta">None yet</span>
+        </div>
+        <p class="best-line" id="callsBest" hidden></p>
+        <div class="guesses" id="callsList"></div>
+      </div>
+    </section>
+
+    <section class="desk" aria-label="Slot calls setup">
+      <details class="panel" open>
+        <summary>Call rules</summary>
+        <div class="panel-body">
+          <div class="inline">
+            <div class="field">
+              <label for="callsCmd">Keyword</label>
+              <input type="text" id="callsCmd" value="!call" autocomplete="off" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label for="callsMax">Calls per person</label>
+              <input type="number" id="callsMax" min="1" max="50" step="1" value="1" inputmode="numeric">
+            </div>
+          </div>
+          <label class="sw"><input type="checkbox" id="callsSubs"> Subscribers only</label>
+          <label class="sw"><input type="checkbox" id="callsNoDupes" checked> Skip slots that were already called</label>
+          <p class="hint">Type each call's result (like <code>250</code> for 250x) once it's played, and the best one gets a star. Blocked names from the Roller tab can't call.</p>
+        </div>
+      </details>
+      <details class="panel">
+        <summary>Add a call by hand</summary>
+        <div class="panel-body">
+          <div class="inline">
+            <div class="field">
+              <label for="callsManName">Name</label>
+              <input type="text" id="callsManName" autocomplete="off" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label for="callsManSlot">Slot</label>
+              <input type="text" id="callsManSlot" autocomplete="off">
+            </div>
+            <button class="btn" id="callsManAdd" type="button">Add</button>
+          </div>
+          <p class="hint" id="callsManMsg"></p>
+        </div>
+      </details>
+      <details class="panel" id="ovPanelC">
+        <summary>OBS overlay</summary>
+        <div class="panel-body">
+          <label class="sw"><input type="checkbox" class="ov-on"> Send slot calls to the overlay</label>
+          <div class="inline">
+            <div class="field">
+              <label>Browser source link</label>
+              <input type="text" class="ov-link" readonly>
+            </div>
+            <button class="btn ov-copy" type="button">Copy link</button>
+          </div>
+          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 500 × 600. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
+        </div>
+      </details>
+      <div class="row">
+        <button class="btn ghost danger" id="callsReset" type="button">New list (clear calls)</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="ov-calls" id="ovCalls" hidden>
+    <div class="ovc-head"><span class="ovc-title">Slot calls</span><span class="ovc-state" id="ovcState"></span></div>
+    <div class="ovc-how" id="ovcHow"></div>
+    <div class="ovc-now"><div class="ovc-label">Playing now</div><div class="ovc-slot" id="ovcNow">—</div><div class="ovc-by" id="ovcBy"></div></div>
+    <div class="ovc-label" id="ovcNextLabel">Up next</div>
+    <div class="ovc-list" id="ovcList"></div>
+    <div class="ovc-best" id="ovcBest" hidden></div>
+  </div>
+
   <footer data-view="roller">
     <details class="sub">
       <summary>How the roll stays fair</summary>
@@ -507,6 +688,9 @@ footer { padding-top: 4px; }
 <script>
 (() => {
 "use strict";
+const params = new URLSearchParams(location.search);
+const OVERLAY = ["giveaway", "calls"].includes(params.get("overlay")) ? params.get("overlay") : null;
+if (OVERLAY) document.body.classList.add("ov", "ovm-" + OVERLAY);
 
 // ---------- crypto randomness ----------
 function randU32() { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; }
@@ -553,6 +737,7 @@ const state = {
   chatroomIds: {}
 };
 function save() {
+  if (OVERLAY) return;                                    // an overlay only mirrors; it never writes the streamer's data
   try {
     localStorage.setItem(LS, JSON.stringify({
       entries: [...state.entries.values()], example: state.example, history: state.history.slice(0, 50),
@@ -659,6 +844,7 @@ function renderEntries() {
   }
   els.entries.replaceChildren(frag);
   if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No one yet. Connect to your chat or add names by hand."; els.entries.append(p); }
+  if (typeof ovSendGiveaway === "function") ovSendGiveaway();
 }
 function changed() { save(); renderEntries(); if (!rolling) { idleOrder = [...state.entries.values()].map(e => e.name); const w = winnerIdx >= 0 ? order[winnerIdx] : null;
     if (!w || !state.entries.has(w.toLowerCase())) { winnerIdx = -1; order = idleOrder; }   // keep a shown result until its winner is removed
@@ -800,13 +986,18 @@ function buildReel(entries) {
   return best;
 }
 function startRoll() {
-  if (rolling || state.entries.size < 2) return;
-  order = buildReel([...state.entries.values()]);
-  const N = order.length;
-  const startIdx = randInt(N);
+  if (OVERLAY || rolling || state.entries.size < 2) return;
+  const reel = buildReel([...state.entries.values()]);
+  const startIdx = randInt(reel.length);
   const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
-  sim = { y: startIdx * H, v: v0, t: 0, done: false };
-  launch = { v0, startIdx, N, at: new Date() };
+  beginRoll(reel, startIdx * H, v0);
+  ovSendRoll(reel, startIdx * H, v0);
+}
+function beginRoll(reel, y0, v0) {
+  order = reel;
+  const N = order.length, startIdx = mod(Math.round(y0 / H), N);
+  sim = { y: y0, v: v0, t: 0, done: false };
+  launch = { v0, startIdx, y0, N, at: new Date() };
   rolling = true; winnerIdx = -1; lastSlot = startIdx; acc = 0; lastFrame = performance.now();
   els.resultLabel.textContent = "Rolling"; els.winner.textContent = "…"; els.winner.classList.remove("pop");
   $("result").classList.remove("won"); setWinnerAv(null);
@@ -832,7 +1023,7 @@ function finish() {
   const N = order.length, slot = Math.round(sim.y / H);
   winnerIdx = mod(slot, N);
   const name = order[winnerIdx];
-  const travelled = (sim.y - launch.startIdx * H) / H;
+  const travelled = (sim.y - launch.y0) / H;
   draw();
   els.resultLabel.textContent = "Winner";
   $("result").classList.add("won"); setWinnerAv(name);
@@ -842,8 +1033,10 @@ function finish() {
     `<span>start slot <b>${launch.startIdx + 1} of ${N}</b></span>` +
     `<span>travelled <b>${travelled.toFixed(1)} names</b></span>` +
     `<span>settled in <b>${sim.t.toFixed(2)} s</b></span>`;
+  if (OVERLAY) return;
   els.winnerActions.hidden = false;
   els.winnerActions.dataset.name = name;
+  ovSendGiveaway();
   state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
@@ -974,7 +1167,7 @@ async function pumpAvatars() {
     fetchAvatarUrl(key).then(url => {
       avatarUrls[key] = url; try { localStorage.setItem(AV_KEY, JSON.stringify(avatarUrls)); } catch (e) {}
       if (url) loadAvatarImg(key, url);
-      renderEntries(); renderGtb();
+      renderEntries(); renderGtb(); renderCalls();
     }).finally(() => { avatarActive--; pumpAvatars(); });
   }
 }
@@ -1146,7 +1339,7 @@ function onChat(d) {
   } else if (S.open && (S.entryMode === "active" || matches(text)) && (!S.subs || isSub(sender))) {
     hit = addEntry(name, "chat", isSub(sender)); if (hit) changed();
   }
-  const g = gtbOnChat(name, text, sender);
+  const g = gtbOnChat(name, text, sender) || callsOnChat(name, text, sender);
   feedLine(name, text, g ? g.tag : hit ? "entered" : "", g && !g.ok);
 }
 function feedLine(name, text, tag, miss) {
@@ -1167,7 +1360,7 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp
 const GTB_KEY = "kick-giveaway-gtb-v1";
 const gtb = { cmd: "!gtb", open: false, rule: "closest", subs: false, final: "", picked: false, guesses: [] };
 try { Object.assign(gtb, JSON.parse(localStorage.getItem(GTB_KEY) || "{}")); } catch (e) {}
-const saveGtb = () => { try { localStorage.setItem(GTB_KEY, JSON.stringify(gtb)); } catch (e) {} };
+const saveGtb = () => { if (OVERLAY) return; try { localStorage.setItem(GTB_KEY, JSON.stringify(gtb)); } catch (e) {} };
 const gEl = {
   state: $("gtbState"), stateText: $("gtbStateText"), start: $("gtbStart"), stop: $("gtbStop"), example: $("gtbExample"),
   final: $("gtbFinal"), pick: $("gtbPick"), result: $("gtbResult"), winAv: $("gtbWinAv"), winLabel: $("gtbWinLabel"),
@@ -1321,24 +1514,268 @@ gEl.reset.addEventListener("click", () => {
   gtb.guesses = []; gtb.picked = false; gtb.final = ""; gtb.open = false; gEl.final.value = ""; saveGtb(); renderGtb();
 });
 
+// ---------- slot calls ----------
+// Chat types "!call Gates of Olympus". Each person gets a set number of calls; the streamer plays them
+// in order (or picks one at random), types the result, and the best result is starred.
+const CALLS_KEY = "kick-giveaway-calls-v1";
+const calls = { cmd: "!call", max: 1, open: false, subs: false, noDupes: true, list: [], seq: 0 };
+try { Object.assign(calls, JSON.parse(localStorage.getItem(CALLS_KEY) || "{}")); } catch (e) {}
+const saveCalls = () => { if (OVERLAY) return; try { localStorage.setItem(CALLS_KEY, JSON.stringify(calls)); } catch (e) {} };
+const cEl = {
+  state: $("callsState"), stateText: $("callsStateText"), start: $("callsStart"), stop: $("callsStop"),
+  example: $("callsExample"), maxText: $("callsMaxText"), nowSlot: $("callsNowSlot"), nowBy: $("callsNowBy"),
+  next: $("callsNext"), random: $("callsRandom"), left: $("callsLeft"), meta: $("callsMeta"), best: $("callsBest"),
+  list: $("callsList"), cmd: $("callsCmd"), max: $("callsMax"), subs: $("callsSubs"), noDupes: $("callsNoDupes"),
+  badge: $("callsBadge"), manName: $("callsManName"), manSlot: $("callsManSlot"), manAdd: $("callsManAdd"),
+  manMsg: $("callsManMsg"), reset: $("callsReset")
+};
+cEl.cmd.value = calls.cmd; cEl.max.value = calls.max; cEl.subs.checked = calls.subs; cEl.noDupes.checked = calls.noDupes;
+const slotKey = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+function callsAdd(name, slot, src) {
+  name = cleanName(name); const key = name.toLowerCase();
+  slot = String(slot || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!name) return "bad";
+  if (!slot) return "noslot";
+  if (blockedSet().has(key)) return "blocked";
+  const mine = calls.list.filter(c => c.name.toLowerCase() === key);
+  if (mine.some(c => slotKey(c.slot) === slotKey(slot))) return "same";
+  if (mine.length >= calls.max) return "limit";
+  if (calls.noDupes && calls.list.some(c => slotKey(c.slot) === slotKey(slot))) return "taken";
+  calls.list.push({ id: ++calls.seq, name, slot, src, at: Date.now(), status: "waiting", result: "" });
+  saveCalls(); renderCalls(); return "ok";
+}
+function callsOnChat(name, text, sender) {
+  const cmd = calls.cmd.trim().toLowerCase(); if (!cmd) return null;
+  const t = text.toLowerCase();
+  if (t !== cmd && !t.startsWith(cmd + " ")) return null;
+  if (!calls.open) return { tag: "calls closed", ok: false };
+  if (calls.subs && !isSub(sender)) return { tag: "subs only", ok: false };
+  const r = callsAdd(name, text.slice(cmd.length), "chat");
+  const tags = { ok: "called", noslot: "no slot named", same: "already called that", limit: "no calls left", taken: "already called by someone", blocked: "blocked", bad: "" };
+  return { tag: tags[r], ok: r === "ok" };
+}
+function playCall(c) {
+  for (const x of calls.list) if (x.status === "current") x.status = "done";
+  if (c) c.status = "current";
+  saveCalls(); renderCalls();
+  cEl.nowSlot.classList.remove("pop"); void cEl.nowSlot.offsetWidth; cEl.nowSlot.classList.add("pop");
+}
+const waitingCalls = () => calls.list.filter(c => c.status === "waiting");
+cEl.next.addEventListener("click", () => playCall(waitingCalls()[0] || null));
+cEl.random.addEventListener("click", () => { const w = waitingCalls(); playCall(w.length ? w[randInt(w.length)] : null); });
+function bestCall() {
+  let best = null;
+  for (const c of calls.list) { const v = parseAmount(String(c.result).replace(/x$/i, "")); if (v !== null && (!best || v > best.v)) best = { c, v }; }
+  return best;
+}
+function renderCalls() {
+  const n = calls.list.length, w = waitingCalls().length;
+  cEl.state.classList.toggle("open", calls.open);
+  cEl.stateText.textContent = calls.open ? "Calls open" : n ? "Calls closed" : "Not started";
+  cEl.start.disabled = calls.open; cEl.stop.disabled = !calls.open;
+  cEl.start.className = calls.open ? "btn" : "btn primary"; cEl.stop.className = calls.open ? "btn primary" : "btn";
+  cEl.example.textContent = `${calls.cmd.trim() || "!call"} Gates of Olympus`;
+  cEl.maxText.textContent = `${calls.max} ${calls.max === 1 ? "slot" : "slots"}`;
+  cEl.badge.textContent = w ? String(w) : "";
+  cEl.left.textContent = `${w} waiting`;
+  cEl.next.disabled = cEl.random.disabled = !w;
+
+  const cur = calls.list.find(c => c.status === "current");
+  cEl.nowSlot.textContent = cur ? cur.slot : w ? "Press Next call" : "Nothing yet";
+  cEl.nowSlot.classList.toggle("empty", !cur);
+  cEl.nowBy.hidden = !cur; cEl.nowBy.replaceChildren();
+  if (cur) { const a = avatarFor(cur.name), av = document.createElement("span"); av.className = "av";
+    if (a.url) av.style.backgroundImage = `url("${a.url.replace(/"/g, "")}")`; else { av.style.backgroundColor = a.color; av.textContent = cur.name[0].toUpperCase(); }
+    const b = document.createElement("b"); b.textContent = cur.name; cEl.nowBy.append(av, "Called by ", b); }
+
+  const done = calls.list.filter(c => c.status !== "waiting").length;
+  cEl.meta.textContent = n ? `${n} ${n === 1 ? "call" : "calls"} · ${done} played` : "None yet";
+  const best = bestCall();
+  cEl.best.hidden = !best; cEl.best.replaceChildren();
+  if (best) { const b = document.createElement("b"); b.textContent = `${moneyFmtX(best.v)}x`; cEl.best.append("Best call: ", b, ` on ${best.c.slot}, called by ${best.c.name}`); }
+
+  const frag = document.createDocumentFragment();
+  calls.list.forEach((c, i) => {
+    const row = document.createElement("div"); row.className = "call " + c.status + (best && best.c === c ? " best" : "");
+    const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = i + 1;
+    const what = document.createElement("div"); what.className = "what";
+    const sl = document.createElement("span"); sl.className = "s"; sl.textContent = c.slot;
+    const nm = document.createElement("span"); nm.className = "n"; nm.textContent = c.name + (c.status === "current" ? " · playing now" : c.status === "done" ? " · played" : "");
+    what.append(sl, nm);
+    const acts = document.createElement("div"); acts.className = "acts";
+    if (c.status === "waiting") {
+      const play = document.createElement("button"); play.type = "button"; play.className = "play"; play.textContent = "Play";
+      play.addEventListener("click", () => playCall(c)); acts.append(play);
+    } else {
+      const x = document.createElement("input"); x.type = "text"; x.className = "x"; x.inputMode = "decimal"; x.placeholder = "result x";
+      x.value = c.result; x.setAttribute("aria-label", `Result for ${c.slot}`);
+      x.addEventListener("change", () => { c.result = x.value.trim(); saveCalls(); setTimeout(renderCalls); });   // not during the blur that fired this
+      acts.append(x);
+    }
+    const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", `Remove ${c.slot}`);
+    del.addEventListener("click", () => { calls.list = calls.list.filter(x => x !== c); saveCalls(); renderCalls(); });
+    acts.append(del);
+    row.append(rank, what, acts); frag.append(row);
+  });
+  cEl.list.replaceChildren(frag);
+  if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No calls yet. Press Start calls, then chat types ${calls.cmd.trim() || "!call"} followed by a slot name.`; cEl.list.append(p); }
+  if (typeof ovSendCalls === "function") ovSendCalls();
+}
+const moneyFmtX = v => (Number.isInteger(v) ? moneyWhole : moneyCents).format(v);
+cEl.start.addEventListener("click", () => { calls.open = true; saveCalls(); renderCalls(); });
+cEl.stop.addEventListener("click", () => { calls.open = false; saveCalls(); renderCalls(); });
+cEl.cmd.addEventListener("input", () => { calls.cmd = cEl.cmd.value; saveCalls(); renderCalls(); });
+cEl.max.addEventListener("input", () => { const v = Math.round(Number(cEl.max.value)); if (v >= 1) { calls.max = Math.min(50, v); saveCalls(); renderCalls(); } });
+cEl.subs.addEventListener("change", () => { calls.subs = cEl.subs.checked; saveCalls(); });
+cEl.noDupes.addEventListener("change", () => { calls.noDupes = cEl.noDupes.checked; saveCalls(); });
+cEl.manAdd.addEventListener("click", () => {
+  if (!cleanName(cEl.manName.value)) { cEl.manName.focus(); return; }
+  const r = callsAdd(cEl.manName.value, cEl.manSlot.value, "manual");
+  const msgs = { ok: "", noslot: "Type a slot name.", same: "They already called that slot.", limit: "That person has no calls left.", taken: "Someone already called that slot.", blocked: "That name is on the blocked list.", bad: "" };
+  cEl.manMsg.textContent = msgs[r];
+  if (r === "ok") { cEl.manSlot.value = ""; cEl.manSlot.focus(); }
+});
+cEl.manSlot.addEventListener("keydown", e => { if (e.key === "Enter") cEl.manAdd.click(); });
+let callsResetArmed = null;
+cEl.reset.addEventListener("click", () => {
+  if (!callsResetArmed) { cEl.reset.textContent = "Click again to clear every call"; callsResetArmed = setTimeout(() => { cEl.reset.textContent = "New list (clear calls)"; callsResetArmed = null; }, 2500); return; }
+  clearTimeout(callsResetArmed); callsResetArmed = null; cEl.reset.textContent = "New list (clear calls)";
+  calls.list = []; calls.open = false; saveCalls(); renderCalls();
+});
+renderCalls();
+
+// ---------- OBS overlay ----------
+// The page you run the giveaway on publishes small JSON updates to a private, randomly named ntfy.sh
+// topic, and the overlay link (the same page with ?overlay=...) subscribes to it. No account or server.
+const OV_LS = "kick-giveaway-overlay";
+var ov = { on: false, key: "" };   // var: the render functions above may call the senders before this line runs
+try { Object.assign(ov, JSON.parse(localStorage.getItem(OV_LS) || "{}")); } catch (e) {}
+if (!/^[a-z0-9]{16,40}$/.test(ov.key)) { ov.key = "kgt" + Array.from({ length: 22 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[randInt(36)]).join(""); }
+const saveOv = () => { if (OVERLAY) return; try { localStorage.setItem(OV_LS, JSON.stringify(ov)); } catch (e) {} };
+saveOv();
+const NTFY = "https://ntfy.sh/";
+const ovBase = location.href.split(/[?#]/)[0];
+const ovLink = kind => `${ovBase}?overlay=${kind}&k=${ov.key}`;
+// One publisher per topic: sends the newest state, at most every few seconds, and re-sends it each
+// minute so an overlay that starts later still catches up.
+function makePublisher(topic, gapMs) {
+  let pending = null, lastBody = "", lastAt = 0, timer = null;
+  const send = body => { lastBody = body; lastAt = Date.now(); fetch(NTFY + topic, { method: "POST", body }).catch(() => {}); };
+  const flush = () => { timer = null; if (pending === null) return; const b = pending; pending = null; if (b !== lastBody) send(b); };
+  setInterval(() => { if (ov.on && lastBody && Date.now() - lastAt > 55000) send(lastBody); }, 15000);
+  return { push(obj, now) {
+    if (!ov.on || OVERLAY) return;
+    pending = JSON.stringify(obj);
+    if (now) { clearTimeout(timer); timer = null; const b = pending; pending = null; send(b); return; }
+    if (!timer) timer = setTimeout(flush, Math.max(0, gapMs - (Date.now() - lastAt)));
+  } };
+}
+const pubG = makePublisher(ov.key + "-g", 3000), pubC = makePublisher(ov.key + "-c", 3000);
+function ovSendGiveaway() {
+  if (!ov || !ov.on || OVERLAY || rolling) return;
+  const names = idleOrder.slice(0, 80);
+  pubG.push({ t: "g", kw: S.entryMode === "active" ? "" : S.keyword.trim(), open: S.open, n: state.entries.size, names,
+    winner: winnerIdx >= 0 ? order[winnerIdx] : null, at: Date.now() });
+}
+// The overlay replays the same deterministic physics from the same start, so it lands on the same name.
+// Big reels are trimmed to 120 slots that keep the winner in the slot the reel stops on.
+function ovSendRoll(reel, y0, v0) {
+  if (!ov || !ov.on) return;
+  const s = { y: y0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s);
+  const stop = Math.round(s.y / H), winner = reel[mod(stop, reel.length)];
+  let sent = reel;
+  if (JSON.stringify(reel).length > 3000) {
+    const M = 120; sent = shuffle(reel).slice(0, M); sent[mod(stop, M)] = winner;
+  }
+  pubG.push({ t: "roll", order: sent, y0, v0, at: Date.now() }, true);
+}
+function ovSendCalls() {
+  if (!ov || !ov.on || OVERLAY) return;
+  const cur = calls.list.find(c => c.status === "current"), best = bestCall();
+  const next = waitingCalls().slice(0, 6).map(c => [c.slot.slice(0, 40), c.name]);
+  pubC.push({ t: "c", open: calls.open, cmd: calls.cmd.trim(), max: calls.max, now: cur ? [cur.slot, cur.name] : null,
+    next, waiting: waitingCalls().length, best: best ? [best.c.slot.slice(0, 40), best.c.name, best.v] : null, at: Date.now() });
+}
+for (const id of ["ovPanelG", "ovPanelC"]) {
+  const panel = $(id), kind = id === "ovPanelG" ? "giveaway" : "calls";
+  const on = panel.querySelector(".ov-on"), link = panel.querySelector(".ov-link"), copy = panel.querySelector(".ov-copy");
+  on.checked = ov.on; link.value = ovLink(kind);
+  on.addEventListener("change", () => {
+    ov.on = on.checked; saveOv();
+    document.querySelectorAll(".ov-on").forEach(x => (x.checked = ov.on));
+    if (ov.on) { ovSendGiveaway(); ovSendCalls(); }
+  });
+  copy.addEventListener("click", () => {
+    navigator.clipboard.writeText(link.value).then(() => { copy.textContent = "Copied"; setTimeout(() => (copy.textContent = "Copy link"), 1400); })
+      .catch(() => { link.select(); });
+  });
+  link.addEventListener("focus", () => link.select());
+}
+
+// Overlay side: listen to the topic and draw what arrives.
+if (OVERLAY) {
+  const key = (params.get("k") || "").replace(/[^a-z0-9]/g, "");
+  S.sound = params.get("sound") !== "0"; state.entries.clear();
+  els.empty.textContent = "Waiting for the giveaway…";
+  order = []; idleOrder = []; winnerIdx = -1; draw();
+  const showWinner = name => {
+    els.resultLabel.textContent = name ? "Winner" : "Winner";
+    $("result").classList.toggle("won", !!name); setWinnerAv(name);
+    els.winner.textContent = name || "Nobody yet";
+  };
+  const onGiveaway = d => {
+    if (d.t === "roll") {
+      if (Date.now() - d.at > 30000) {                   // an old roll: jump straight to where it stopped
+        order = d.order; const s = { y: d.y0, v: d.v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s);
+        sim = s; winnerIdx = mod(Math.round(s.y / H), order.length); draw(); showWinner(order[winnerIdx]);
+      } else beginRoll(d.order, d.y0, d.v0);
+      return;
+    }
+    if (d.t !== "g" || rolling) return;
+    $("ovInfo").innerHTML = d.kw ? `Type <b>${escapeHtml(d.kw)}</b> in chat to enter · ${d.n} in` : `Chat to enter · ${d.n} in`;
+    if (!d.open) $("ovInfo").innerHTML = `Entries closed · ${d.n} in`;
+    const keep = d.winner && winnerIdx >= 0 && order[winnerIdx] === d.winner;
+    if (!keep) { order = d.names; winnerIdx = -1; draw(); showWinner(d.winner); }
+  };
+  const onCalls = d => {
+    if (d.t !== "c") return;
+    $("ovCalls").hidden = false;
+    $("ovcState").textContent = d.open ? "Open" : "Closed"; $("ovcState").classList.toggle("open", d.open);
+    $("ovcHow").innerHTML = d.open ? `Type <b>${escapeHtml(d.cmd)} slot name</b> · ${d.max} per person` : "Calls are closed";
+    $("ovcNow").textContent = d.now ? d.now[0] : "—";
+    $("ovcBy").innerHTML = d.now ? `called by <b>${escapeHtml(d.now[1])}</b>` : "";
+    $("ovcNextLabel").textContent = d.waiting ? `Up next · ${d.waiting} waiting` : "No calls waiting";
+    $("ovcList").replaceChildren(...d.next.map(([slot, name]) => { const r = document.createElement("div"), a = document.createElement("span"), b = document.createElement("span"); a.textContent = slot; b.textContent = name; r.append(a, b); return r; }));
+    $("ovcBest").hidden = !d.best;
+    if (d.best) $("ovcBest").innerHTML = `Best call: <b>${escapeHtml(String(d.best[2]))}x</b> on ${escapeHtml(d.best[0])} by ${escapeHtml(d.best[1])}`;
+  };
+  if (key) {
+    const topic = key + (OVERLAY === "calls" ? "-c" : "-g"), handle = OVERLAY === "calls" ? onCalls : onGiveaway;
+    const es = new EventSource(`${NTFY}${topic}/sse?since=10m`);
+    es.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.event === "message" && m.message) handle(JSON.parse(m.message)); } catch (e) {} };
+  } else els.empty.textContent = "This overlay link is missing its key. Copy it again from the OBS overlay panel.";
+}
+
 // ---------- tabs ----------
 // One chat connection serves both tabs; the Kick chat panel moves to whichever tab is showing.
 const TAB_KEY = "kick-giveaway-tab";
 let activeTab = "roller";
 const tabBtns = document.querySelectorAll(".tabs [data-tab]");
 function showTab(name) {
-  activeTab = name === "gtb" ? "gtb" : "roller";
+  activeTab = ["gtb", "calls"].includes(name) ? name : "roller";
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
   const desk = document.querySelector(`[data-view="${activeTab}"] .desk`), chat = $("chatPanel");
   if (chat.parentElement !== desk) desk.prepend(chat);
+  if (OVERLAY) return;
   try { localStorage.setItem(TAB_KEY, activeTab); } catch (e) {}
   if (location.hash !== "#" + activeTab) history.replaceState(null, "", "#" + activeTab);
 }
 tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
-let startTab = location.hash.slice(1); if (startTab !== "gtb" && startTab !== "roller") { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
-showTab(startTab);
+let startTab = location.hash.slice(1); if (!["gtb", "calls", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
+showTab(OVERLAY === "calls" ? "calls" : OVERLAY ? "roller" : startTab);
 renderGtb(); showFinalRead();
 
 // expose the simulator for anyone who wants to audit it from the console
