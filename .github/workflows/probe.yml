@@ -8,6 +8,7 @@ jobs:
     steps:
       - name: Ask slot.report to check the site's link, then try the data
         run: |
+          sleep 100; echo "=== live page"; curl -sS https://jaydabnknt.github.io/kick-giveaway-roller/ | grep -c "runs entirely in your browser"
           echo "=== register"; curl -sS -m 60 -X POST https://slot.report/api/register -H 'Content-Type: application/json' -d '{"url":"https://jaydabnknt.github.io/kick-giveaway-roller/"}'; echo
           sleep 5
           echo "=== data with site origin"
