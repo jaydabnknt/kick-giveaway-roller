@@ -6,15 +6,17 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Read Stake's only-on-stake group via reader
+      - name: Only-on-stake details
         run: |
-          for H in "" "X-Wait-For-Selector: img[alt]" ; do
-          for U in "https://stake.us/casino/group/only-on-stake" "https://stake.us/casino/group/stake-originals"; do
-            echo "=== $U [$H]"
-            curl -sS -m 90 ${H:+-H "$H"} -H 'X-Timeout: 30' "https://r.jina.ai/$U" -o out.md -w 'HTTP %{http_code}\n'
-            wc -c out.md
-            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | wc -l
-            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | head -60
-            sed -n '/Sort/,/Social Casino/p' out.md | head -60
-            [ $(wc -c < out.md) -lt 2000 ] && cat out.md
-          done; done
+          U="https://stake.us/casino/group/only-on-stake"
+          curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/$U" -o a.md -w 'HTTP %{http_code}\n'
+          grep -n -i -E 'displaying|load more|games|of [0-9]' a.md | head -20
+          grep -n 'twist-gaming-wild-savannah' a.md | head -3
+          L=$(grep -n 'casino/games/' a.md | head -1 | cut -d: -f1); sed -n "$((L-15)),$((L+8))p" a.md
+          L2=$(grep -n 'casino/games/' a.md | tail -1 | cut -d: -f1); sed -n "$((L2)),$((L2+25))p" a.md
+          for Q in "?sortBy=az" "?sortBy=za" "?page=2" "?sortBy=new"; do
+            curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/$U$Q" -o b.md -w "$Q HTTP %{http_code} "
+            grep -o 'casino/games/[a-z0-9-]*' b.md | sort -u > b.txt; grep -o 'casino/games/[a-z0-9-]*' a.md | sort -u > a.txt
+            echo "count $(wc -l < b.txt) new $(comm -13 a.txt b.txt | wc -l)"; comm -13 a.txt b.txt | head -30
+          done
+          echo "=== stake.com"; curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/https://stake.com/casino/group/only-on-stake" -o c.md -w 'HTTP %{http_code}\n'; grep -o 'casino/games/[a-z0-9-]*' c.md | sort -u | wc -l; head -c 400 c.md
