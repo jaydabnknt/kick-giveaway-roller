@@ -8,11 +8,13 @@ jobs:
     steps:
       - name: Read Stake's only-on-stake group via reader
         run: |
-          for U in "https://stake.us/casino/group/only-on-stake" "https://stake.com/casino/group/only-on-stake"; do
-            echo "=== $U"
-            curl -sS -m 90 -H 'X-Timeout: 40' -H 'X-Wait-For-Selector: a[href*="/casino/games/"]' "https://r.jina.ai/$U" -o out.md -w 'HTTP %{http_code}\n'
+          for H in "" "X-Wait-For-Selector: img[alt]" ; do
+          for U in "https://stake.us/casino/group/only-on-stake" "https://stake.us/casino/group/stake-originals"; do
+            echo "=== $U [$H]"
+            curl -sS -m 90 ${H:+-H "$H"} -H 'X-Timeout: 30' "https://r.jina.ai/$U" -o out.md -w 'HTTP %{http_code}\n'
             wc -c out.md
             grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | wc -l
-            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | head -80
-            grep -i -E 'load more|displaying|of [0-9]+ games|[0-9]+ games' out.md | head -5
-          done
+            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | head -60
+            sed -n '/Sort/,/Social Casino/p' out.md | head -60
+            [ $(wc -c < out.md) -lt 2000 ] && cat out.md
+          done; done
