@@ -6,17 +6,19 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Only-on-stake details
+      - name: slot.report coverage of Stake exclusives
         run: |
-          U="https://stake.us/casino/group/only-on-stake"
-          curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/$U" -o a.md -w 'HTTP %{http_code}\n'
-          grep -n -i -E 'displaying|load more|games|of [0-9]' a.md | head -20
-          grep -n 'twist-gaming-wild-savannah' a.md | head -3
-          L=$(grep -n 'casino/games/' a.md | head -1 | cut -d: -f1); sed -n "$((L-15)),$((L+8))p" a.md
-          L2=$(grep -n 'casino/games/' a.md | tail -1 | cut -d: -f1); sed -n "$((L2)),$((L2+25))p" a.md
-          for Q in "?sortBy=az" "?sortBy=za" "?page=2" "?sortBy=new"; do
-            curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/$U$Q" -o b.md -w "$Q HTTP %{http_code} "
-            grep -o 'casino/games/[a-z0-9-]*' b.md | sort -u > b.txt; grep -o 'casino/games/[a-z0-9-]*' a.md | sort -u > a.txt
-            echo "count $(wc -l < b.txt) new $(comm -13 a.txt b.txt | wc -l)"; comm -13 a.txt b.txt | head -30
-          done
-          echo "=== stake.com"; curl -sS -m 90 -H 'X-Timeout: 30' "https://r.jina.ai/https://stake.com/casino/group/only-on-stake" -o c.md -w 'HTTP %{http_code}\n'; grep -o 'casino/games/[a-z0-9-]*' c.md | sort -u | wc -l; head -c 400 c.md
+          curl -sS -m 60 -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o sr.json -w 'HTTP %{http_code}\n'
+          python3 - <<'PY'
+          import json,collections,re
+          j=json.load(open('sr.json')); rows=j if isinstance(j,list) else j.get('results') or []
+          names="zeus sanctuary|big bank bust|snack attack megaways|aladdin's treasure|aladdins treasure|bison spirit|gates of heaven|jewel bonanza|lucky phoenix megaways|madame mystique megaways|slushie party|sugar twist|sweet fiesta|dog mansion megaways|wild orbs|carp diem|festive frost|jade fate|lab of lunacy|mining mayhem|samurai dogs|spin reaper|wallaby wilds|wild savannah".split('|')
+          n=lambda s: re.sub(r'[^a-z0-9]','',s.lower())
+          idx=collections.defaultdict(list)
+          for r in rows: idx[n(r['name'])].append(r)
+          for x in names: print(x,'->',[(r['name'],r['provider']) for r in idx.get(n(x),[])])
+          pc=collections.Counter(str(r.get('provider')) for r in rows)
+          for p,c in sorted(pc.items()):
+            if re.search(r'twist|massive|titan|shady|mirror|paperclip|uppercut|stake|engine|hacksaw|nolimit|relax|push|bgaming|onetouch',p.lower()): print('PROV',p,c)
+          print('nproviders',len(pc))
+          PY
