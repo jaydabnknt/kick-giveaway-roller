@@ -8,8 +8,8 @@ jobs:
     steps:
       - name: Read slot.report registration form
         run: |
-          curl -sS -m 30 https://slot.report/api/register -o reg.html
+          curl -sSL -m 30 https://slot.report/api/ -o reg.html
           echo "=== forms"; grep -io '<form[^>]*>' reg.html | head
           echo "=== inputs"; grep -io '<input[^>]*>' reg.html | head -20
-          echo "=== fetch/api calls"; grep -o "fetch([^)]*)" reg.html | head; grep -o '"/api/[^"]*"' reg.html | sort -u | head -30; grep -o "'/api/[^']*'" reg.html | sort -u | head -30
+          echo "=== fetch/api calls"; grep -o "fetch([^)]*)" reg.html | head; grep -o ".\{0,300\}Check link.\{0,300\}" reg.html | head -3; grep -o '"/api/[^"]*"' reg.html | sort -u | head -30; grep -o "'/api/[^']*'" reg.html | sort -u | head -30
           echo "=== script snippets"; tr '\n' ' ' < reg.html | grep -o '<script[^>]*>[^<]\{0,3000\}' | grep -i 'regist\|check\|key' | head -c 6000
