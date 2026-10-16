@@ -728,8 +728,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
                 <option value="release">Release date</option>
                 <option value="maxwin">Max win</option>
                 <option value="vol">Volatility</option>
-                <option value="hit">Hit frequency</option>
-                <option value="paylines">Paylines / ways</option>
+                <option value="hit">How often it hits</option>
                 <option value="name">Name</option>
                 <option value="provider">Provider</option>
               </select>
@@ -1796,16 +1795,37 @@ const saveSf = () => { if (OVERLAY) return; try { localStorage.setItem(SLOTF_LS,
 const num = v => { if (v === null || v === undefined || v === "") return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
 const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
 const title = t => t.replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+// slot.report merges several sources, so the same thing comes spelled many ways ("wilds", "Wild Symbol",
+// "free_spins", "multiplikatoren"). These fold them into one label each.
+const VOL_ALIASES = { "med": "medium", "medium-low": "low-medium", "med-high": "medium-high", "very-high": "very high", "insane": "extreme" };
+const FEAT_ALIASES = [
+  [/^wild/, "Wilds"], [/^(multipli|multiplikator)/, "Multipliers"], [/^free ?spin/, "Free Spins"], [/^bonus ?buy|^feature buy/, "Bonus Buy"],
+  [/^scatter/, "Scatters"], [/^re ?spin/, "Respins"], [/^megaways/, "Megaways"], [/hold (and|&|n)? ?win|hold ?& ?win/, "Hold & Win"],
+  [/^cash ?collect|^collect/, "Cash Collect"], [/^sticky/, "Sticky Symbols"], [/^expanding/, "Expanding"], [/cluster/, "Cluster Pays"],
+  [/^(tumble|cascad|avalanche|drop)/, "Tumble"], [/^(gamble|risk)/, "Gamble"], [/^bonus game|^pick/, "Bonus Game"], [/jackpot/, "Jackpot"],
+  [/^mystery/, "Mystery Symbols"], [/^(increasing|progressive) multi/, "Multipliers"], [/^(stacked)/, "Stacked Symbols"]
+];
+const FEAT_SKIP = /volatility|^high rtp|^rtp/;
+function normFeat(f) {
+  const k = txt(f).toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!k || FEAT_SKIP.test(k)) return "";
+  for (const [re, label] of FEAT_ALIASES) if (re.test(k)) return label;
+  return title(k);
+}
 function normSlot(r) {
   const feats = Array.isArray(r.features) ? r.features : typeof r.features === "string" ? r.features.split(/[,;|]/) : [];
+  const themes = (Array.isArray(r.theme) ? r.theme : txt(r.theme) ? [r.theme] : []).map(t => title(txt(t))).filter(Boolean);
+  let vol = txt(r.volatility).toLowerCase(); vol = VOL_ALIASES[vol] || vol;
+  const featList = [...new Set(feats.map(normFeat).filter(Boolean))];
   const rel = txt(r.release_date), year = num(r.year) || (rel ? num(rel.slice(0, 4)) : null);
   const rtp = num(r.rtp);
   return {
     name: txt(r.name), slug: txt(r.slug), provider: txt(r.provider), rtp: rtp !== null && rtp <= 1 ? rtp * 100 : rtp,
-    vol: txt(r.volatility).toLowerCase(), volScore: num(r.volatility_score), maxWin: num(r.max_win),
-    feats: feats.map(f => title(txt(f))).filter(Boolean), mech: title(txt(r.mechanic)), theme: title(txt(r.theme)),
-    grid: txt(r.grid), paylines: num(r.paylines), paylinesRaw: txt(r.paylines), buy: r.has_bonus_buy === true || r.has_bonus_buy === 1 || r.has_bonus_buy === "true",
-    jackpot: r.has_jackpot === true || r.has_jackpot === 1 || r.has_jackpot === "true",
+    vol, volScore: num(r.volatility_score), maxWin: num(r.max_win),
+    feats: featList, mech: normFeat(r.mechanic), themes, theme: themes.join(", "),
+    grid: txt(r.grid), paylines: num(r.paylines), paylinesRaw: txt(r.paylines),
+    buy: r.has_bonus_buy === true || r.has_bonus_buy === 1 || r.has_bonus_buy === "true" || featList.includes("Bonus Buy"),
+    jackpot: r.has_jackpot === true || r.has_jackpot === 1 || r.has_jackpot === "true" || featList.includes("Jackpot"),
     release: rel, relTime: rel ? Date.parse(rel) || null : null, year, hit: num(r.hit_frequency), minBet: num(r.min_bet), maxBet: num(r.max_bet)
   };
 }
@@ -1842,10 +1862,10 @@ function useSlots(list, at) {
   sl.all = list; sl.loaded = true;
   fillSelect($("slotsProvider"), countBy(list, s => s.provider).sort((a, b) => a[0].localeCompare(b[0])), sf.provider);
   fillSelect($("slotsMech"), countBy(list, s => s.mech).sort((a, b) => b[1] - a[1]), sf.mech);
-  fillSelect($("slotsTheme"), countBy(list, s => s.theme).sort((a, b) => b[1] - a[1]), sf.theme);
-  const vols = countBy(list, s => s.vol).sort((a, b) => (VOL_ORDER.indexOf(a[0]) + 99 * (VOL_ORDER.indexOf(a[0]) < 0)) - (VOL_ORDER.indexOf(b[0]) + 99 * (VOL_ORDER.indexOf(b[0]) < 0)));
+  fillSelect($("slotsTheme"), countBy(list, s => s.themes).sort((a, b) => b[1] - a[1]).slice(0, 60), sf.theme);
+  const vols = countBy(list, s => VOL_ORDER.includes(s.vol) ? s.vol : "").sort((a, b) => (VOL_ORDER.indexOf(a[0]) + 99 * (VOL_ORDER.indexOf(a[0]) < 0)) - (VOL_ORDER.indexOf(b[0]) + 99 * (VOL_ORDER.indexOf(b[0]) < 0)));
   chipRow($("slotsVol"), vols.map(v => v[0]), sf.vol, v => title(v));
-  chipRow($("slotsFeat"), countBy(list, s => s.feats).sort((a, b) => b[1] - a[1]).slice(0, 18).map(v => v[0]), sf.feat, v => v);
+  chipRow($("slotsFeat"), countBy(list, s => s.feats).sort((a, b) => b[1] - a[1]).slice(0, 20).map(v => v[0]), sf.feat, v => v);
   const d = new Date(at);
   $("slotsMeta").textContent = `${list.length.toLocaleString()} slots · updated ${d.toLocaleDateString([], { month: "short", day: "numeric" })}`;
   renderSlots();
@@ -1862,12 +1882,12 @@ function filteredSlots() {
   const since = Date.now() - 90 * 86400000;
   const out = sl.all.filter(s =>
     (!q || s.name.toLowerCase().includes(q) || s.provider.toLowerCase().includes(q)) &&
-    (!sf.provider || s.provider === sf.provider) && (!sf.mech || s.mech === sf.mech) && (!sf.theme || s.theme === sf.theme) &&
+    (!sf.provider || s.provider === sf.provider) && (!sf.mech || s.mech === sf.mech) && (!sf.theme || s.themes.includes(sf.theme)) &&
     (!sf.vol.length || sf.vol.includes(s.vol)) && sf.feat.every(f => s.feats.includes(f)) &&
     (minRtp === null || (s.rtp !== null && s.rtp >= minRtp)) && (minWin === null || (s.maxWin !== null && s.maxWin >= minWin)) &&
     (from === null || (s.year !== null && s.year >= from)) && (to === null || (s.year !== null && s.year <= to)) &&
     (!sf.buy || s.buy) && (!sf.jackpot || s.jackpot) && (!sf.recent || (s.relTime !== null && s.relTime >= since)));
-  const key = { rtp: s => s.rtp, release: s => s.relTime, maxwin: s => s.maxWin, vol: volRank, hit: s => s.hit, paylines: s => s.paylines, name: s => s.name.toLowerCase(), provider: s => s.provider.toLowerCase() + "\u0000" + s.name.toLowerCase() }[sf.sort];
+  const key = { rtp: s => s.rtp, release: s => s.relTime, maxwin: s => s.maxWin, vol: volRank, hit: s => s.hit ? 1 / s.hit : null, name: s => s.name.toLowerCase(), provider: s => s.provider.toLowerCase() + "\u0000" + s.name.toLowerCase() }[sf.sort];
   const textSort = sf.sort === "name" || sf.sort === "provider";
   const dir = (sf.dir === "asc") !== textSort ? 1 : -1;      // text sorts read A to Z under "highest first"
   return out.sort((a, b) => {
@@ -1893,7 +1913,7 @@ function slotRow(s) {
   if (tags.childElementCount) row.append(tags);
   if (sl.open === s) {
     const more = document.createElement("div"); more.className = "more";
-    const bits = [["Hit rate", s.hit !== null ? (s.hit <= 1 ? (s.hit * 100).toFixed(1) : s.hit.toFixed(1)) + "%" : null], ["Grid", s.grid], ["Lines / ways", s.paylinesRaw], ["Theme", s.theme],
+    const bits = [["Hits", s.hit ? `1 in ${s.hit.toFixed(2)} spins` : null], ["Grid", s.grid], ["Lines / ways", s.paylinesRaw], ["Theme", s.theme],
       ["Bets", s.minBet !== null && s.maxBet !== null ? `${s.minBet} to ${s.maxBet}` : null], ["Released", s.release]];
     for (const [k, v] of bits) if (v) { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; d.append(k + " ", b); more.append(d); }
     row.append(more);
