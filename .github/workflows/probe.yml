@@ -6,14 +6,26 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Try Stake's slot list without a token
+      - name: Look for Stake exclusives in slot.report
         run: |
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36'
-          Q1='{"operationName":"SlugKuratorGroup","variables":{"slug":"slots"},"query":"query SlugKuratorGroup($slug: String!) { slugKuratorGroup(slug: $slug) { id name slug gameCount } }"}'
-          Q2='{"operationName":"SlugKuratorGroup","variables":{"slug":"slots","limit":5,"offset":0},"query":"query SlugKuratorGroup($slug: String!, $limit: Int!, $offset: Int!) { slugKuratorGroup(slug: $slug) { id name gameCount groupGamesList(limit: $limit, offset: $offset) { game { id name slug provider { name } } } } }"}'
-          for BASE in https://stake.com https://stake.us https://stake.ac; do
-            for Q in "$Q1" "$Q2"; do
-              echo "=== $BASE"
-              curl -sS -m 30 -X POST "$BASE/_api/graphql" -H 'Content-Type: application/json' -H "User-Agent: $UA" -H "Origin: $BASE" -H 'x-language: en' -d "$Q" -w '\nHTTP %{http_code}\n' | head -c 1200; echo
-            done
+          curl -sS -m 60 -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o sr.json -w 'HTTP %{http_code}\n'
+          python3 - <<'PY'
+          import json,collections
+          j=json.load(open('sr.json')); rows=j if isinstance(j,list) else j.get('results') or j.get('slots') or j.get('data') or []
+          print('rows',len(rows)); print('keys',sorted(rows[0].keys()) if rows else None)
+          hits=[r for r in rows if 'stake' in json.dumps({k:v for k,v in r.items() if k not in('url','slug')}).lower()]
+          print('rows mentioning stake',len(hits))
+          c=collections.Counter()
+          for r in hits:
+            for k,v in r.items():
+              if 'stake' in json.dumps(v).lower(): c[k]+=1
+          print('fields',c)
+          for r in hits[:15]: print(r.get('name'),'|',r.get('provider'),'|',[ (k,v) for k,v in r.items() if 'stake' in json.dumps(v).lower()][:3])
+          pc=collections.Counter(str(r.get('provider')) for r in rows)
+          print([p for p in pc if any(w in p.lower() for w in ['stake','massive','twist','titan','backseat','paperclip','hacksaw','print'])])
+          PY
+      - name: Try reader proxies for Stake's exclusives page
+        run: |
+          for U in "https://r.jina.ai/https://stake.com/casino/group/stake-exclusives" "https://r.jina.ai/https://stake.us/casino/group/stake-exclusives"; do
+            echo "=== $U"; curl -sS -m 60 "$U" -w '\nHTTP %{http_code}\n' | head -c 2500; echo
           done
