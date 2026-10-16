@@ -188,6 +188,8 @@ details.sub[open] > summary { margin-bottom: 10px; }
 .how p { margin: 0; }
 .how b { color: var(--fg); }
 footer { padding-top: 4px; }
+.about p { margin: 0; color: var(--muted); font-size: 13px; max-width: 80ch; }
+body.ov .about { display: none !important; }
 
 /* Tabs */
 .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; width: max-content; max-width: 100%; }
@@ -698,7 +700,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
           <h2 id="slotsTitle">Slots</h2>
           <span class="meta" id="slotsMeta"></span>
         </div>
-        <p class="hint">Slot data comes from <a href="https://slot.report/" target="_blank">slot.report</a>, a free and independent slot database, and this page refreshes it once a day. RTP is the provider's default; some casinos run lower versions.</p>
+        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. RTP is the provider's default; some casinos run lower versions.</p>
         <div class="notice" id="slotsErr" hidden></div>
         <div class="row">
           <button class="btn primary" id="slotsRandom" type="button">Random slot from these</button>
@@ -805,6 +807,10 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
     <div class="ovc-list" id="ovcList"></div>
     <div class="ovc-best" id="ovcBest" hidden></div>
   </div>
+
+  <section class="about">
+    <p>Giveaway Tools runs entirely in your browser. The roller, Guess the Balance and slot calls read your Kick chat directly, and the Slots tab gets its RTP, volatility, max win and release figures from the free slot database at <a href="https://slot.report/">slot.report</a>, which tracks thousands of games from dozens of providers and updates daily.</p>
+  </section>
 
   <footer data-view="roller">
     <details class="sub">
