@@ -6,10 +6,17 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Read slot.report registration form
+      - name: Ask slot.report to check the site's link, then try the data
         run: |
-          curl -sSL -m 30 https://slot.report/api/ -o reg.html
-          echo "=== forms"; grep -io '<form[^>]*>' reg.html | head
-          echo "=== inputs"; grep -io '<input[^>]*>' reg.html | head -20
-          echo "=== fetch/api calls"; grep -o "fetch([^)]*)" reg.html | head; grep -o ".\{0,300\}Check link.\{0,300\}" reg.html | head -3; grep -o '"/api/[^"]*"' reg.html | sort -u | head -30; grep -o "'/api/[^']*'" reg.html | sort -u | head -30
-          echo "=== script snippets"; tr '\n' ' ' < reg.html | grep -o '<script[^>]*>[^<]\{0,3000\}' | grep -i 'regist\|check\|key' | head -c 6000
+          echo "=== register"; curl -sS -m 60 -X POST https://slot.report/api/register -H 'Content-Type: application/json' -d '{"url":"https://jaydabnknt.github.io/kick-giveaway-roller/"}'; echo
+          sleep 5
+          echo "=== data with site origin"
+          curl -sS -m 60 --compressed -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o s.json -w '%{http_code}\n'
+          head -c 300 s.json; echo
+          jq -c '{count, n:(.results|length)}' s.json || true
+          jq -c '.results[0:2]' s.json | head -c 2500 || true
+          echo "=== value shapes"
+          jq -r '[.results[].volatility]|unique|join(" | ")' s.json || true
+          jq -r '[.results[].features[]?]|group_by(.)|map([.[0],length])|sort_by(-.[1])|.[0:30]|map("\(.[0]):\(.[1])")|join(", ")' s.json || true
+          jq -r '[.results[].mechanic]|unique|.[0:40]|join(" | ")' s.json || true
+          jq -c '[.results[] | {rtp, max_win, release_date, hit_frequency, paylines, has_bonus_buy}] | .[100:104]' s.json || true
