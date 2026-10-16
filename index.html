@@ -292,8 +292,30 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 .ovc-best b { color: #ffd166; }
 .ov-link { font-family: var(--mono); font-size: 12px !important; }
 
+/* Slot browser */
+.slot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px; border-radius: 8px; cursor: pointer; }
+.slot-row:nth-child(odd) { background: color-mix(in srgb, var(--panel-2) 55%, transparent); }
+.slot-row:hover { box-shadow: inset 0 0 0 1px var(--line); }
+.slot-row .nm { font-weight: 800; font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-row .pv { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-row .stats { grid-row: span 2; display: flex; gap: 14px; align-items: center; font: 600 13px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.slot-row .stats div { display: grid; }
+.slot-row .stats small { font: 700 9.5px var(--font); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.slot-row .stats .hi { color: var(--accent); }
+.slot-row .tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-size: 11.5px; padding: 1px 7px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.slot-row .more { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 14px; font-size: 13px; color: var(--muted); padding-top: 6px; }
+.slot-row .more b { color: var(--fg); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 99px; padding: 5px 11px; min-height: 32px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.slots-status { font-size: 13.5px; }
+.pick-card .slot { font-weight: 900; font-size: clamp(22px, 4vw, 32px); color: var(--accent); line-height: 1.1; overflow-wrap: anywhere; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
 /* Phones: one column, bigger touch targets, 16px inputs so iOS doesn't zoom in. */
 @media (max-width: 860px) {
+  [data-view="slots"] .desk { order: -1; }
   .grid { grid-template-columns: minmax(0, 1fr); }
   .reel-box { height: clamp(260px, 44vh, 420px); }
 }
@@ -315,6 +337,10 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
   .call { grid-template-columns: 22px minmax(0, 1fr); }
   .call .acts { grid-column: 2; }
   .call .x { flex: 1 1 auto; }
+  .tabs button { font-size: 13.5px; padding: 9px 4px; }
+  .slot-row { grid-template-columns: minmax(0, 1fr); }
+  .slot-row .stats { grid-row: auto; justify-content: flex-start; text-align: left; }
+  .chips button { min-height: 38px; font-size: 14px; }
   .gtb-btns { flex: 1 1 100%; }
   .gtb-btns .btn { flex: 1 1 0; }
   .final-row .btn.primary { flex: 1 1 100%; }
@@ -341,7 +367,8 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
   <nav class="tabs" role="tablist" aria-label="Giveaway type">
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
     <button type="button" role="tab" data-tab="gtb" aria-selected="false"><span><span class="long">Guess the </span>Balance</span> <span class="badge" id="gtbBadge"></span></button>
-    <button type="button" role="tab" data-tab="calls" aria-selected="false">Slot Calls <span class="badge" id="callsBadge"></span></button>
+    <button type="button" role="tab" data-tab="calls" aria-selected="false"><span><span class="long">Slot </span>Calls</span> <span class="badge" id="callsBadge"></span></button>
+    <button type="button" role="tab" data-tab="slots" aria-selected="false">Slots</button>
   </nav>
 
   <div class="grid" data-view="roller">
@@ -661,6 +688,112 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
       <div class="row">
         <button class="btn ghost danger" id="callsReset" type="button">New list (clear calls)</button>
       </div>
+    </section>
+  </div>
+
+  <div class="grid" data-view="slots" hidden>
+    <section class="stage" aria-label="Slot browser">
+      <div class="card">
+        <div class="list-head">
+          <h2 id="slotsTitle">Slots</h2>
+          <span class="meta" id="slotsMeta"></span>
+        </div>
+        <p class="hint">Slot data comes from <a href="https://slot.report/" target="_blank">slot.report</a>, a free and independent slot database, and this page refreshes it once a day. RTP is the provider's default; some casinos run lower versions.</p>
+        <div class="notice" id="slotsErr" hidden></div>
+        <div class="row">
+          <button class="btn primary" id="slotsRandom" type="button">Random slot from these</button>
+          <span class="meta hint" id="slotsCount" style="margin-left:auto"></span>
+        </div>
+        <div class="pick-card" id="slotsPick" hidden></div>
+        <div class="guesses" id="slotsList" style="max-height:none"></div>
+        <button class="btn" id="slotsMore" type="button" hidden>Show more</button>
+      </div>
+    </section>
+
+    <section class="desk" aria-label="Slot filters">
+      <details class="panel" open>
+        <summary>Search and sort</summary>
+        <div class="panel-body">
+          <div class="field">
+            <label for="slotsQ">Name</label>
+            <input type="text" id="slotsQ" placeholder="e.g. olympus" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="slotsSort">Sort by</label>
+              <select id="slotsSort">
+                <option value="rtp">RTP</option>
+                <option value="release">Release date</option>
+                <option value="maxwin">Max win</option>
+                <option value="vol">Volatility</option>
+                <option value="hit">Hit frequency</option>
+                <option value="paylines">Paylines / ways</option>
+                <option value="name">Name</option>
+                <option value="provider">Provider</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="slotsDir">Order</label>
+              <select id="slotsDir">
+                <option value="desc">Highest / newest first</option>
+                <option value="asc">Lowest / oldest first</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+      <details class="panel" id="slotsFilters" open>
+        <summary>Filters <button class="btn ghost" id="slotsClear" type="button" style="min-height:30px;padding:2px 10px;font-size:13px;margin-left:auto">Reset</button></summary>
+        <div class="panel-body">
+          <div class="field">
+            <label for="slotsProvider">Provider</label>
+            <select id="slotsProvider"><option value="">All providers</option></select>
+          </div>
+          <div class="field">
+            <label>Volatility</label>
+            <div class="chips" id="slotsVol"></div>
+          </div>
+          <div class="field">
+            <label>Must have</label>
+            <div class="chips" id="slotsFeat"></div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="slotsMech">Mechanic</label>
+              <select id="slotsMech"><option value="">Any</option></select>
+            </div>
+            <div class="field">
+              <label for="slotsTheme">Theme</label>
+              <select id="slotsTheme"><option value="">Any</option></select>
+            </div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="slotsMinRtp">Min RTP %</label>
+              <input type="number" id="slotsMinRtp" min="80" max="100" step="0.1" inputmode="decimal" placeholder="e.g. 96">
+            </div>
+            <div class="field">
+              <label for="slotsMinWin">Min max win (x)</label>
+              <input type="number" id="slotsMinWin" min="0" step="100" inputmode="numeric" placeholder="e.g. 5000">
+            </div>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="slotsFrom">Released from</label>
+              <input type="number" id="slotsFrom" min="1990" max="2100" step="1" inputmode="numeric" placeholder="year">
+            </div>
+            <div class="field">
+              <label for="slotsTo">Released to</label>
+              <input type="number" id="slotsTo" min="1990" max="2100" step="1" inputmode="numeric" placeholder="year">
+            </div>
+          </div>
+          <div class="toggles">
+            <label class="sw"><input type="checkbox" id="slotsBuy"> Bonus buy</label>
+            <label class="sw"><input type="checkbox" id="slotsJackpot"> Jackpot</label>
+            <label class="sw"><input type="checkbox" id="slotsNew"> Last 90 days</label>
+          </div>
+        </div>
+      </details>
     </section>
   </div>
 
@@ -1645,6 +1778,154 @@ cEl.reset.addEventListener("click", () => {
 });
 renderCalls();
 
+// ---------- slot browser ----------
+// Loads slot.report's slot list once a day, keeps a copy in the browser, and filters and sorts it here.
+const SLOTS_URL = "https://slot.report/api/v1/slots.json";
+const SLOTS_LS = "kick-giveaway-slots-cache", SLOTF_LS = "kick-giveaway-slots-filters";
+const VOL_ORDER = ["low", "low-medium", "medium", "medium-high", "high", "very high", "extreme"];
+const sl = { all: [], shown: 60, loaded: false, open: null };
+const sf = { q: "", sort: "rtp", dir: "desc", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false };
+try { Object.assign(sf, JSON.parse(localStorage.getItem(SLOTF_LS) || "{}")); } catch (e) {}
+const saveSf = () => { if (OVERLAY) return; try { localStorage.setItem(SLOTF_LS, JSON.stringify(sf)); } catch (e) {} };
+const num = v => { if (v === null || v === undefined || v === "") return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
+const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
+const title = t => t.replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+function normSlot(r) {
+  const feats = Array.isArray(r.features) ? r.features : typeof r.features === "string" ? r.features.split(/[,;|]/) : [];
+  const rel = txt(r.release_date), year = num(r.year) || (rel ? num(rel.slice(0, 4)) : null);
+  const rtp = num(r.rtp);
+  return {
+    name: txt(r.name), slug: txt(r.slug), provider: txt(r.provider), rtp: rtp !== null && rtp <= 1 ? rtp * 100 : rtp,
+    vol: txt(r.volatility).toLowerCase(), volScore: num(r.volatility_score), maxWin: num(r.max_win),
+    feats: feats.map(f => title(txt(f))).filter(Boolean), mech: title(txt(r.mechanic)), theme: title(txt(r.theme)),
+    grid: txt(r.grid), paylines: num(r.paylines), paylinesRaw: txt(r.paylines), buy: r.has_bonus_buy === true || r.has_bonus_buy === 1 || r.has_bonus_buy === "true",
+    jackpot: r.has_jackpot === true || r.has_jackpot === 1 || r.has_jackpot === "true",
+    release: rel, relTime: rel ? Date.parse(rel) || null : null, year, hit: num(r.hit_frequency), minBet: num(r.min_bet), maxBet: num(r.max_bet)
+  };
+}
+const volRank = s => { const i = VOL_ORDER.indexOf(s.vol); return s.volScore !== null ? s.volScore : i >= 0 ? i : null; };
+async function loadSlots(force) {
+  const err = $("slotsErr");
+  let cached = null; try { cached = JSON.parse(localStorage.getItem(SLOTS_LS) || "null"); } catch (e) {}
+  if (cached && cached.list && cached.list.length) { useSlots(cached.list, cached.at); if (!force && Date.now() - cached.at < 86400000) return; }
+  $("slotsMeta").textContent = sl.loaded ? $("slotsMeta").textContent : "Loading…";
+  try {
+    const r = await fetchWithTimeout(SLOTS_URL, 20000);
+    const j = await r.json();
+    const rows = Array.isArray(j) ? j : j.results || j.slots || j.data || [];
+    if (!r.ok || !rows.length) throw Object.assign(new Error(j.message || "No slots came back"), { api: j });
+    const list = rows.map(normSlot).filter(x => x.name);
+    useSlots(list, Date.now()); err.hidden = true;
+    try { localStorage.setItem(SLOTS_LS, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
+  } catch (e) {
+    if (sl.loaded) return;                                   // an older copy is already showing
+    err.hidden = false;
+    err.innerHTML = e.api && e.api.error === "backlink_required"
+      ? "slot.report hasn't switched this site on yet. It checks the site once a day for the link above, so the list should appear within a day. Nothing for you to do."
+      : "Couldn't load the slot list right now. Check your connection and open this tab again.";
+    $("slotsMeta").textContent = "";
+  }
+}
+function fillSelect(sel, values, current) {
+  const first = sel.options[0].outerHTML;
+  sel.innerHTML = first + values.map(([v, n]) => `<option value="${escapeHtml(v)}">${escapeHtml(v)} (${n})</option>`).join("");
+  sel.value = values.some(([v]) => v === current) ? current : "";
+}
+function countBy(list, f) { const m = new Map(); for (const s of list) for (const k of [].concat(f(s))) if (k) m.set(k, (m.get(k) || 0) + 1); return [...m]; }
+function useSlots(list, at) {
+  sl.all = list; sl.loaded = true;
+  fillSelect($("slotsProvider"), countBy(list, s => s.provider).sort((a, b) => a[0].localeCompare(b[0])), sf.provider);
+  fillSelect($("slotsMech"), countBy(list, s => s.mech).sort((a, b) => b[1] - a[1]), sf.mech);
+  fillSelect($("slotsTheme"), countBy(list, s => s.theme).sort((a, b) => b[1] - a[1]), sf.theme);
+  const vols = countBy(list, s => s.vol).sort((a, b) => (VOL_ORDER.indexOf(a[0]) + 99 * (VOL_ORDER.indexOf(a[0]) < 0)) - (VOL_ORDER.indexOf(b[0]) + 99 * (VOL_ORDER.indexOf(b[0]) < 0)));
+  chipRow($("slotsVol"), vols.map(v => v[0]), sf.vol, v => title(v));
+  chipRow($("slotsFeat"), countBy(list, s => s.feats).sort((a, b) => b[1] - a[1]).slice(0, 18).map(v => v[0]), sf.feat, v => v);
+  const d = new Date(at);
+  $("slotsMeta").textContent = `${list.length.toLocaleString()} slots · updated ${d.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+  renderSlots();
+}
+function chipRow(box, values, chosen, label) {
+  box.replaceChildren(...values.map(v => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label(v); b.setAttribute("aria-pressed", String(chosen.includes(v)));
+    b.addEventListener("click", () => { const i = chosen.indexOf(v); if (i >= 0) chosen.splice(i, 1); else chosen.push(v); b.setAttribute("aria-pressed", String(i < 0)); sl.shown = 60; saveSf(); renderSlots(); });
+    return b;
+  }));
+}
+function filteredSlots() {
+  const q = sf.q.trim().toLowerCase(), minRtp = num(sf.minRtp), minWin = num(sf.minWin), from = num(sf.from), to = num(sf.to);
+  const since = Date.now() - 90 * 86400000;
+  const out = sl.all.filter(s =>
+    (!q || s.name.toLowerCase().includes(q) || s.provider.toLowerCase().includes(q)) &&
+    (!sf.provider || s.provider === sf.provider) && (!sf.mech || s.mech === sf.mech) && (!sf.theme || s.theme === sf.theme) &&
+    (!sf.vol.length || sf.vol.includes(s.vol)) && sf.feat.every(f => s.feats.includes(f)) &&
+    (minRtp === null || (s.rtp !== null && s.rtp >= minRtp)) && (minWin === null || (s.maxWin !== null && s.maxWin >= minWin)) &&
+    (from === null || (s.year !== null && s.year >= from)) && (to === null || (s.year !== null && s.year <= to)) &&
+    (!sf.buy || s.buy) && (!sf.jackpot || s.jackpot) && (!sf.recent || (s.relTime !== null && s.relTime >= since)));
+  const key = { rtp: s => s.rtp, release: s => s.relTime, maxwin: s => s.maxWin, vol: volRank, hit: s => s.hit, paylines: s => s.paylines, name: s => s.name.toLowerCase(), provider: s => s.provider.toLowerCase() + "\u0000" + s.name.toLowerCase() }[sf.sort];
+  const textSort = sf.sort === "name" || sf.sort === "provider";
+  const dir = (sf.dir === "asc") !== textSort ? 1 : -1;      // text sorts read A to Z under "highest first"
+  return out.sort((a, b) => {
+    const x = key(a), y = key(b);
+    if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1;   // missing values always last
+    if (y === null || y === undefined) return -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * dir || a.name.localeCompare(b.name);
+  });
+}
+const fmtX = v => v === null ? "?" : v >= 10000 ? Math.round(v / 1000) + "k" : moneyWhole.format(v);
+function slotRow(s) {
+  const row = document.createElement("div"); row.className = "slot-row";
+  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = s.name;
+  const pv = document.createElement("div"); pv.className = "pv"; pv.textContent = [s.provider, s.release ? s.release.slice(0, 10) : s.year].filter(Boolean).join(" · ");
+  const st = document.createElement("div"); st.className = "stats";
+  const stat = (label, val, hi) => { const d = document.createElement("div"); if (hi) d.className = "hi"; const sm = document.createElement("small"); sm.textContent = label; d.append(val, sm); return d; };
+  st.append(stat("RTP", s.rtp === null ? "?" : s.rtp.toFixed(2) + "%", sf.sort === "rtp"), stat("Max", fmtX(s.maxWin) + "x", sf.sort === "maxwin"), stat("Vol", s.vol ? title(s.vol) : "?", sf.sort === "vol"));
+  row.append(nm, st, pv);
+  const tags = document.createElement("div"); tags.className = "tags";
+  const seenTags = new Set();
+  for (const t of [s.buy && "Bonus Buy", s.jackpot && "Jackpot", s.mech, ...s.feats.slice(0, 5)].filter(Boolean)) {
+    if (seenTags.has(t.toLowerCase())) continue; seenTags.add(t.toLowerCase()); const g = document.createElement("span"); g.className = "tag"; g.textContent = t; tags.append(g); }
+  if (tags.childElementCount) row.append(tags);
+  if (sl.open === s) {
+    const more = document.createElement("div"); more.className = "more";
+    const bits = [["Hit rate", s.hit !== null ? (s.hit <= 1 ? (s.hit * 100).toFixed(1) : s.hit.toFixed(1)) + "%" : null], ["Grid", s.grid], ["Lines / ways", s.paylinesRaw], ["Theme", s.theme],
+      ["Bets", s.minBet !== null && s.maxBet !== null ? `${s.minBet} to ${s.maxBet}` : null], ["Released", s.release]];
+    for (const [k, v] of bits) if (v) { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; d.append(k + " ", b); more.append(d); }
+    row.append(more);
+  }
+  row.addEventListener("click", () => { sl.open = sl.open === s ? null : s; renderSlots(); });
+  return row;
+}
+function renderSlots() {
+  if (!sl.loaded) return;
+  const list = filteredSlots();
+  $("slotsCount").textContent = `${list.length.toLocaleString()} match`;
+  $("slotsRandom").disabled = !list.length;
+  $("slotsList").replaceChildren(...list.slice(0, sl.shown).map(slotRow));
+  if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "No slots match these filters."; $("slotsList").append(p); }
+  $("slotsMore").hidden = list.length <= sl.shown;
+  $("slotsMore").textContent = `Show more (${(list.length - sl.shown).toLocaleString()} left)`;
+}
+if (matchMedia("(max-width: 860px)").matches) $("slotsFilters").open = false;   // phones: list first, filters one tap away
+$("slotsMore").addEventListener("click", () => { sl.shown += 100; renderSlots(); });
+$("slotsRandom").addEventListener("click", () => {
+  const list = filteredSlots(); if (!list.length) return;
+  const s = list[randInt(list.length)], card = $("slotsPick");
+  card.hidden = false; card.replaceChildren();
+  const lab = document.createElement("div"); lab.className = "label hint"; lab.textContent = "Random pick";
+  const nm = document.createElement("div"); nm.className = "slot pop"; nm.textContent = s.name;
+  card.append(lab, nm, slotRow(s));
+});
+const sfInputs = { slotsQ: "q", slotsSort: "sort", slotsDir: "dir", slotsProvider: "provider", slotsMech: "mech", slotsTheme: "theme", slotsMinRtp: "minRtp", slotsMinWin: "minWin", slotsFrom: "from", slotsTo: "to" };
+for (const [id, k] of Object.entries(sfInputs)) { const el = $(id); el.value = sf[k]; el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { sf[k] = el.value; sl.shown = 60; saveSf(); renderSlots(); }); }
+for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) { const el = $(id); el.checked = sf[k]; el.addEventListener("change", () => { sf[k] = el.checked; sl.shown = 60; saveSf(); renderSlots(); }); }
+$("slotsClear").addEventListener("click", e => {
+  e.preventDefault();
+  Object.assign(sf, { q: "", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false });
+  for (const [id, k] of Object.entries(sfInputs)) $(id).value = sf[k];
+  for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) $(id).checked = sf[k];
+  saveSf(); if (sl.loaded) useSlots(sl.all, JSON.parse(localStorage.getItem(SLOTS_LS) || "{}").at || Date.now());
+});
+
 // ---------- OBS overlay ----------
 // The page you run the giveaway on publishes small JSON updates to a private, randomly named ntfy.sh
 // topic, and the overlay link (the same page with ?overlay=...) subscribes to it. No account or server.
@@ -1763,18 +2044,19 @@ const TAB_KEY = "kick-giveaway-tab";
 let activeTab = "roller";
 const tabBtns = document.querySelectorAll(".tabs [data-tab]");
 function showTab(name) {
-  activeTab = ["gtb", "calls"].includes(name) ? name : "roller";
+  activeTab = ["gtb", "calls", "slots"].includes(name) ? name : "roller";
+  if (activeTab === "slots" && !sl.loaded && !OVERLAY) loadSlots();
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
   const desk = document.querySelector(`[data-view="${activeTab}"] .desk`), chat = $("chatPanel");
-  if (chat.parentElement !== desk) desk.prepend(chat);
+  if (activeTab !== "slots" && chat.parentElement !== desk) desk.prepend(chat);   // the slot browser doesn't use chat
   if (OVERLAY) return;
   try { localStorage.setItem(TAB_KEY, activeTab); } catch (e) {}
   if (location.hash !== "#" + activeTab) history.replaceState(null, "", "#" + activeTab);
 }
 tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
-let startTab = location.hash.slice(1); if (!["gtb", "calls", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
+let startTab = location.hash.slice(1); if (!["gtb", "calls", "slots", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
 showTab(OVERLAY === "calls" ? "calls" : OVERLAY ? "roller" : startTab);
 renderGtb(); showFinalRead();
 
