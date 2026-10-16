@@ -6,13 +6,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Check slot.report access for the site
+      - name: Read slot.report registration form
         run: |
-          sleep 90
-          echo "=== link on live site"; curl -sS https://jaydabnknt.github.io/kick-giveaway-roller/ | grep -o 'Slot data comes from.\{0,120\}' | head -2
-          for H in "Origin: https://jaydabnknt.github.io" "Referer: https://jaydabnknt.github.io/kick-giveaway-roller/"; do
-            echo "=== with $H"
-            curl -sS -m 60 --compressed -H "$H" -H 'User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/141 Mobile Safari/537.36' https://slot.report/api/v1/slots.json -o s.json -w '%{http_code}\n'
-            head -c 400 s.json; echo
-          done
-          jq -c '.results[0:2]' s.json 2>/dev/null | head -c 3000 || true
+          curl -sS -m 30 https://slot.report/api/register -o reg.html
+          echo "=== forms"; grep -io '<form[^>]*>' reg.html | head
+          echo "=== inputs"; grep -io '<input[^>]*>' reg.html | head -20
+          echo "=== fetch/api calls"; grep -o "fetch([^)]*)" reg.html | head; grep -o '"/api/[^"]*"' reg.html | sort -u | head -30; grep -o "'/api/[^']*'" reg.html | sort -u | head -30
+          echo "=== script snippets"; tr '\n' ' ' < reg.html | grep -o '<script[^>]*>[^<]\{0,3000\}' | grep -i 'regist\|check\|key' | head -c 6000
