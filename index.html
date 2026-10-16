@@ -231,6 +231,8 @@ body.ov .about { display: none !important; }
 .list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .list-head h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
 .list-head .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#slotsMeta { margin-left: auto; }
+#slotsRefresh { padding: 5px 10px; font-size: 12.5px; min-height: 0; }
 
 /* Slot calls */
 .now { display: grid; gap: 4px; }
@@ -699,8 +701,9 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
         <div class="list-head">
           <h2 id="slotsTitle">Slots</h2>
           <span class="meta" id="slotsMeta"></span>
+          <button class="btn ghost" id="slotsRefresh" type="button">Refresh</button>
         </div>
-        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. RTP is the provider's default; some casinos run lower versions.</p>
+        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. Tap Refresh to get the newest list now. RTP is the provider's default; some casinos run lower versions.</p>
         <div class="notice" id="slotsErr" hidden></div>
         <div class="row">
           <button class="btn primary" id="slotsRandom" type="button">Random slot from these</button>
@@ -1843,8 +1846,9 @@ async function loadSlots(force) {
     const list = rows.map(normSlot).filter(x => x.name);
     useSlots(list, Date.now()); err.hidden = true;
     try { localStorage.setItem(SLOTS_LS, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
+    return true;
   } catch (e) {
-    if (sl.loaded) return;                                   // an older copy is already showing
+    if (sl.loaded) return false;                             // an older copy is already showing
     err.hidden = false;
     err.innerHTML = e.api && e.api.error === "backlink_required"
       ? "slot.report hasn't switched this site on yet. It checks the site once a day for the link above, so the list should appear within a day. Nothing for you to do."
@@ -1852,6 +1856,13 @@ async function loadSlots(force) {
     $("slotsMeta").textContent = "";
   }
 }
+$("slotsRefresh").addEventListener("click", async () => {
+  const b = $("slotsRefresh"); if (b.disabled) return;
+  b.disabled = true; b.textContent = "Refreshing…";
+  const ok = await loadSlots(true);
+  b.textContent = ok ? "Updated" : ok === false ? "Couldn't refresh" : "Refresh";
+  setTimeout(() => { b.disabled = false; b.textContent = "Refresh"; }, 2500);
+});
 function fillSelect(sel, values, current) {
   const first = sel.options[0].outerHTML;
   sel.innerHTML = first + values.map(([v, n]) => `<option value="${escapeHtml(v)}">${escapeHtml(v)} (${n})</option>`).join("");
