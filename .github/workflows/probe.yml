@@ -6,26 +6,13 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Look for Stake exclusives in slot.report
+      - name: Read Stake's only-on-stake group via reader
         run: |
-          curl -sS -m 60 -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o sr.json -w 'HTTP %{http_code}\n'
-          python3 - <<'PY'
-          import json,collections
-          j=json.load(open('sr.json')); rows=j if isinstance(j,list) else j.get('results') or j.get('slots') or j.get('data') or []
-          print('rows',len(rows)); print('keys',sorted(rows[0].keys()) if rows else None)
-          hits=[r for r in rows if 'stake' in json.dumps({k:v for k,v in r.items() if k not in('url','slug')}).lower()]
-          print('rows mentioning stake',len(hits))
-          c=collections.Counter()
-          for r in hits:
-            for k,v in r.items():
-              if 'stake' in json.dumps(v).lower(): c[k]+=1
-          print('fields',c)
-          for r in hits[:15]: print(r.get('name'),'|',r.get('provider'),'|',[ (k,v) for k,v in r.items() if 'stake' in json.dumps(v).lower()][:3])
-          pc=collections.Counter(str(r.get('provider')) for r in rows)
-          print([p for p in pc if any(w in p.lower() for w in ['stake','massive','twist','titan','backseat','paperclip','hacksaw','print'])])
-          PY
-      - name: Try reader proxies for Stake's exclusives page
-        run: |
-          for U in "https://r.jina.ai/https://stake.com/casino/group/stake-exclusives" "https://r.jina.ai/https://stake.us/casino/group/stake-exclusives"; do
-            echo "=== $U"; curl -sS -m 60 "$U" -w '\nHTTP %{http_code}\n' | head -c 2500; echo
+          for U in "https://stake.us/casino/group/only-on-stake" "https://stake.com/casino/group/only-on-stake"; do
+            echo "=== $U"
+            curl -sS -m 90 -H 'X-Timeout: 40' -H 'X-Wait-For-Selector: a[href*="/casino/games/"]' "https://r.jina.ai/$U" -o out.md -w 'HTTP %{http_code}\n'
+            wc -c out.md
+            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | wc -l
+            grep -o 'casino/games/[a-z0-9-]*' out.md | sort -u | head -80
+            grep -i -E 'load more|displaying|of [0-9]+ games|[0-9]+ games' out.md | head -5
           done
