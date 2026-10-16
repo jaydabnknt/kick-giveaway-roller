@@ -703,8 +703,9 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
           <span class="meta" id="slotsMeta"></span>
           <button class="btn ghost" id="slotsRefresh" type="button">Refresh</button>
         </div>
-        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. Tap Refresh to get the newest list now. RTP is the provider's default; some casinos run lower versions.</p>
+        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. Tap Refresh to get the newest list now. Only on Stake uses the exclusives Stake names on its own Only on Stake page, so it may miss some. RTP is the provider's default; some casinos run lower versions.</p>
         <div class="notice" id="slotsErr" hidden></div>
+        <div class="toggles"><label class="sw"><input type="checkbox" id="slotsStake"> Only on Stake games</label></div>
         <div class="row">
           <button class="btn primary" id="slotsRandom" type="button">Random slot from these</button>
           <span class="meta hint" id="slotsCount" style="margin-left:auto"></span>
@@ -1792,7 +1793,7 @@ const SLOTS_URL = "https://slot.report/api/v1/slots.json";
 const SLOTS_LS = "kick-giveaway-slots-cache", SLOTF_LS = "kick-giveaway-slots-filters";
 const VOL_ORDER = ["low", "low-medium", "medium", "medium-high", "high", "very high", "extreme"];
 const sl = { all: [], shown: 60, loaded: false, open: null };
-const sf = { q: "", sort: "rtp", dir: "desc", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false };
+const sf = { q: "", sort: "rtp", dir: "desc", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false, stake: false };
 try { Object.assign(sf, JSON.parse(localStorage.getItem(SLOTF_LS) || "{}")); } catch (e) {}
 const saveSf = () => { if (OVERLAY) return; try { localStorage.setItem(SLOTF_LS, JSON.stringify(sf)); } catch (e) {} };
 const num = v => { if (v === null || v === undefined || v === "") return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
@@ -1832,6 +1833,37 @@ function normSlot(r) {
     release: rel, relTime: rel ? Date.parse(rel) || null : null, year, hit: num(r.hit_frequency), minBet: num(r.min_bet), maxBet: num(r.max_bet)
   };
 }
+// Stake has no public game list we can read from a browser, and slot.report has no "exclusive" flag.
+// These are the Only on Stake games Stake names on its own Only on Stake page (checked 2026-10-16),
+// plus its exclusive studios. Games slot.report doesn't know still show, just without stats.
+const STAKE_ONLY = [
+  ["Zeus' Sanctuary", "BGaming", "bgaming-zeus-sanctuary"], ["Big Bank Bust", "OneTouch", "onetouch-big-bank-bust"],
+  ["Snack Attack Megaways", "OneTouch", "onetouch-snack-attack-megaways"], ["Aladdin's Treasure", "Pragmatic Play", "pragmatic-play-aladdins-treasure"],
+  ["Bison Spirit", "Pragmatic Play", "pragmatic-play-bison-spirit"], ["Gates of Heaven", "Pragmatic Play", "pragmatic-play-gates-of-heaven"],
+  ["Jewel Bonanza", "Pragmatic Play", "pragmatic-play-jewel-bonanza"], ["Lucky Phoenix Megaways", "Pragmatic Play", "pragmatic-play-lucky-phoenix-megaways"],
+  ["Madame Mystique Megaways", "Pragmatic Play", "pragmatic-play-madame-mystique-megaways"], ["Slushie Party", "Pragmatic Play", "pragmatic-play-slushie-party"],
+  ["Sugar Twist", "Pragmatic Play", "pragmatic-play-sugar-twist"], ["Sweet Fiesta", "Pragmatic Play", "pragmatic-play-sweet-fiesta"],
+  ["The Dog Mansion Megaways", "Pragmatic Play", "pragmatic-play-the-dog-mansion-megaways"], ["Wild Orbs", "Titan Gaming", "titan-gaming-wild-orbs"],
+  ["Carp Diem", "Twist Gaming", "twist-gaming-carp-diem"], ["Festive Frost", "Twist Gaming", "twist-gaming-festive-frost"],
+  ["Jade Fate", "Twist Gaming", "twist-gaming-jade-fate"], ["Lab of Lunacy", "Twist Gaming", "twist-gaming-lab-of-lunacy"],
+  ["Mining Mayhem", "Twist Gaming", "twist-gaming-mining-mayhem"], ["Samurai Dogs", "Twist Gaming", "twist-gaming-samurai-dogs"],
+  ["Spin Reaper", "Twist Gaming", "twist-gaming-spin-reaper"], ["Wallaby Wilds", "Twist Gaming", "twist-gaming-wallaby-wilds"],
+  ["Wild Savannah", "Twist Gaming", "twist-gaming-wild-savannah"]
+];
+const STAKE_STUDIOS = /^(twist gaming|massive studios|titan gaming|shady lady|mirror image gaming|paperclip gaming|uppercut gaming|stake( originals)?)$/i;
+const stakeKey = n => n.toLowerCase().replace(/^the /, "").replace(/[^a-z0-9]/g, "");
+function markStake(list) {
+  const want = new Map(STAKE_ONLY.map(g => [stakeKey(g[0]), g]));
+  const found = new Set();
+  for (const s of list) {
+    const g = want.get(stakeKey(s.name));
+    s.onStake = !!g || STAKE_STUDIOS.test(s.provider);
+    if (g) { s.stakeSlug = g[2]; found.add(g); }
+  }
+  sl.stubs = STAKE_ONLY.filter(g => !found.has(g)).map(([name, provider, stakeSlug]) => ({
+    name, slug: "", provider, rtp: null, vol: "", volScore: null, maxWin: null, feats: [], mech: "", themes: [], theme: "", grid: "", paylines: null, paylinesRaw: "",
+    buy: false, jackpot: false, release: "", relTime: null, year: null, hit: null, minBet: null, maxBet: null, onStake: true, stakeSlug, stub: true }));
+}
 const volRank = s => { const i = VOL_ORDER.indexOf(s.vol); return s.volScore !== null ? s.volScore : i >= 0 ? i : null; };
 async function loadSlots(force) {
   const err = $("slotsErr");
@@ -1870,7 +1902,7 @@ function fillSelect(sel, values, current) {
 }
 function countBy(list, f) { const m = new Map(); for (const s of list) for (const k of [].concat(f(s))) if (k) m.set(k, (m.get(k) || 0) + 1); return [...m]; }
 function useSlots(list, at) {
-  sl.all = list; sl.loaded = true;
+  sl.all = list; sl.loaded = true; markStake(list);
   fillSelect($("slotsProvider"), countBy(list, s => s.provider).sort((a, b) => a[0].localeCompare(b[0])), sf.provider);
   fillSelect($("slotsMech"), countBy(list, s => s.mech).sort((a, b) => b[1] - a[1]), sf.mech);
   fillSelect($("slotsTheme"), countBy(list, s => s.themes).sort((a, b) => b[1] - a[1]).slice(0, 60), sf.theme);
@@ -1891,7 +1923,9 @@ function chipRow(box, values, chosen, label) {
 function filteredSlots() {
   const q = sf.q.trim().toLowerCase(), minRtp = num(sf.minRtp), minWin = num(sf.minWin), from = num(sf.from), to = num(sf.to);
   const since = Date.now() - 90 * 86400000;
-  const out = sl.all.filter(s =>
+  const base = sf.stake ? sl.all.filter(s => s.onStake).concat(sl.stubs || []) : sl.all;
+  const out = base.filter(s =>
+    (!sf.stake || s.onStake) &&
     (!q || s.name.toLowerCase().includes(q) || s.provider.toLowerCase().includes(q)) &&
     (!sf.provider || s.provider === sf.provider) && (!sf.mech || s.mech === sf.mech) && (!sf.theme || s.themes.includes(sf.theme)) &&
     (!sf.vol.length || sf.vol.includes(s.vol)) && sf.feat.every(f => s.feats.includes(f)) &&
@@ -1919,7 +1953,7 @@ function slotRow(s) {
   row.append(nm, st, pv);
   const tags = document.createElement("div"); tags.className = "tags";
   const seenTags = new Set();
-  for (const t of [s.buy && "Bonus Buy", s.jackpot && "Jackpot", s.mech, ...s.feats.slice(0, 5)].filter(Boolean)) {
+  for (const t of [s.onStake && "Only on Stake", s.buy && "Bonus Buy", s.jackpot && "Jackpot", s.mech, ...s.feats.slice(0, 5)].filter(Boolean)) {
     if (seenTags.has(t.toLowerCase())) continue; seenTags.add(t.toLowerCase()); const g = document.createElement("span"); g.className = "tag"; g.textContent = t; tags.append(g); }
   if (tags.childElementCount) row.append(tags);
   if (sl.open === s) {
@@ -1927,6 +1961,8 @@ function slotRow(s) {
     const bits = [["Hits", s.hit ? `1 in ${s.hit.toFixed(2)} spins` : null], ["Grid", s.grid], ["Lines / ways", s.paylinesRaw], ["Theme", s.theme],
       ["Bets", s.minBet !== null && s.maxBet !== null ? `${s.minBet} to ${s.maxBet}` : null], ["Released", s.release]];
     for (const [k, v] of bits) if (v) { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; d.append(k + " ", b); more.append(d); }
+    if (s.stub) { const d = document.createElement("div"); d.textContent = "slot.report has no stats for this one yet."; more.append(d); }
+    if (s.stakeSlug) { const a = document.createElement("a"); a.href = "https://stake.com/casino/games/" + s.stakeSlug; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open on Stake"; a.addEventListener("click", e => e.stopPropagation()); more.append(a); }
     row.append(more);
   }
   row.addEventListener("click", () => { sl.open = sl.open === s ? null : s; renderSlots(); });
@@ -1954,12 +1990,12 @@ $("slotsRandom").addEventListener("click", () => {
 });
 const sfInputs = { slotsQ: "q", slotsSort: "sort", slotsDir: "dir", slotsProvider: "provider", slotsMech: "mech", slotsTheme: "theme", slotsMinRtp: "minRtp", slotsMinWin: "minWin", slotsFrom: "from", slotsTo: "to" };
 for (const [id, k] of Object.entries(sfInputs)) { const el = $(id); el.value = sf[k]; el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { sf[k] = el.value; sl.shown = 60; saveSf(); renderSlots(); }); }
-for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) { const el = $(id); el.checked = sf[k]; el.addEventListener("change", () => { sf[k] = el.checked; sl.shown = 60; saveSf(); renderSlots(); }); }
+for (const [id, k] of [["slotsStake", "stake"], ["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) { const el = $(id); el.checked = sf[k]; el.addEventListener("change", () => { sf[k] = el.checked; sl.shown = 60; saveSf(); renderSlots(); }); }
 $("slotsClear").addEventListener("click", e => {
   e.preventDefault();
-  Object.assign(sf, { q: "", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false });
+  Object.assign(sf, { q: "", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false, stake: false });
   for (const [id, k] of Object.entries(sfInputs)) $(id).value = sf[k];
-  for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) $(id).checked = sf[k];
+  for (const [id, k] of [["slotsStake", "stake"], ["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) $(id).checked = sf[k];
   saveSf(); if (sl.loaded) useSlots(sl.all, JSON.parse(localStorage.getItem(SLOTS_LS) || "{}").at || Date.now());
 });
 
