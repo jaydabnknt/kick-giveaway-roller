@@ -6,18 +6,11 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask slot.report to check the site's link, then try the data
+      - name: Read the wrapper's game-list query
         run: |
-          sleep 100; echo "=== live page"; curl -sS https://jaydabnknt.github.io/kick-giveaway-roller/ | grep -c "runs entirely in your browser"
-          echo "=== register"; curl -sS -m 60 -X POST https://slot.report/api/register -H 'Content-Type: application/json' -d '{"url":"https://jaydabnknt.github.io/kick-giveaway-roller/"}'; echo
-          sleep 5
-          echo "=== data with site origin"
-          curl -sS -m 60 --compressed -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o s.json -w '%{http_code}\n'
-          head -c 300 s.json; echo
-          jq -c '{count, n:(.results|length)}' s.json || true
-          jq -c '.results[0:2]' s.json | head -c 2500 || true
-          echo "=== value shapes"
-          jq -r '[.results[].volatility]|unique|join(" | ")' s.json || true
-          jq -r '[.results[].features[]?]|group_by(.)|map([.[0],length])|sort_by(-.[1])|.[0:30]|map("\(.[0]):\(.[1])")|join(", ")' s.json || true
-          jq -r '[.results[].mechanic]|unique|.[0:40]|join(" | ")' s.json || true
-          jq -c '[.results[] | {rtp, max_win, release_date, hit_frequency, paylines, has_bonus_buy}] | .[100:104]' s.json || true
+          mkdir pkg && cd pkg && pip download --no-deps -q stakeapi-codestats && ls
+          for f in *.whl; do python -m zipfile -e "$f" x; done
+          for f in *.tar.gz; do tar xzf "$f" 2>/dev/null || true; done
+          echo "=== files"; find . -name '*.py' | head -30
+          echo "=== kurator-related code"
+          grep -rn -i -B2 -A45 'kurator' --include=*.py . | head -220
