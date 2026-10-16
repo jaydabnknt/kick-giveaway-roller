@@ -260,6 +260,13 @@ body.ov .about { display: none !important; }
 .call.best { box-shadow: inset 0 0 0 1px #ffd166; }
 .call.best .rank::after { content: "★"; color: #ffd166; margin-left: 2px; }
 .best-line { font-size: 14px; color: var(--muted); }
+.bonus-pick { display: grid; gap: 8px; margin-top: 4px; }
+.bonus-pick .seg { grid-template-columns: repeat(3, 1fr); }
+.bonus-pick .seg button[data-type="super"][aria-pressed="true"] { color: #5ab0ff; }
+.bonus-pick .seg button[data-type="epic"][aria-pressed="true"] { color: #c58bff; }
+.btype { font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; padding: 3px 7px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.btype.super { color: #5ab0ff; border-color: color-mix(in srgb, #5ab0ff 45%, transparent); }
+.btype.epic { color: #c58bff; border-color: color-mix(in srgb, #c58bff 45%, transparent); }
 .best-line b { color: #ffd166; }
 
 /* OBS overlay mode (?overlay=giveaway or ?overlay=calls): transparent page, only the show parts */
@@ -370,9 +377,8 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 
   <nav class="tabs" role="tablist" aria-label="Giveaway type">
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
-    <button type="button" role="tab" data-tab="gtb" aria-selected="false"><span><span class="long">Guess the </span>Balance</span> <span class="badge" id="gtbBadge"></span></button>
+    <button type="button" role="tab" data-tab="gtb" aria-selected="false"><span>GTB</span> <span class="badge" id="gtbBadge"></span></button>
     <button type="button" role="tab" data-tab="calls" aria-selected="false"><span><span class="long">Slot </span>Calls</span> <span class="badge" id="callsBadge"></span></button>
-    <button type="button" role="tab" data-tab="slots" aria-selected="false">Slots</button>
   </nav>
 
   <div class="grid" data-view="roller">
@@ -623,6 +629,14 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
           <div class="slot empty" id="callsNowSlot">Nothing yet</div>
           <div class="by" id="callsNowBy" hidden></div>
         </div>
+        <div class="bonus-pick" id="bonusPick" hidden>
+          <div class="seg" role="group" aria-label="Bonus type">
+            <button type="button" data-type="normal" aria-pressed="true">Normal</button>
+            <button type="button" data-type="super" aria-pressed="false">Super</button>
+            <button type="button" data-type="epic" aria-pressed="false">Epic</button>
+          </div>
+          <button class="btn" id="bonusGot" type="button">Got the bonus</button>
+        </div>
         <div class="row">
           <button class="btn primary" id="callsNext" type="button">Next call</button>
           <button class="btn" id="callsRandom" type="button">Random call</button>
@@ -636,6 +650,14 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
         </div>
         <p class="best-line" id="callsBest" hidden></p>
         <div class="guesses" id="callsList"></div>
+      </div>
+      <div class="card">
+        <div class="list-head">
+          <h2>Bonus hunt</h2>
+          <span class="meta" id="huntMeta">Empty</span>
+        </div>
+        <div class="guesses" id="huntList"></div>
+        <div class="row"><button class="btn ghost danger" id="huntClear" type="button" hidden>Clear bonus hunt</button></div>
       </div>
     </section>
 
@@ -812,7 +834,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
   </div>
 
   <section class="about">
-    <p>Giveaway Tools runs entirely in your browser. The roller, Guess the Balance and slot calls read your Kick chat directly, and the Slots tab gets its RTP, volatility, max win and release figures from the free slot database at <a href="https://slot.report/">slot.report</a>, which tracks thousands of games from dozens of providers and updates daily.</p>
+    <p>Giveaway Tools runs entirely in your browser. The roller, Guess the Balance and slot calls read your Kick chat directly, and slot RTP, volatility, max win and release figures come from the free slot database at <a href="https://slot.report/">slot.report</a>, which tracks thousands of games from dozens of providers and updates daily.</p>
   </section>
 
   <footer data-view="roller">
@@ -1660,7 +1682,7 @@ gEl.reset.addEventListener("click", () => {
 // Chat types "!call Gates of Olympus". Each person gets a set number of calls; the streamer plays them
 // in order (or picks one at random), types the result, and the best result is starred.
 const CALLS_KEY = "kick-giveaway-calls-v1";
-const calls = { cmd: "!call", max: 1, open: false, subs: false, noDupes: true, list: [], seq: 0 };
+const calls = { cmd: "!call", max: 1, open: false, subs: false, noDupes: true, list: [], seq: 0, hunt: [], bonusType: "normal" };
 try { Object.assign(calls, JSON.parse(localStorage.getItem(CALLS_KEY) || "{}")); } catch (e) {}
 const saveCalls = () => { if (OVERLAY) return; try { localStorage.setItem(CALLS_KEY, JSON.stringify(calls)); } catch (e) {} };
 const cEl = {
@@ -1669,8 +1691,11 @@ const cEl = {
   next: $("callsNext"), random: $("callsRandom"), left: $("callsLeft"), meta: $("callsMeta"), best: $("callsBest"),
   list: $("callsList"), cmd: $("callsCmd"), max: $("callsMax"), subs: $("callsSubs"), noDupes: $("callsNoDupes"),
   badge: $("callsBadge"), manName: $("callsManName"), manSlot: $("callsManSlot"), manAdd: $("callsManAdd"),
-  manMsg: $("callsManMsg"), reset: $("callsReset")
+  manMsg: $("callsManMsg"), reset: $("callsReset"),
+  bonusPick: $("bonusPick"), bonusGot: $("bonusGot"), huntMeta: $("huntMeta"), huntList: $("huntList"), huntClear: $("huntClear")
 };
+const BONUS_TYPES = { normal: "Normal", super: "Super", epic: "Epic" };
+const huntFor = c => c && calls.hunt.find(h => h.callId === c.id);
 cEl.cmd.value = calls.cmd; cEl.max.value = calls.max; cEl.subs.checked = calls.subs; cEl.noDupes.checked = calls.noDupes;
 const slotKey = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
@@ -1699,6 +1724,7 @@ function callsOnChat(name, text, sender) {
 }
 function playCall(c) {
   for (const x of calls.list) if (x.status === "current") x.status = "done";
+  calls.bonusType = "normal";
   if (c) c.status = "current";
   saveCalls(); renderCalls();
   cEl.nowSlot.classList.remove("pop"); void cEl.nowSlot.offsetWidth; cEl.nowSlot.classList.add("pop");
@@ -1731,6 +1757,15 @@ function renderCalls() {
     if (a.url) av.style.backgroundImage = `url("${a.url.replace(/"/g, "")}")`; else { av.style.backgroundColor = a.color; av.textContent = cur.name[0].toUpperCase(); }
     const b = document.createElement("b"); b.textContent = cur.name; cEl.nowBy.append(av, "Called by ", b); }
 
+  cEl.bonusPick.hidden = !cur;
+  if (cur) {
+    const h = huntFor(cur), type = h ? h.type : calls.bonusType;
+    cEl.bonusPick.querySelectorAll("[data-type]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.type === type)));
+    cEl.bonusGot.textContent = h ? `In bonus hunt (${BONUS_TYPES[h.type]}) · tap to remove` : "Got the bonus";
+    cEl.bonusGot.className = h ? "btn" : "btn primary";
+  }
+  renderHunt();
+
   const done = calls.list.filter(c => c.status !== "waiting").length;
   cEl.meta.textContent = n ? `${n} ${n === 1 ? "call" : "calls"} · ${done} played` : "None yet";
   const best = bestCall();
@@ -1743,7 +1778,8 @@ function renderCalls() {
     const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = i + 1;
     const what = document.createElement("div"); what.className = "what";
     const sl = document.createElement("span"); sl.className = "s"; sl.textContent = c.slot;
-    const nm = document.createElement("span"); nm.className = "n"; nm.textContent = c.name + (c.status === "current" ? " · playing now" : c.status === "done" ? " · played" : "");
+    const hb = huntFor(c);
+    const nm = document.createElement("span"); nm.className = "n"; nm.textContent = c.name + (c.status === "current" ? " · playing now" : c.status === "done" ? " · played" : "") + (hb ? ` · ${BONUS_TYPES[hb.type]} bonus` : "");
     what.append(sl, nm);
     const acts = document.createElement("div"); acts.className = "acts";
     if (c.status === "waiting") {
@@ -1764,6 +1800,46 @@ function renderCalls() {
   if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No calls yet. Press Start calls, then chat types ${calls.cmd.trim() || "!call"} followed by a slot name.`; cEl.list.append(p); }
   if (typeof ovSendCalls === "function") ovSendCalls();
 }
+function renderHunt() {
+  const n = calls.hunt.length;
+  const cnt = t => calls.hunt.filter(h => h.type === t).length;
+  cEl.huntMeta.textContent = n ? `${n} ${n === 1 ? "bonus" : "bonuses"} · ` + Object.keys(BONUS_TYPES).map(t => `${cnt(t)} ${t}`).join(", ") : "Empty";
+  cEl.huntClear.hidden = !n;
+  const frag = document.createDocumentFragment();
+  calls.hunt.forEach((h, i) => {
+    const row = document.createElement("div"); row.className = "call";
+    const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = i + 1;
+    const what = document.createElement("div"); what.className = "what";
+    const sl = document.createElement("span"); sl.className = "s"; sl.textContent = h.slot;
+    const nm = document.createElement("span"); nm.className = "n"; nm.textContent = "Called by " + h.name;
+    what.append(sl, nm);
+    const acts = document.createElement("div"); acts.className = "acts";
+    const tg = document.createElement("span"); tg.className = "btype " + h.type; tg.textContent = BONUS_TYPES[h.type];
+    const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", `Remove ${h.slot} from the bonus hunt`);
+    del.addEventListener("click", () => { calls.hunt = calls.hunt.filter(x => x !== h); saveCalls(); renderCalls(); });
+    acts.append(tg, del); row.append(rank, what, acts); frag.append(row);
+  });
+  cEl.huntList.replaceChildren(frag);
+  if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "When a call gets into a bonus, pick Normal, Super or Epic under Playing now and tap Got the bonus."; cEl.huntList.append(p); }
+}
+cEl.bonusPick.querySelectorAll("[data-type]").forEach(b => b.addEventListener("click", () => {
+  const cur = calls.list.find(c => c.status === "current"), h = huntFor(cur);
+  calls.bonusType = b.dataset.type; if (h) h.type = b.dataset.type;
+  saveCalls(); renderCalls();
+}));
+cEl.bonusGot.addEventListener("click", () => {
+  const cur = calls.list.find(c => c.status === "current"); if (!cur) return;
+  const h = huntFor(cur);
+  if (h) calls.hunt = calls.hunt.filter(x => x !== h);
+  else calls.hunt.push({ callId: cur.id, name: cur.name, slot: cur.slot, type: calls.bonusType, at: Date.now() });
+  saveCalls(); renderCalls();
+});
+let huntClearArmed = null;
+cEl.huntClear.addEventListener("click", () => {
+  if (!huntClearArmed) { cEl.huntClear.textContent = "Tap again to clear the bonus hunt"; huntClearArmed = setTimeout(() => { cEl.huntClear.textContent = "Clear bonus hunt"; huntClearArmed = null; }, 2500); return; }
+  clearTimeout(huntClearArmed); huntClearArmed = null; cEl.huntClear.textContent = "Clear bonus hunt";
+  calls.hunt = []; saveCalls(); renderCalls();
+});
 const moneyFmtX = v => (Number.isInteger(v) ? moneyWhole : moneyCents).format(v);
 cEl.start.addEventListener("click", () => { calls.open = true; saveCalls(); renderCalls(); });
 cEl.stop.addEventListener("click", () => { calls.open = false; saveCalls(); renderCalls(); });
@@ -2117,7 +2193,7 @@ const TAB_KEY = "kick-giveaway-tab";
 let activeTab = "roller";
 const tabBtns = document.querySelectorAll(".tabs [data-tab]");
 function showTab(name) {
-  activeTab = ["gtb", "calls", "slots"].includes(name) ? name : "roller";
+  activeTab = ["gtb", "calls"].includes(name) ? name : "roller";   // Slots tab is switched off for now; its code is kept
   if (activeTab === "slots" && !sl.loaded && !OVERLAY) loadSlots();
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
@@ -2129,7 +2205,7 @@ function showTab(name) {
 }
 tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
-let startTab = location.hash.slice(1); if (!["gtb", "calls", "slots", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
+let startTab = location.hash.slice(1); if (!["gtb", "calls", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
 showTab(OVERLAY === "calls" ? "calls" : OVERLAY ? "roller" : startTab);
 renderGtb(); showFinalRead();
 
