@@ -6,18 +6,13 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Look at slot.report data
+      - name: Check slot.report access for the site
         run: |
-          curl -sS -m 60 -D h.txt -H 'Origin: https://jaydabnknt.github.io' --compressed https://slot.report/api/v1/slots.json -o slots.json || true
-          echo "=== headers"; cat h.txt
-          echo "=== size"; ls -la slots.json
-          echo "=== top keys"; jq -c 'keys' slots.json || head -c 1500 slots.json
-          jq -c '{count, _credit, n: (.results|length)}' slots.json || true
-          echo "=== sample"; jq -c '.results[0:3]' slots.json || true
-          echo "=== providers"; jq -r '[.results[].provider] | group_by(.) | map("\(.[0]):\(length)") | .[0:120] | join(", ")' slots.json || true
-          echo "=== features"; jq -r '[.results[].features[]?] | group_by(.) | map([.[0], length]) | sort_by(-.[1]) | .[0:60] | map("\(.[0]):\(.[1])") | join(", ")' slots.json || true
-          echo "=== mechanics"; jq -r '[.results[].mechanic] | group_by(.) | map("\(.[0]):\(length)") | join(", ")' slots.json || true
-          echo "=== volatility"; jq -r '[.results[].volatility] | group_by(.) | map("\(.[0]):\(length)") | join(", ")' slots.json || true
-          echo "=== themes"; jq -r '[.results[].theme] | group_by(.) | map("\(.[0]):\(length)") | .[0:60] | join(", ")' slots.json || true
-          echo "=== status"; curl -sS -m 30 https://slot.report/api/v1/status.json | head -c 800; echo
-          echo "=== terms page"; curl -sS -m 30 https://slot.report/api/ | sed -e 's/<[^>]*>/ /g' | tr -s ' \n' | grep -io '.\{0,200\}\(dofollow\|attribution\|credit\|terms\|cors\|domain\).\{0,200\}' | head -30
+          sleep 90
+          echo "=== link on live site"; curl -sS https://jaydabnknt.github.io/kick-giveaway-roller/ | grep -o 'Slot data comes from.\{0,120\}' | head -2
+          for H in "Origin: https://jaydabnknt.github.io" "Referer: https://jaydabnknt.github.io/kick-giveaway-roller/"; do
+            echo "=== with $H"
+            curl -sS -m 60 --compressed -H "$H" -H 'User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/141 Mobile Safari/537.36' https://slot.report/api/v1/slots.json -o s.json -w '%{http_code}\n'
+            head -c 400 s.json; echo
+          done
+          jq -c '.results[0:2]' s.json 2>/dev/null | head -c 3000 || true
