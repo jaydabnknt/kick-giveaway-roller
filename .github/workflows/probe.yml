@@ -6,16 +6,18 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask Kick for its realtime chat connection
+      - name: Look at slot.report data
         run: |
-          BODY='{"client":{"id":"6f1c2b9e-3c1a-4d7e-9a51-2b8f0a4c1d23","type":"web"},"capabilities":{"accepted_providers":[{"provider":"pusher"}]}}'
-          for ORIGIN in https://kick.com https://jaydabnknt.github.io; do
-            echo "=== origin $ORIGIN"
-            curl -sS -m 20 -X POST https://web.kick.com/api/v1/realtime/connection \
-              -H 'Content-Type: application/json' -H 'Accept: application/json' \
-              -H "Origin: $ORIGIN" -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36' \
-              -D - -d "$BODY" | head -c 3000; echo
-          done
-          echo "=== preflight"
-          curl -sS -m 20 -X OPTIONS https://web.kick.com/api/v1/realtime/connection -H 'Origin: https://jaydabnknt.github.io' \
-            -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' -D - -o /dev/null
+          curl -sS -m 60 -D h.txt -H 'Origin: https://jaydabnknt.github.io' --compressed https://slot.report/api/v1/slots.json -o slots.json || true
+          echo "=== headers"; cat h.txt
+          echo "=== size"; ls -la slots.json
+          echo "=== top keys"; jq -c 'keys' slots.json || head -c 1500 slots.json
+          jq -c '{count, _credit, n: (.results|length)}' slots.json || true
+          echo "=== sample"; jq -c '.results[0:3]' slots.json || true
+          echo "=== providers"; jq -r '[.results[].provider] | group_by(.) | map("\(.[0]):\(length)") | .[0:120] | join(", ")' slots.json || true
+          echo "=== features"; jq -r '[.results[].features[]?] | group_by(.) | map([.[0], length]) | sort_by(-.[1]) | .[0:60] | map("\(.[0]):\(.[1])") | join(", ")' slots.json || true
+          echo "=== mechanics"; jq -r '[.results[].mechanic] | group_by(.) | map("\(.[0]):\(length)") | join(", ")' slots.json || true
+          echo "=== volatility"; jq -r '[.results[].volatility] | group_by(.) | map("\(.[0]):\(length)") | join(", ")' slots.json || true
+          echo "=== themes"; jq -r '[.results[].theme] | group_by(.) | map("\(.[0]):\(length)") | .[0:60] | join(", ")' slots.json || true
+          echo "=== status"; curl -sS -m 30 https://slot.report/api/v1/status.json | head -c 800; echo
+          echo "=== terms page"; curl -sS -m 30 https://slot.report/api/ | sed -e 's/<[^>]*>/ /g' | tr -s ' \n' | grep -io '.\{0,200\}\(dofollow\|attribution\|credit\|terms\|cors\|domain\).\{0,200\}' | head -30
