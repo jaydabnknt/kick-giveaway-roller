@@ -260,6 +260,9 @@ body.ov .about { display: none !important; }
 .call.best { box-shadow: inset 0 0 0 1px #ffd166; }
 .call.best .rank::after { content: "★"; color: #ffd166; margin-left: 2px; }
 .best-line { font-size: 14px; color: var(--muted); }
+.bot-opts { display: grid; gap: 2px; }
+.bot-opts .sw { font-size: 14px; }
+#botLogin { text-decoration: none; display: inline-flex; align-items: center; }
 .bonus-pick { display: grid; gap: 8px; margin-top: 4px; }
 .bonus-pick .seg { grid-template-columns: repeat(3, 1fr); }
 .bonus-pick .seg button[data-type="super"][aria-pressed="true"] { color: #5ab0ff; }
@@ -407,6 +410,20 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
     </section>
 
     <section class="desk" aria-label="Setup">
+      <details class="panel" id="botPanel">
+        <summary>Chat bot <span class="badge" id="botBadge"></span></summary>
+        <div class="panel-body">
+          <p class="hint" id="botStatus">Not connected.</p>
+          <div class="row">
+            <a class="btn primary" id="botLogin" href="#" target="_blank" rel="noopener">Sign in the bot</a>
+            <button class="btn" id="botTest" type="button" hidden>Send test message</button>
+            <button class="btn ghost danger" id="botForget" type="button" hidden>Disconnect bot</button>
+          </div>
+          <p class="hint" id="botMsg"></p>
+          <div class="bot-opts" id="botOpts"></div>
+          <p class="hint">The bot posts in the channel you connect to above. Sign it in while logged in to Kick as your bot account.</p>
+        </div>
+      </details>
       <details class="panel" id="chatPanel" open>
         <summary>Kick chat</summary>
         <div class="panel-body">
@@ -1201,6 +1218,7 @@ function finish() {
   els.winnerActions.hidden = false;
   els.winnerActions.dataset.name = name;
   ovSendGiveaway();
+  botSay("winner", `🎉 @${name} won the giveaway! (${N} ${N === 1 ? "entry" : "entries"})`);
   state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
@@ -1640,8 +1658,10 @@ function renderGtb() {
   gEl.list.replaceChildren(frag);
   if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No guesses yet. Connect to your chat and have people type ${gtb.cmd.trim() || "!gtb"} followed by their guess.`; gEl.list.append(p); }
 }
-gEl.start.addEventListener("click", () => { gtb.picked = false; setOpen(true); });
-gEl.stop.addEventListener("click", () => setOpen(false));
+gEl.start.addEventListener("click", () => { gtb.picked = false; setOpen(true);
+  botSay("gtbOpen", `💰 Guess the Balance is open! Type ${gtb.cmd.trim() || "!gtb"} <amount> to guess. One guess each${gtb.subs ? ", subs only" : ""}.`); });
+gEl.stop.addEventListener("click", () => { setOpen(false);
+  botSay("gtbClose", `🔒 Guesses are closed! ${gtb.guesses.length} ${gtb.guesses.length === 1 ? "guess" : "guesses"} in.`); });
 function showFinalRead() {
   const el = $("gtbFinalRead"), v = parseAmount(gtb.final);
   el.hidden = !gtb.final.trim();
@@ -1650,7 +1670,10 @@ function showFinalRead() {
 gEl.final.addEventListener("input", () => { gtb.final = gEl.final.value; showFinalRead(); gEl.final.setCustomValidity(""); saveGtb(); if (gtb.picked) renderGtb(); });
 function pickGtb() {
   if (parseAmount(gtb.final) === null) { gEl.final.setCustomValidity("Type the final balance, like 1250 or 1,250.50"); gEl.final.reportValidity(); return; }
+  const wasOpen = gtb.open, fin = parseAmount(gtb.final), w = gtbWinner(fin);
   gtb.picked = true; gtb.open = false; saveGtb(); renderGtb();
+  if (w) botSay("gtbWin", `🏆 @${w.name} wins Guess the Balance with ${money(w.amount)}! The balance was ${money(fin)}.`);
+  else if (wasOpen || gtb.guesses.length) botSay("gtbWin", `The balance was ${money(fin)}. Nobody won this round.`);
   gEl.winName.classList.remove("pop"); void gEl.winName.offsetWidth; gEl.winName.classList.add("pop");
   if (window.innerWidth <= 860) gEl.result.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
 }
@@ -1719,6 +1742,8 @@ function callsOnChat(name, text, sender) {
   if (!calls.open) return { tag: "calls closed", ok: false };
   if (calls.subs && !isSub(sender)) return { tag: "subs only", ok: false };
   const r = callsAdd(name, text.slice(cmd.length), "chat");
+  if (r === "ok") { const c = calls.list[calls.list.length - 1], mine = calls.list.filter(x => x.name.toLowerCase() === c.name.toLowerCase()).length;
+    botSay("callAck", `@${c.name} called ${c.slot} (${mine}/${calls.max})`); }
   const tags = { ok: "called", noslot: "no slot named", same: "already called that", limit: "no calls left", taken: "already called by someone", blocked: "blocked", bad: "" };
   return { tag: tags[r], ok: r === "ok" };
 }
@@ -1727,6 +1752,7 @@ function playCall(c) {
   calls.bonusType = "normal";
   if (c) c.status = "current";
   saveCalls(); renderCalls();
+  if (c) botSay("nowPlaying", `▶️ Now playing ${c.slot}, called by @${c.name}`);
   cEl.nowSlot.classList.remove("pop"); void cEl.nowSlot.offsetWidth; cEl.nowSlot.classList.add("pop");
 }
 const waitingCalls = () => calls.list.filter(c => c.status === "waiting");
@@ -1831,7 +1857,8 @@ cEl.bonusGot.addEventListener("click", () => {
   const cur = calls.list.find(c => c.status === "current"); if (!cur) return;
   const h = huntFor(cur);
   if (h) calls.hunt = calls.hunt.filter(x => x !== h);
-  else calls.hunt.push({ callId: cur.id, name: cur.name, slot: cur.slot, type: calls.bonusType, at: Date.now() });
+  else { calls.hunt.push({ callId: cur.id, name: cur.name, slot: cur.slot, type: calls.bonusType, at: Date.now() });
+    botSay("bonus", `🎁 ${cur.slot} (called by @${cur.name}) hit ${calls.bonusType === "epic" ? "an" : "a"} ${BONUS_TYPES[calls.bonusType]} bonus! ${calls.hunt.length} in the bonus hunt.`); }
   saveCalls(); renderCalls();
 });
 let huntClearArmed = null;
@@ -1841,8 +1868,10 @@ cEl.huntClear.addEventListener("click", () => {
   calls.hunt = []; saveCalls(); renderCalls();
 });
 const moneyFmtX = v => (Number.isInteger(v) ? moneyWhole : moneyCents).format(v);
-cEl.start.addEventListener("click", () => { calls.open = true; saveCalls(); renderCalls(); });
-cEl.stop.addEventListener("click", () => { calls.open = false; saveCalls(); renderCalls(); });
+cEl.start.addEventListener("click", () => { calls.open = true; saveCalls(); renderCalls();
+  botSay("callsOpen", `🎰 Slot calls are open! Type ${calls.cmd.trim() || "!call"} <slot name>. ${calls.max} ${calls.max === 1 ? "call" : "calls"} each${calls.subs ? ", subs only" : ""}.`); });
+cEl.stop.addEventListener("click", () => { calls.open = false; saveCalls(); renderCalls();
+  botSay("callsClose", `🔒 Slot calls are closed! ${calls.list.length} ${calls.list.length === 1 ? "call" : "calls"} in.`); });
 cEl.cmd.addEventListener("input", () => { calls.cmd = cEl.cmd.value; saveCalls(); renderCalls(); });
 cEl.max.addEventListener("input", () => { const v = Math.round(Number(cEl.max.value)); if (v >= 1) { calls.max = Math.min(50, v); saveCalls(); renderCalls(); } });
 cEl.subs.addEventListener("change", () => { calls.subs = cEl.subs.checked; saveCalls(); });
@@ -2187,6 +2216,63 @@ if (OVERLAY) {
   } else els.empty.textContent = "This overlay link is missing its key. Copy it again from the OBS overlay panel.";
 }
 
+// ---------- chat bot ----------
+// JDBBot runs on Cloudflare Workers (see the bot branch of the repo). After the bot account signs in, the
+// worker sends you back here with #bot=<url>&botkey=<key>; the page keeps both and posts lines through it.
+const BOT_LS = "kick-giveaway-bot", BOT_DEFAULT_URL = "";
+const BOT_EVENTS = [
+  ["winner", "Giveaway winner", true], ["gtbOpen", "GTB opened", true], ["gtbClose", "GTB closed", true], ["gtbWin", "GTB winner", true],
+  ["callsOpen", "Calls opened", true], ["callsClose", "Calls closed", true], ["nowPlaying", "Now playing a call", true],
+  ["bonus", "Call hit a bonus", true], ["callAck", "Reply to every !call", false]
+];
+var bot = { url: BOT_DEFAULT_URL, key: "", name: "", on: Object.fromEntries(BOT_EVENTS.map(e => [e[0], e[2]])) };
+try { const b = JSON.parse(localStorage.getItem(BOT_LS) || "{}"); Object.assign(bot, b, { on: { ...bot.on, ...(b.on || {}) } }); } catch (e) {}
+{ const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("botkey") && !OVERLAY) { bot.key = h.get("botkey"); bot.url = h.get("bot") || bot.url; history.replaceState(null, "", location.pathname + location.search); $("botPanel").open = true; } }
+const saveBot = () => { if (OVERLAY) return; try { localStorage.setItem(BOT_LS, JSON.stringify(bot)); } catch (e) {} };
+saveBot();
+const botQueue = []; let botBusy = false;
+function botSay(event, text) {
+  if (OVERLAY || !bot || !bot.key || !bot.url || !bot.on[event]) return;
+  const channel = $("channel").value.trim();
+  if (!channel) { $("botMsg").textContent = "Type your channel in Kick chat so the bot knows where to post."; return; }
+  botQueue.push({ channel, text }); botPump();
+}
+async function botPump() {
+  if (botBusy) return; botBusy = true;
+  while (botQueue.length) {
+    const m = botQueue.shift();
+    try {
+      const r = await fetchWithTimeout(bot.url + "/say", 15000, { method: "POST", headers: { "content-type": "application/json", "x-bot-key": bot.key }, body: JSON.stringify(m) });
+      const j = await r.json().catch(() => ({}));
+      $("botMsg").textContent = r.ok ? "" : r.status === 401 ? "The bot's key changed. Tap Sign in the bot again." : "The bot couldn't post: " + (j.error || r.status);
+    } catch (e) { $("botMsg").textContent = "Couldn't reach the bot. Check your connection."; }
+    await new Promise(res => setTimeout(res, 1200));   // stay well under Kick's chat rate limit
+  }
+  botBusy = false;
+}
+function renderBot() {
+  const ready = !!(bot.key && bot.url);
+  $("botStatus").textContent = ready ? `Connected${bot.name ? " as " + bot.name : ""}. It posts the messages switched on below.` : "Not connected. Sign the bot in once and this page remembers it.";
+  $("botBadge").textContent = ready ? "on" : "";
+  const login = $("botLogin"); login.hidden = !bot.url; login.href = bot.url ? bot.url + "/login" : "#";
+  login.textContent = ready ? "Sign in again" : "Sign in the bot"; login.className = ready ? "btn" : "btn primary";
+  if (!bot.url) $("botStatus").textContent = "The bot isn't set up yet.";
+  $("botTest").hidden = $("botForget").hidden = !ready;
+  const box = $("botOpts");
+  box.replaceChildren(...BOT_EVENTS.map(([k, label]) => {
+    const l = document.createElement("label"); l.className = "sw";
+    const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!bot.on[k];
+    c.addEventListener("change", () => { bot.on[k] = c.checked; saveBot(); });
+    l.append(c, " " + label); return l;
+  }));
+}
+$("botTest").addEventListener("click", () => { const was = bot.on.test; bot.on.test = true; botSay("test", "👋 Bot is connected and working!"); bot.on.test = was; });
+$("botForget").addEventListener("click", () => { bot.key = ""; bot.name = ""; saveBot(); renderBot(); });
+if (bot.key && bot.url && !OVERLAY) fetchWithTimeout(bot.url + "/status", 10000, { headers: { "x-bot-key": bot.key } })
+  .then(r => r.json()).then(j => { if (j.ok) { bot.name = j.bot || ""; saveBot(); renderBot(); } else if (j.error === "bad key") { $("botMsg").textContent = "The bot's key changed. Tap Sign in again."; } }).catch(() => {});
+renderBot();
+
 // ---------- tabs ----------
 // One chat connection serves both tabs; the Kick chat panel moves to whichever tab is showing.
 const TAB_KEY = "kick-giveaway-tab";
@@ -2198,7 +2284,7 @@ function showTab(name) {
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
   const desk = document.querySelector(`[data-view="${activeTab}"] .desk`), chat = $("chatPanel");
-  if (activeTab !== "slots" && chat.parentElement !== desk) desk.prepend(chat);   // the slot browser doesn't use chat
+  if (activeTab !== "slots" && chat.parentElement !== desk) { desk.prepend(chat); chat.after($("botPanel")); }   // the slot browser doesn't use chat
   if (OVERLAY) return;
   try { localStorage.setItem(TAB_KEY, activeTab); } catch (e) {}
   if (location.hash !== "#" + activeTab) history.replaceState(null, "", "#" + activeTab);
