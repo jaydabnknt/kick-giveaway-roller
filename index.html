@@ -2219,7 +2219,7 @@ if (OVERLAY) {
 // ---------- chat bot ----------
 // JDBBot runs on Cloudflare Workers (see the bot branch of the repo). After the bot account signs in, the
 // worker sends you back here with #bot=<url>&botkey=<key>; the page keeps both and posts lines through it.
-const BOT_LS = "kick-giveaway-bot", BOT_DEFAULT_URL = "";
+const BOT_LS = "kick-giveaway-bot", BOT_DEFAULT_URL = "https://jdbbot.jdbbot.workers.dev";
 const BOT_EVENTS = [
   ["winner", "Giveaway winner", true], ["gtbOpen", "GTB opened", true], ["gtbClose", "GTB closed", true], ["gtbWin", "GTB winner", true],
   ["callsOpen", "Calls opened", true], ["callsClose", "Calls closed", true], ["nowPlaying", "Now playing a call", true],
