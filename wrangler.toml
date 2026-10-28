@@ -1,0 +1,12 @@
+name = "jdbbot"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[vars]
+BOT_USERNAME = "JDBBot"
+SITE_URL = "https://jaydabnknt.github.io/kick-giveaway-roller/"
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "KV_ID_FILLED_BY_DEPLOY"

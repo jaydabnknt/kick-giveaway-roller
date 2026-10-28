@@ -1,0 +1,38 @@
+name: deploy-bot
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "${{ secrets.KICK_CLIENT_ID }}" ] || missing="$missing KICK_CLIENT_ID"
+          [ -n "${{ secrets.KICK_CLIENT_SECRET }}" ] || missing="$missing KICK_CLIENT_SECRET"
+          if [ -n "$missing" ]; then echo "::error::Missing GitHub secrets:$missing"; exit 1; fi
+      - name: Make or find the bot's storage
+        run: |
+          npm i -g wrangler@4 >/dev/null 2>&1
+          ID=$(wrangler kv namespace list 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s.slice(s.indexOf("[")));const n=a.find(x=>x.title==="jdbbot-store");console.log(n?n.id:"")})')
+          if [ -z "$ID" ]; then
+            wrangler kv namespace create jdbbot-store > kv.txt 2>&1 || { cat kv.txt; exit 1; }
+            ID=$(grep -oE '[0-9a-f]{32}' kv.txt | head -1)
+          fi
+          [ -n "$ID" ] || { echo "::error::Could not create KV storage"; exit 1; }
+          sed -i "s/KV_ID_FILLED_BY_DEPLOY/$ID/" wrangler.toml
+      - name: Deploy
+        run: |
+          wrangler deploy 2>&1 | tee deploy.txt
+          echo "BOT URL: $(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.txt | head -1)"
+      - name: Set Kick keys
+        run: |
+          printf '%s' "${{ secrets.KICK_CLIENT_ID }}" | wrangler secret put KICK_CLIENT_ID
+          printf '%s' "${{ secrets.KICK_CLIENT_SECRET }}" | wrangler secret put KICK_CLIENT_SECRET
