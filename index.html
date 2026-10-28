@@ -2226,7 +2226,7 @@ const BOT_EVENTS = [
   ["bonus", "Call hit a bonus", true], ["callAck", "Reply to every !call", false]
 ];
 var bot = { url: BOT_DEFAULT_URL, key: "", name: "", on: Object.fromEntries(BOT_EVENTS.map(e => [e[0], e[2]])) };
-try { const b = JSON.parse(localStorage.getItem(BOT_LS) || "{}"); Object.assign(bot, b, { on: { ...bot.on, ...(b.on || {}) } }); } catch (e) {}
+try { const b = JSON.parse(localStorage.getItem(BOT_LS) || "{}"); Object.assign(bot, b, { url: b.url || BOT_DEFAULT_URL, on: { ...bot.on, ...(b.on || {}) } }); } catch (e) {}
 { const h = new URLSearchParams(location.hash.slice(1));
   if (h.get("botkey") && !OVERLAY) { bot.key = h.get("botkey"); bot.url = h.get("bot") || bot.url; history.replaceState(null, "", location.pathname + location.search); $("botPanel").open = true; } }
 const saveBot = () => { if (OVERLAY) return; try { localStorage.setItem(BOT_LS, JSON.stringify(bot)); } catch (e) {} };
