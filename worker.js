@@ -56,6 +56,36 @@ async function broadcasterId(env, slug) {
   return id;
 }
 
+// Keyless mode: the site sends an event name and a few fields, and the bot builds the line itself, so
+// nobody can make JDBBot say arbitrary text. Only requests from the site's own page are accepted, and
+// each channel is rate limited.
+const clean = (v, n = 40) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+const at = v => { const n = clean(v, 30).replace(/^@/, ""); return /^[A-Za-z0-9_.-]{1,30}$/.test(n) ? "@" + n : ""; };
+const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+const TEMPLATES = {
+  test: () => "👋 Bot is connected and working!",
+  winner: d => at(d.name) && `🎉 ${at(d.name)} won the giveaway! (${plural(+d.n || 0, "entry", "entries")})`,
+  gtbOpen: d => `💰 Guess the Balance is open! Type ${clean(d.cmd, 15) || "!gtb"} <amount> to guess. One guess each${d.subs ? ", subs only" : ""}.`,
+  gtbClose: d => `🔒 Guesses are closed! ${plural(+d.n || 0, "guess", "guesses")} in.`,
+  gtbWin: d => at(d.name) ? `🏆 ${at(d.name)} wins Guess the Balance with ${clean(d.amount, 20)}! The balance was ${clean(d.final, 20)}.` : `The balance was ${clean(d.final, 20)}. Nobody won this round.`,
+  callsOpen: d => `🎰 Slot calls are open! Type ${clean(d.cmd, 15) || "!call"} <slot name>. ${plural(+d.max || 1, "call", "calls")} each${d.subs ? ", subs only" : ""}.`,
+  callsClose: d => `🔒 Slot calls are closed! ${plural(+d.n || 0, "call", "calls")} in.`,
+  nowPlaying: d => at(d.name) && `▶️ Now playing ${clean(d.slot, 60)}, called by ${at(d.name)}`,
+  bonus: d => at(d.name) && `🎁 ${clean(d.slot, 60)} (called by ${at(d.name)}) hit ${/^[aeiou]/i.test(clean(d.type)) ? "an" : "a"} ${clean(d.type, 10)} bonus! ${+d.n || 1} in the bonus hunt.`,
+  callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`
+};
+async function rateOk(env, channel) {
+  const k = "rl:" + channel + ":" + Math.floor(Date.now() / 60000);
+  const n = Number(await env.STORE.get(k) || 0);
+  if (n >= 12) return false;
+  await env.STORE.put(k, String(n + 1), { expirationTtl: 120 });
+  return true;
+}
+function fromSite(req, env) {
+  const o = req.headers.get("origin") || "";
+  return o === new URL(env.SITE_URL).origin;
+}
+
 async function checkKey(req, env) {
   const key = req.headers.get("x-bot-key") || "";
   const real = await env.STORE.get("sitekey");
@@ -110,9 +140,12 @@ export default {
     }
 
     if (url.pathname === "/say" && req.method === "POST") {
-      if (!(await checkKey(req, env))) return json({ ok: false, error: "bad key" }, 401);
+      const keyed = await checkKey(req, env);
+      if (!keyed && !fromSite(req, env)) return json({ ok: false, error: "not allowed" }, 403);
       const body = await req.json().catch(() => ({}));
-      const text = String(body.text || "").replace(/\s+/g, " ").trim().slice(0, 500);
+      const tpl = TEMPLATES[body.event];
+      const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
+      if (!keyed && !(await rateOk(env, clean(body.channel).toLowerCase()))) return json({ ok: false, error: "slow down" }, 429);
       if (!text) return json({ ok: false, error: "empty" }, 400);
       try {
         const id = await broadcasterId(env, body.channel);
