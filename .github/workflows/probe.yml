@@ -6,19 +6,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: slot.report coverage of Stake exclusives
+      - name: Check JDBBot
         run: |
-          curl -sS -m 60 -H 'Origin: https://jaydabnknt.github.io' -H 'Referer: https://jaydabnknt.github.io/kick-giveaway-roller/' https://slot.report/api/v1/slots.json -o sr.json -w 'HTTP %{http_code}\n'
-          python3 - <<'PY'
-          import json,collections,re
-          j=json.load(open('sr.json')); rows=j if isinstance(j,list) else j.get('results') or []
-          names="zeus sanctuary|big bank bust|snack attack megaways|aladdin's treasure|aladdins treasure|bison spirit|gates of heaven|jewel bonanza|lucky phoenix megaways|madame mystique megaways|slushie party|sugar twist|sweet fiesta|dog mansion megaways|wild orbs|carp diem|festive frost|jade fate|lab of lunacy|mining mayhem|samurai dogs|spin reaper|wallaby wilds|wild savannah".split('|')
-          n=lambda s: re.sub(r'[^a-z0-9]','',s.lower())
-          idx=collections.defaultdict(list)
-          for r in rows: idx[n(r['name'])].append(r)
-          for x in names: print(x,'->',[(r['name'],r['provider']) for r in idx.get(n(x),[])])
-          pc=collections.Counter(str(r.get('provider')) for r in rows)
-          for p,c in sorted(pc.items()):
-            if re.search(r'twist|massive|titan|shady|mirror|paperclip|uppercut|stake|engine|hacksaw|nolimit|relax|push|bgaming|onetouch',p.lower()): print('PROV',p,c)
-          print('nproviders',len(pc))
-          PY
+          sleep 60
+          B=https://jdbbot.jdbbot.workers.dev
+          curl -sS -m 20 $B/health -w '\nHTTP %{http_code}\n'
+          curl -sS -m 20 -o /dev/null -D - $B/login | grep -i -E '^(HTTP|location)' | sed -E 's/(state|code_challenge)=[^&]*/\1=X/g'
+          curl -sS -m 20 -o /dev/null -w 'site HTTP %{http_code}\n' https://jaydabnknt.github.io/kick-giveaway-roller/
