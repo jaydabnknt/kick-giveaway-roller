@@ -98,6 +98,11 @@ export default {
       return Response.redirect(back.toString(), 302);
     }
 
+    if (url.pathname === "/health") {   // public: is the bot signed in? (no secrets)
+      const tok = await env.STORE.get("tokens");
+      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET) });
+    }
+
     if (url.pathname === "/status") {
       if (!(await checkKey(req, env))) return json({ ok: false, error: "bad key" }, 401);
       const tok = await env.STORE.get("tokens");
