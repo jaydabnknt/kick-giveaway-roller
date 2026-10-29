@@ -530,7 +530,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
             </div>
             <button class="btn ov-copy" type="button">Copy link</button>
           </div>
-          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 600 × 640. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
+          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 600 × 640. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. The link is made from your channel name, so it stays the same on every device. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
         </div>
       </details>
       <details class="panel" id="historyCard" hidden>
@@ -724,7 +724,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
             </div>
             <button class="btn ov-copy" type="button">Copy link</button>
           </div>
-          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 500 × 600. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
+          <p class="hint">In OBS, add a <b>Browser</b> source, paste this link and set it to 500 × 600. Updates go through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>, a free relay, so you can run this page on your phone. The link is made from your channel name, so it stays the same on every device. Keep this page open and on screen while you stream, because phones pause pages in the background.</p>
         </div>
       </details>
       <div class="row">
@@ -1386,7 +1386,7 @@ async function lookupChatroom(slug) {
 }
 els.connect.addEventListener("click", async () => {
   const slug = slugOf(els.channel.value); if (!slug) { els.channel.focus(); return; }
-  els.channel.value = slug; S.channel = slug; save();
+  els.channel.value = slug; S.channel = slug; save(); if (typeof ovRefreshLinks === "function" && ov) ovRefreshLinks();
   showError(""); els.lookupHelp.hidden = true; setPill("wait", "Finding chat"); els.connect.disabled = true;
   let id = null;
   try { id = await lookupChatroom(slug); }
@@ -2103,22 +2103,37 @@ $("slotsClear").addEventListener("click", e => {
 });
 
 // ---------- OBS overlay ----------
-// The page you run the giveaway on publishes small JSON updates to a private, randomly named ntfy.sh
-// topic, and the overlay link (the same page with ?overlay=...) subscribes to it. No account or server.
+// The page you run the giveaway on publishes small JSON updates to an ntfy.sh topic named after your
+// Kick channel, and the overlay link (the same page with ?overlay=...&ch=channel) subscribes to it, so the
+// same link works from any phone or computer. No account or server. Old ?k= links still work.
 const OV_LS = "kick-giveaway-overlay";
-var ov = { on: false, key: "" };   // var: the render functions above may call the senders before this line runs
+var ov = { on: true, key: "" };   // var: the render functions above may call the senders before this line runs
 try { Object.assign(ov, JSON.parse(localStorage.getItem(OV_LS) || "{}")); } catch (e) {}
 if (!/^[a-z0-9]{16,40}$/.test(ov.key)) { ov.key = "kgt" + Array.from({ length: 22 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[randInt(36)]).join(""); }
 const saveOv = () => { if (OVERLAY) return; try { localStorage.setItem(OV_LS, JSON.stringify(ov)); } catch (e) {} };
 saveOv();
 const NTFY = "https://ntfy.sh/";
 const ovBase = location.href.split(/[?#]/)[0];
-const ovLink = kind => `${ovBase}?overlay=${kind}&k=${ov.key}`;
+const chanSlug = v => String(v || "").trim().toLowerCase().replace(/^.*kick\.com\//, "").replace(/^@/, "").replace(/[^a-z0-9_-]/g, "");
+function chanKey(slug) {             // stable, non-obvious topic name per channel (two 32-bit FNV-1a hashes)
+  let out = "kgc";
+  for (const seed of [2166136261, 3335557771, 1234567891]) {
+    let h = seed; for (const ch of "kick-giveaway-tools:" + slug) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    out += h.toString(36).padStart(7, "0");
+  }
+  return out;
+}
+const ovChan = () => chanSlug($("channel").value);
+const ovLink = kind => ovChan() ? `${ovBase}?overlay=${kind}&ch=${ovChan()}` : "Type your channel in Kick chat first";
 // One publisher per topic: sends the newest state, at most every few seconds, and re-sends it each
 // minute so an overlay that starts later still catches up.
-function makePublisher(topic, gapMs) {
+function makePublisher(suffix, gapMs) {
   let pending = null, lastBody = "", lastAt = 0, timer = null;
-  const send = body => { lastBody = body; lastAt = Date.now(); fetch(NTFY + topic, { method: "POST", body }).catch(() => {}); };
+  const send = body => {
+    lastBody = body; lastAt = Date.now();
+    const topics = [ov.key + suffix]; if (ovChan()) topics.push(chanKey(ovChan()) + suffix);   // legacy link + channel link
+    for (const t of topics) fetch(NTFY + t, { method: "POST", body }).catch(() => {});
+  };
   const flush = () => { timer = null; if (pending === null) return; const b = pending; pending = null; if (b !== lastBody) send(b); };
   setInterval(() => { if (ov.on && lastBody && Date.now() - lastAt > 55000) send(lastBody); }, 15000);
   return { push(obj, now) {
@@ -2128,7 +2143,7 @@ function makePublisher(topic, gapMs) {
     if (!timer) timer = setTimeout(flush, Math.max(0, gapMs - (Date.now() - lastAt)));
   } };
 }
-const pubG = makePublisher(ov.key + "-g", 3000), pubC = makePublisher(ov.key + "-c", 3000);
+const pubG = makePublisher("-g", 3000), pubC = makePublisher("-c", 3000);
 function ovSendGiveaway() {
   if (!ov || !ov.on || OVERLAY || rolling) return;
   const names = idleOrder.slice(0, 80);
@@ -2169,10 +2184,15 @@ for (const id of ["ovPanelG", "ovPanelC"]) {
   });
   link.addEventListener("focus", () => link.select());
 }
+function ovRefreshLinks() {
+  document.querySelectorAll("#ovPanelG .ov-link, #ovPanelC .ov-link").forEach(l => (l.value = ovLink(l.closest("#ovPanelC") ? "calls" : "giveaway")));
+}
+$("channel").addEventListener("input", ovRefreshLinks);
+$("channel").addEventListener("change", () => { if (ov.on) { ovSendGiveaway(); ovSendCalls(); } });
 
 // Overlay side: listen to the topic and draw what arrives.
 if (OVERLAY) {
-  const key = (params.get("k") || "").replace(/[^a-z0-9]/g, "");
+  const key = params.get("ch") ? chanKey(chanSlug(params.get("ch"))) : (params.get("k") || "").replace(/[^a-z0-9]/g, "");
   S.sound = params.get("sound") !== "0"; state.entries.clear();
   els.empty.textContent = "Waiting for the giveaway…";
   order = []; idleOrder = []; winnerIdx = -1; draw();
@@ -2211,7 +2231,7 @@ if (OVERLAY) {
     const topic = key + (OVERLAY === "calls" ? "-c" : "-g"), handle = OVERLAY === "calls" ? onCalls : onGiveaway;
     const es = new EventSource(`${NTFY}${topic}/sse?since=10m`);
     es.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.event === "message" && m.message) handle(JSON.parse(m.message)); } catch (e) {} };
-  } else els.empty.textContent = "This overlay link is missing its key. Copy it again from the OBS overlay panel.";
+  } else els.empty.textContent = "This overlay link is missing your channel. Copy it again from the OBS overlay panel.";
 }
 
 // ---------- chat bot ----------
