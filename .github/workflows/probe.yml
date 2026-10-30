@@ -8,9 +8,9 @@ jobs:
     steps:
       - name: Subscribe JDBBot to chat
         run: |
-          sleep 75
+          sleep 5
           B=https://jdbbot.jdbbot.workers.dev
           curl -sS -m 30 $B/health; echo
           curl -sS -m 30 $B/setup; echo
           curl -sS -m 30 -o /dev/null -w 'webhook unsigned -> %{http_code}\n' -X POST $B/webhook -d '{}'
-          curl -sS -m 30 $B/clips | sed 's/<[^>]*>/ /g' | tr -s ' ' | tail -c 300; echo
+          curl -sS -m 30 $B/health; echo
