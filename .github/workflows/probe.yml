@@ -6,5 +6,9 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Bot health
-        run: curl -sS -m 30 https://jdbbot.jdbbot.workers.dev/health; echo
+      - name: Which raid events does Kick accept
+        run: |
+          sleep 70
+          for n in channel.raided channel.raid channel.hosted channel.host livestream.hosted channel.followed; do
+            echo "== $n"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/try-event?name=$n"; echo
+          done
