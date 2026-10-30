@@ -3,8 +3,12 @@ main = "worker.js"
 compatibility_date = "2025-09-01"
 workers_dev = true
 
+[triggers]
+crons = ["17 */6 * * *"]
+
 [vars]
 BOT_USERNAME = "JDBBot"
+BOT_CHANNEL = "jaydab4ngnt"
 SITE_URL = "https://jaydabnknt.github.io/kick-giveaway-roller/"
 
 [[kv_namespaces]]

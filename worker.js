@@ -92,10 +92,109 @@ async function checkKey(req, env) {
   return !!real && key.length > 20 && key === real;
 }
 
+// ---------- chat commands (work on their own, no site needed) ----------
+// Kick sends every chat message in BOT_CHANNEL to /webhook (set in the Kick developer app). The bot checks
+// Kick's signature, then answers commands. Kick has no API for bots to cut clips, so !clip saves a
+// timestamped marker instead; the list is at /clips.
+async function appToken(env) {
+  const c = await env.STORE.get("apptoken", "json");
+  if (c && Date.now() < c.exp - 120000) return c.access;
+  const t = await tokenRequest(env, { grant_type: "client_credentials" });
+  await env.STORE.put("apptoken", JSON.stringify(t));
+  return t.access;
+}
+async function kickApp(env, path, init = {}) {
+  const r = await fetch("https://api.kick.com/public/v1" + path, {
+    ...init, headers: { accept: "application/json", "content-type": "application/json", authorization: "Bearer " + await appToken(env), ...(init.headers || {}) }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Kick API ${path} -> ${r.status} ${JSON.stringify(data).slice(0, 300)}`);
+  return data;
+}
+async function subscribeChat(env) {
+  const id = await broadcasterId(env, env.BOT_CHANNEL);
+  const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
+  if (have.data && have.data.some(x => x.event === "chat.message.sent")) return { ok: true, already: true, have: have.data };
+  const res = await kickApp(env, "/events/subscriptions", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, method: "webhook", events: [{ name: "chat.message.sent", version: 1 }] }) });
+  return { ok: true, res, before: have };
+}
+let kickKey = null;
+async function verifyKick(req, body) {
+  const id = req.headers.get("kick-event-message-id"), ts = req.headers.get("kick-event-message-timestamp"), sig = req.headers.get("kick-event-signature");
+  if (!id || !ts || !sig) return false;
+  if (!kickKey) {
+    const d = await fetch("https://api.kick.com/public/v1/public-key").then(r => r.json());
+    const pem = (d.data && d.data.public_key) || "";
+    const der = Uint8Array.from(atob(pem.replace(/-----[^-]+-----|\s/g, "")), c => c.charCodeAt(0));
+    kickKey = await crypto.subtle.importKey("spki", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  }
+  const sigBytes = Uint8Array.from(atob(sig), c => c.charCodeAt(0));
+  return crypto.subtle.verify("RSASSA-PKCS1-v1_5", kickKey, sigBytes, new TextEncoder().encode(`${id}.${ts}.${body}`));
+}
+const hms = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+async function liveStart(env, id) {
+  const d = await kickApp(env, "/livestreams?broadcaster_user_id=" + id).catch(() => ({}));
+  const ls = d.data && d.data[0];
+  return ls && ls.started_at ? Date.parse(ls.started_at) : null;
+}
+async function postAsBot(env, broadcasterUserId, text) {
+  await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content: text.slice(0, 500), type: "user" }) });
+}
+async function onChat(env, ev) {
+  const text = String(ev.content || "").trim(), who = (ev.sender && ev.sender.username) || "";
+  const chan = ev.broadcaster || {}, bid = chan.user_id;
+  if (!text.startsWith("!") || !bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
+  const [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
+  const cdKey = "cd:" + bid + ":" + cmd;                      // a few seconds' cooldown per command
+  if (await env.STORE.get(cdKey)) return;
+  if (cmd === "!clip") {
+    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
+    const secs = Math.min(120, Math.max(5, parseInt(arg, 10) || 30));
+    const start = await liveStart(env, bid);
+    if (!start) return postAsBot(env, bid, `@${who} the stream isn't live, so there's nothing to clip.`);
+    const end = (Date.now() - start) / 1000;
+    const list = (await env.STORE.get("clips:" + bid, "json")) || [];
+    list.unshift({ by: who, secs, from: Math.max(0, end - secs), to: end, stream: start, at: Date.now() });
+    await env.STORE.put("clips:" + bid, JSON.stringify(list.slice(0, 200)));
+    return postAsBot(env, bid, `📌 @${who} marked a clip: ${hms(end - secs)} to ${hms(end)} of this stream (last ${secs}s). Saved for the streamer to cut from the VOD.`);
+  }
+  if (cmd === "!uptime") {
+    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
+    const start = await liveStart(env, bid);
+    return postAsBot(env, bid, start ? `⏱️ Live for ${hms((Date.now() - start) / 1000)}` : "The stream is offline.");
+  }
+  if (cmd === "!commands") {
+    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
+    return postAsBot(env, bid, "Commands: !clip [seconds] marks a clip of the last 30s (or up to 120s) · !uptime shows how long the stream has been live");
+  }
+}
+async function clipsPage(env) {
+  const id = await broadcasterId(env, env.BOT_CHANNEL);
+  const list = (await env.STORE.get("clips:" + id, "json")) || [];
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const rows = list.map(c => `<tr><td>${new Date(c.stream).toISOString().slice(0, 10)}</td><td><b>${hms(c.from)} – ${hms(c.to)}</b></td><td>${esc(c.by)}</td><td>${c.secs}s</td></tr>`).join("");
+  return page("Clip markers", `Times are from the start of each stream, so you can find them in the VOD.<table style="width:100%;margin-top:12px;border-collapse:collapse" cellpadding="6"><tr style="text-align:left;color:#9aa"><th>Stream</th><th>Time</th><th>By</th><th>Length</th></tr>${rows || '<tr><td colspan="4">No clips marked yet.</td></tr>'}</table>`);
+}
+
 export default {
-  async fetch(req, env) {
+  async scheduled(event, env, ctx) { ctx.waitUntil(subscribeChat(env).catch(() => {})); },   // keep the chat subscription alive
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+    if (url.pathname === "/webhook" && req.method === "POST") {
+      const body = await req.text();
+      if (!(await verifyKick(req, body).catch(() => false))) return new Response("bad signature", { status: 401 });
+      const mid = req.headers.get("kick-event-message-id");
+      if (await env.STORE.get("seen:" + mid)) return new Response("dup");
+      await env.STORE.put("seen:" + mid, "1", { expirationTtl: 600 });
+      if ((req.headers.get("kick-event-type") || "") === "chat.message.sent") ctx.waitUntil(onChat(env, JSON.parse(body)).catch(e => env.STORE.put("lasterror", String(e.message || e))));
+      return new Response("ok");
+    }
+    if (url.pathname === "/setup") {       // harmless: (re)subscribes BOT_CHANNEL's chat to /webhook
+      try { return json(await subscribeChat(env)); } catch (e) { return json({ ok: false, error: String(e.message || e) }, 502); }
+    }
+    if (url.pathname === "/clips") return clipsPage(env);
 
     if (url.pathname === "/" ) return page("JDBBot", "This is the chat bot for Giveaway Tools. To sign it in, open <a style=\"color:#53fc18\" href=\"/login\">/login</a> while logged in to Kick as the bot account.");
 
@@ -130,7 +229,7 @@ export default {
 
     if (url.pathname === "/health") {   // public: is the bot signed in? (no secrets)
       const tok = await env.STORE.get("tokens");
-      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET) });
+      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror") });
     }
 
     if (url.pathname === "/status") {
