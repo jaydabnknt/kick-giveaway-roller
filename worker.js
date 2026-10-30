@@ -114,8 +114,11 @@ async function kickApp(env, path, init = {}) {
 async function subscribeChat(env) {
   const id = await broadcasterId(env, env.BOT_CHANNEL);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
-  if (have.data && have.data.some(x => (x.event || x.name) === "chat.message.sent")) return { ok: true, already: true, have: have.data };
-  const res = await kickApp(env, "/events/subscriptions", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, method: "webhook", events: [{ name: "chat.message.sent", version: 1 }] }) });
+  const want = ["chat.message.sent", ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
+  const got = new Set((have.data || []).map(x => x.event || x.name));
+  const missing = want.filter(n => !got.has(n));
+  if (!missing.length) return { ok: true, already: true, have: have.data };
+  const res = await kickApp(env, "/events/subscriptions", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, method: "webhook", events: missing.map(name => ({ name, version: 1 })) }) });
   return { ok: true, res, before: have };
 }
 let kickKey = null;
@@ -178,10 +181,39 @@ async function onChat(env, ev) {
     const start = await liveStart(env, bid);
     return postAsBot(env, bid, start ? `⏱️ Live for ${hms((Date.now() - start) / 1000)}` : "The stream is offline.");
   }
+  if (cmd === "!so") {
+    const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
+    const isMod = badges.some(b => /broadcaster|moderator|mod/.test(b)) || who.toLowerCase() === String(env.BOT_CHANNEL).toLowerCase();
+    if (!isMod) return;
+    const target = arg.replace(/^@/, "").replace(/^https?:\/\/(www\.)?kick\.com\//i, "").replace(/[^A-Za-z0-9_-]/g, "");
+    if (!target) return postAsBot(env, bid, "Usage: !so name");
+    await env.STORE.put(cdKey, "1", { expirationTtl: 10 });
+    return postAsBot(env, bid, await shoutout(env, target));
+  }
   if (cmd === "!commands") {
     await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
-    return postAsBot(env, bid, "Commands: !clip [seconds] marks a clip of the last 30s (or up to 120s) · !uptime shows how long the stream has been live");
+    return postAsBot(env, bid, "Commands: !clip [seconds] marks a clip of the last 30s (or up to 120s) · !uptime shows how long the stream has been live · !so name shouts out a streamer (mods)");
   }
+}
+async function channelInfo(env, slug) {
+  slug = String(slug).toLowerCase().replace(/_/g, "-");
+  const d = await kickApp(env, "/channels?slug=" + encodeURIComponent(slug)).catch(() => ({}));
+  return d.data && d.data[0];
+}
+async function shoutout(env, name) {
+  const ch = await channelInfo(env, name);
+  const slug = (ch && ch.slug) || name.toLowerCase().replace(/_/g, "-");
+  const what = ch && ch.category && ch.category.name ? ` · last streaming ${ch.category.name}` : "";
+  return ch ? `📣 Go show some love to ${name}! Check them out at https://kick.com/${slug}${what}` : `Couldn't find a Kick channel called ${name}.`;
+}
+async function onRaid(env, ev) {
+  const raider = ev.raider || ev.host || ev.from_broadcaster || ev.broadcaster_from || {};
+  const name = raider.username || raider.channel_slug || raider.slug || "";
+  const bid = (ev.broadcaster && ev.broadcaster.user_id) || await broadcasterId(env, env.BOT_CHANNEL);
+  const viewers = ev.viewers || ev.viewer_count || ev.number_viewers || 0;
+  if (!name) { await env.STORE.put("lastraid", JSON.stringify(ev).slice(0, 2000)); return; }
+  const slug = String(raider.channel_slug || name).toLowerCase().replace(/_/g, "-");
+  await postAsBot(env, bid, `🚨 Thank you ${name} for the raid${viewers ? " with " + viewers + " viewers" : ""}! Everyone go check them out and drop a follow: https://kick.com/${slug}`);
 }
 async function clipsPage(env) {
   const id = await broadcasterId(env, env.BOT_CHANNEL);
@@ -203,7 +235,11 @@ export default {
       const mid = req.headers.get("kick-event-message-id");
       if (await env.STORE.get("seen:" + mid)) return new Response("dup");
       await env.STORE.put("seen:" + mid, "1", { expirationTtl: 600 });
-      if ((req.headers.get("kick-event-type") || "") === "chat.message.sent") ctx.waitUntil(onChat(env, JSON.parse(body)).catch(e => env.STORE.put("lasterror", String(e.message || e))));
+      const type = req.headers.get("kick-event-type") || "";
+      const fail = e => env.STORE.put("lasterror", String(e.message || e));
+      if (type === "chat.message.sent") ctx.waitUntil(onChat(env, JSON.parse(body)).catch(fail));
+      else if (/raid|host/i.test(type)) ctx.waitUntil(onRaid(env, JSON.parse(body)).catch(fail));
+      else ctx.waitUntil(env.STORE.put("lastevent:" + type, body.slice(0, 2000), { expirationTtl: 86400 * 7 }));
       return new Response("ok");
     }
     if (url.pathname === "/setup") {       // harmless: (re)subscribes BOT_CHANNEL's chat to /webhook
@@ -211,6 +247,13 @@ export default {
       try { return json(await subscribeChat(env)); } catch (e) { return json({ ok: false, error: String(e.message || e) }, 502); }
     }
     if (url.pathname === "/clips") return clipsPage(env);
+    if (url.pathname === "/try-event") {   // which event names does Kick accept? (one at a time, BOT_CHANNEL only)
+      const name = clean(url.searchParams.get("name"), 60);
+      try {
+        const id = await broadcasterId(env, env.BOT_CHANNEL);
+        return json(await kickApp(env, "/events/subscriptions", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, method: "webhook", events: [{ name, version: 1 }] }) }));
+      } catch (e) { return json({ ok: false, error: String(e.message || e) }); }
+    }
 
     if (url.pathname === "/" ) return page("JDBBot", "This is the chat bot for Giveaway Tools. To sign it in, open <a style=\"color:#53fc18\" href=\"/login\">/login</a> while logged in to Kick as the bot account.");
 
@@ -245,7 +288,7 @@ export default {
 
     if (url.pathname === "/health") {   // public: is the bot signed in? (no secrets)
       const tok = await env.STORE.get("tokens");
-      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror"), postingAs: await env.STORE.get("postmode"), appBotError: await env.STORE.get("appbot-off") });
+      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror"), postingAs: await env.STORE.get("postmode"), appBotError: await env.STORE.get("appbot-off"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
     if (url.pathname === "/status") {
