@@ -114,7 +114,7 @@ async function kickApp(env, path, init = {}) {
 async function subscribeChat(env) {
   const id = await broadcasterId(env, env.BOT_CHANNEL);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
-  if (have.data && have.data.some(x => x.event === "chat.message.sent")) return { ok: true, already: true, have: have.data };
+  if (have.data && have.data.some(x => (x.event || x.name) === "chat.message.sent")) return { ok: true, already: true, have: have.data };
   const res = await kickApp(env, "/events/subscriptions", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, method: "webhook", events: [{ name: "chat.message.sent", version: 1 }] }) });
   return { ok: true, res, before: have };
 }
@@ -158,6 +158,8 @@ async function onChat(env, ev) {
   const chan = ev.broadcaster || {}, bid = chan.user_id;
   if (!text.startsWith("!") || !bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
   const [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
+  const dk = "msg:" + (ev.message_id || "");           // the same chat message can arrive twice
+  if (ev.message_id) { if (await env.STORE.get(dk)) return; await env.STORE.put(dk, "1", { expirationTtl: 600 }); }
   const cdKey = "cd:" + bid + ":" + cmd;                      // a few seconds' cooldown per command
   if (await env.STORE.get(cdKey)) return;
   if (cmd === "!clip") {
