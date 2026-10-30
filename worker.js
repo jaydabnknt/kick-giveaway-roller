@@ -137,8 +137,21 @@ async function liveStart(env, id) {
   const ls = d.data && d.data[0];
   return ls && ls.started_at ? Date.parse(ls.started_at) : null;
 }
+// Post a line in a channel. First try as the Kick app's own BOT (app token, type "bot"); if Kick refuses,
+// fall back to the JDBBot account for an hour before trying the app bot again.
 async function postAsBot(env, broadcasterUserId, text) {
-  await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content: text.slice(0, 500), type: "user" }) });
+  const content = text.slice(0, 500);
+  if (!(await env.STORE.get("appbot-off"))) {
+    try {
+      await kickApp(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "bot" }) });
+      await env.STORE.put("postmode", "app bot");
+      return;
+    } catch (e) {
+      await env.STORE.put("appbot-off", String(e.message || e).slice(0, 300), { expirationTtl: 3600 });
+    }
+  }
+  await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "user" }) });
+  await env.STORE.put("postmode", "JDBBot account");
 }
 async function onChat(env, ev) {
   const text = String(ev.content || "").trim(), who = (ev.sender && ev.sender.username) || "";
@@ -192,6 +205,7 @@ export default {
       return new Response("ok");
     }
     if (url.pathname === "/setup") {       // harmless: (re)subscribes BOT_CHANNEL's chat to /webhook
+      await env.STORE.delete("appbot-off");   // and lets the app bot be tried again right away
       try { return json(await subscribeChat(env)); } catch (e) { return json({ ok: false, error: String(e.message || e) }, 502); }
     }
     if (url.pathname === "/clips") return clipsPage(env);
@@ -229,7 +243,7 @@ export default {
 
     if (url.pathname === "/health") {   // public: is the bot signed in? (no secrets)
       const tok = await env.STORE.get("tokens");
-      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror") });
+      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror"), postingAs: await env.STORE.get("postmode"), appBotError: await env.STORE.get("appbot-off") });
     }
 
     if (url.pathname === "/status") {
@@ -248,7 +262,7 @@ export default {
       if (!text) return json({ ok: false, error: "empty" }, 400);
       try {
         const id = await broadcasterId(env, body.channel);
-        await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: id, content: text, type: "user" }) });
+        await postAsBot(env, id, text);
         return json({ ok: true });
       } catch (e) {
         return json({ ok: false, error: String(e.message || e) }, 502);
