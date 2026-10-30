@@ -6,11 +6,11 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Check ntfy relay and site
+      - name: Subscribe JDBBot to chat
         run: |
-          T=kgtprobe$RANDOM$RANDOM
-          curl -sS -m 20 -D - -o pub.txt -X POST -H 'Origin: https://jaydabnknt.github.io' -d '{"t":"g","test":1}' https://ntfy.sh/$T | grep -i -E '^(HTTP|access-control|x-ratelimit|retry)'; head -c 400 pub.txt; echo
-          curl -sS -m 20 "https://ntfy.sh/$T/json?poll=1&since=10m" | head -c 400; echo
-          (curl -sS -m 8 -D - -H 'Origin: https://jaydabnknt.github.io' "https://ntfy.sh/$T/sse?since=10m" | head -c 700) ; echo
-          curl -sS -m 20 -o /dev/null -w 'site %{http_code}\n' "https://jaydabnknt.github.io/kick-giveaway-roller/?overlay=giveaway&k=kgttest"
-          curl -sS -m 20 https://jaydabnknt.github.io/kick-giveaway-roller/ | grep -c 'ntfy.sh'
+          sleep 75
+          B=https://jdbbot.jdbbot.workers.dev
+          curl -sS -m 30 $B/health; echo
+          curl -sS -m 30 $B/setup; echo
+          curl -sS -m 30 -o /dev/null -w 'webhook unsigned -> %{http_code}\n' -X POST $B/webhook -d '{}'
+          curl -sS -m 30 $B/clips | sed 's/<[^>]*>/ /g' | tr -s ' ' | tail -c 300; echo
