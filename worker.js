@@ -25,19 +25,19 @@ async function tokenRequest(env, params) {
   return { access: t.access_token, refresh: t.refresh_token, exp: Date.now() + (t.expires_in || 3600) * 1000 };
 }
 
-async function accessToken(env) {
-  const tok = await env.STORE.get("tokens", "json");
+async function accessToken(env, key = "tokens") {   // "tokens" is JDBBot's; "stok:<id>" a streamer's
+  const tok = await env.STORE.get(key, "json");
   if (!tok) throw new Error("not signed in");
   if (Date.now() < tok.exp - 120000) return tok.access;
   const fresh = await tokenRequest(env, { grant_type: "refresh_token", refresh_token: tok.refresh });
   if (!fresh.refresh) fresh.refresh = tok.refresh;
-  await env.STORE.put("tokens", JSON.stringify(fresh));
+  await env.STORE.put(key, JSON.stringify(fresh));
   return fresh.access;
 }
 
-async function kickApi(env, path, init = {}) {
+async function kickApi(env, path, init = {}, key) {
   const r = await fetch("https://api.kick.com/public/v1" + path, {
-    ...init, headers: { accept: "application/json", "content-type": "application/json", authorization: "Bearer " + await accessToken(env), ...(init.headers || {}) }
+    ...init, headers: { accept: "application/json", "content-type": "application/json", authorization: "Bearer " + await accessToken(env, key), ...(init.headers || {}) }
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`Kick API ${path} -> ${r.status} ${JSON.stringify(data).slice(0, 200)}`);
@@ -141,13 +141,13 @@ async function liveStart(env, id) {
   const ls = d.data && d.data[0];
   return ls && ls.started_at ? Date.parse(ls.started_at) : null;
 }
-// Post a line in a channel. First try as the Kick app's own BOT (app token, type "bot"); if Kick refuses,
-// fall back to the JDBBot account for an hour before trying the app bot again.
+// Post a line in a channel. If the streamer pressed "Allow" on their bot page, Kick lets the app's own bot
+// (the one with the bot badge) post there using their permission; otherwise it posts as the JDBBot account.
 async function postAsBot(env, broadcasterUserId, text) {
   const content = text.slice(0, 500);
-  if (!(await env.STORE.get("appbot-off"))) {
+  if (await env.STORE.get("stok:" + broadcasterUserId)) {
     try {
-      await kickApp(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "bot" }) });
+      await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ content, type: "bot" }) }, "stok:" + broadcasterUserId);
       await setOnce(env, "postmode", "app bot");
       return;
     } catch (e) {
@@ -340,12 +340,13 @@ export default {
 
     if (url.pathname === "/" ) return page("JDBBot", "This is the chat bot for Giveaway Tools. To sign it in, open <a style=\"color:#53fc18\" href=\"/login\">/login</a> while logged in to Kick as the bot account.");
 
-    if (url.pathname === "/login") {
-      const state = randomString(24), verifier = randomString(32);
+    if (url.pathname === "/login" || url.pathname === "/allow") {   // /allow: a streamer lets the badge bot post in their chat
+      const allow = url.pathname === "/allow";
+      const state = (allow ? "a" : "") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
       await env.STORE.put("oauth:" + state, verifier, { expirationTtl: 600 });
       const u = new URL("https://id.kick.com/oauth/authorize");
-      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
+      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: allow ? "user:read channel:read chat:write events:subscribe" : SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
       return Response.redirect(u.toString(), 302);
     }
 
@@ -358,6 +359,18 @@ export default {
       const tok = await tokenRequest(env, { grant_type: "authorization_code", redirect_uri: redirectUri(req), code, code_verifier: verifier });
       const me = await fetch("https://api.kick.com/public/v1/users", { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
       const name = (me.data && me.data[0] && me.data[0].name) || "";
+      if (state.startsWith("a")) {
+        const uid = me.data && me.data[0] && me.data[0].user_id;
+        if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again from your bot page.");
+        const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
+        const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
+        await env.STORE.put("stok:" + uid, JSON.stringify(tok));
+        await env.STORE.put("ch:" + slug, String(uid));
+        const list = await channelList(env);
+        if (!list.some(c => c.slug === slug)) { await subscribeChat(env, slug).catch(() => {}); list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list)); }
+        ctx.waitUntil(postAsBot(env, uid, "👋 JDBBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
+        return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&allowed=1", 302);
+      }
       const want = String(env.BOT_USERNAME || "").toLowerCase();
       if (want && name.toLowerCase() !== want) return page("Wrong account", `You signed in as <b>${name || "someone else"}</b>. Log out of Kick in this browser, log in as <b>${env.BOT_USERNAME}</b>, then open /login again.`);
       await env.STORE.put("tokens", JSON.stringify(tok));
@@ -409,7 +422,8 @@ export default {
       const cmds = (await env.STORE.get("cmds:" + slug, "json")) || {};
       let clips = [];
       if (enabled) clips = ((await env.STORE.get("clips:" + await broadcasterId(env, slug).catch(() => 0), "json")) || []).slice(0, 50);
-      return json({ ok: true, slug, enabled, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
+      const badge = enabled && !!(await env.STORE.get("stok:" + await broadcasterId(env, slug).catch(() => 0)));
+      return json({ ok: true, slug, enabled, badge, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
         custom: Object.entries(cmds).sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => ({ name: "!" + name, text: c.text, by: c.by })), clips });
     }
     if (url.pathname === "/enable" && req.method === "POST") {   // add JDBBot to a channel: get a code, then check it
