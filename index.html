@@ -1659,6 +1659,10 @@ function isSub(sender) {
   const badges = (sender && sender.identity && sender.identity.badges) || [];
   return badges.some(b => ["subscriber", "founder", "og", "broadcaster"].includes(b.type));
 }
+function isModOrStreamer(name, sender) {
+  const badges = (sender && sender.identity && sender.identity.badges) || [];
+  return badges.some(b => ["moderator", "broadcaster"].includes(b.type)) || cleanName(name).toLowerCase().replace(/_/g, "-") === String(S.channel || "").toLowerCase();
+}
 const seenMsgIds = new Set();
 function onChat(d) {
   if (d.id) {                                             // the same message can arrive on more than one channel
@@ -1741,6 +1745,14 @@ function gtbOnChat(name, text, sender) {
   const cmd = gtb.cmd.trim().toLowerCase(); if (!cmd) return null;
   const t = text.toLowerCase();
   if (t !== cmd && !t.startsWith(cmd + " ")) return null;
+  const word = t.slice(cmd.length).trim();
+  if (/^(start|open|stop|close|end)$/.test(word)) {         // mods: "!gtb start" / "!gtb stop"
+    if (!isModOrStreamer(name, sender)) return { tag: "mods only", ok: false };
+    const start = /^(start|open)$/.test(word);
+    if (start === gtb.open) return { tag: start ? "already open" : "already closed", ok: false };
+    (start ? gEl.start : gEl.stop).click();
+    return { tag: start ? "guesses opened" : "guesses closed", ok: true };
+  }
   if (!gtb.open) return { tag: "guesses closed", ok: false };
   if (gtb.subs && !isSub(sender)) return { tag: "subs only", ok: false };
   const amount = parseAmount(text.slice(cmd.length));
