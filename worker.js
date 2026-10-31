@@ -1,12 +1,12 @@
-// JDBBot: a tiny Kick chat bot for Giveaway Tools, running on Cloudflare Workers' free plan.
-// The site sends POST /say with the key it was given at sign-in; the bot posts that line in Kick chat
-// as the bot account. Kick tokens live in Workers KV and are refreshed here, never in the site.
+// JDBBot: a tiny Kick chat bot for Giveaway Tools, running on Cloudflare Workers' free plan. It posts as the
+// Kick app's own bot (bot badge) in channels whose streamer pressed Allow on their bot page; their Kick tokens
+// live in Workers KV and are refreshed here, never in the site.
 //
-// Routes:  GET /login  -> sign in to Kick as the bot account (once)
-//          GET /callback -> Kick sends you back here; stores tokens, hands the site its key
-//          GET /status, POST /say {channel, text}  (both need header X-Bot-Key)
+// Routes:  GET /allow -> the streamer allows the bot on Kick (once); /callback stores their token
+//          POST /say {channel, event, data} from the site, POST /webhook from Kick (chat commands)
+//          GET /channel?ch= for the site's bot pages, /room?ch=, /clips?ch=, /health, /setup
 
-const SCOPES = "user:read channel:read chat:write";
+const SCOPES = "user:read channel:read chat:write events:subscribe";
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...CORS } });
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-bot-key", "access-control-allow-methods": "GET, POST, OPTIONS" };
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -25,7 +25,7 @@ async function tokenRequest(env, params) {
   return { access: t.access_token, refresh: t.refresh_token, exp: Date.now() + (t.expires_in || 3600) * 1000 };
 }
 
-async function accessToken(env, key = "tokens") {   // "tokens" is JDBBot's; "stok:<id>" a streamer's
+async function accessToken(env, key) {   // key is "stok:<streamer's user id>"
   const tok = await env.STORE.get(key, "json");
   if (!tok) throw new Error("not signed in");
   if (Date.now() < tok.exp - 120000) return tok.access;
@@ -49,7 +49,7 @@ async function broadcasterId(env, slug) {
   if (!/^[a-z0-9-]{2,40}$/.test(slug)) throw new Error("bad channel name");
   const cached = await env.STORE.get("ch:" + slug);
   if (cached) return Number(cached);
-  const d = await kickApi(env, "/channels?slug=" + encodeURIComponent(slug));
+  const d = await kickApp(env, "/channels?slug=" + encodeURIComponent(slug));
   const id = d.data && d.data[0] && d.data[0].broadcaster_user_id;
   if (!id) throw new Error("channel not found: " + slug);
   await env.STORE.put("ch:" + slug, String(id));
@@ -141,21 +141,11 @@ async function liveStart(env, id) {
   const ls = d.data && d.data[0];
   return ls && ls.started_at ? Date.parse(ls.started_at) : null;
 }
-// Post a line in a channel. If the streamer pressed "Allow" on their bot page, Kick lets the app's own bot
-// (the one with the bot badge) post there using their permission; otherwise it posts as the JDBBot account.
+// Post a line in a channel as the app's bot (the one with the bot badge). Kick only allows that with the
+// streamer's permission, which they give once with the Allow button on their bot page (/allow).
 async function postAsBot(env, broadcasterUserId, text) {
-  const content = text.slice(0, 500);
-  if (await env.STORE.get("stok:" + broadcasterUserId)) {
-    try {
-      await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ content, type: "bot" }) }, "stok:" + broadcasterUserId);
-      await setOnce(env, "postmode", "app bot");
-      return;
-    } catch (e) {
-      await env.STORE.put("appbot-off", String(e.message || e).slice(0, 300), { expirationTtl: 3600 });
-    }
-  }
-  await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "user" }) });
-  await setOnce(env, "postmode", "JDBBot account");
+  if (!(await env.STORE.get("stok:" + broadcasterUserId))) throw new Error("this channel hasn't pressed Allow on its bot page");
+  await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ content: text.slice(0, 500), type: "bot" }) }, "stok:" + broadcasterUserId);
 }
 async function setOnce(env, k, v) { if ((await env.STORE.get(k)) !== v) await env.STORE.put(k, v); }
 
@@ -180,11 +170,6 @@ async function channelList(env) {
   return list;
 }
 const isEnabled = async (env, slug) => (await channelList(env)).some(c => c.slug === normSlug(slug));
-async function publicText(env, slug) {   // everything public that the streamer can edit: title, bio
-  const ch = await channelInfo(env, slug).catch(() => null);
-  const v2 = await fetch("https://kick.com/api/v2/channels/" + encodeURIComponent(slug), { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } }).then(r => r.ok ? r.text() : "").catch(() => "");
-  return [ch && ch.channel_description, ch && ch.stream_title, v2].join(" ");
-}
 async function unsubscribe(env, slug) {
   const id = await broadcasterId(env, slug);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(() => ({}));
@@ -253,6 +238,7 @@ async function onChat(env, ev) {
       if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
       await postAsBot(env, bid, "👋 JDBBot is leaving this channel. Add it back any time from " + env.SITE_URL + "?c=" + slug);
       await env.STORE.put("channels", JSON.stringify((await channelList(env)).filter(c => c.slug !== slug)));
+      await env.STORE.delete("stok:" + bid);
       return unsubscribe(env, slug);
     }
     if (sub !== "add" && sub !== "edit" && !/^(del|delete|remove)$/.test(sub)) return postAsBot(env, bid, usage);
@@ -338,15 +324,14 @@ export default {
       } catch (e) { return json({ ok: false, error: String(e.message || e) }); }
     }
 
-    if (url.pathname === "/" ) return page("JDBBot", "This is the chat bot for Giveaway Tools. To sign it in, open <a style=\"color:#53fc18\" href=\"/login\">/login</a> while logged in to Kick as the bot account.");
+    if (url.pathname === "/" ) return page("JDBBot", `This is the chat bot for Giveaway Tools. Add it to your channel from your bot page on <a style="color:#53fc18" href="${env.SITE_URL}?c=">the site</a>.`);
 
-    if (url.pathname === "/login" || url.pathname === "/allow") {   // /allow: a streamer lets the badge bot post in their chat
-      const allow = url.pathname === "/allow";
-      const state = (allow ? "a" : "") + randomString(24), verifier = randomString(32);
+    if (url.pathname === "/allow") {   // a streamer lets the badge bot post in their chat (once)
+      const state = "a" + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
       await env.STORE.put("oauth:" + state, verifier, { expirationTtl: 600 });
       const u = new URL("https://id.kick.com/oauth/authorize");
-      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: allow ? "user:read channel:read chat:write events:subscribe" : SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
+      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
       return Response.redirect(u.toString(), 302);
     }
 
@@ -354,12 +339,12 @@ export default {
       const code = url.searchParams.get("code"), state = url.searchParams.get("state") || "";
       if (url.searchParams.get("error")) return page("Sign-in cancelled", "Kick said: " + url.searchParams.get("error"));
       const verifier = await env.STORE.get("oauth:" + state);
-      if (!code || !verifier) return page("Link expired", "Open /login again.");
+      if (!code || !verifier) return page("Link expired", "Open your bot page and tap Allow again.");
       await env.STORE.delete("oauth:" + state);
       const tok = await tokenRequest(env, { grant_type: "authorization_code", redirect_uri: redirectUri(req), code, code_verifier: verifier });
       const me = await fetch("https://api.kick.com/public/v1/users", { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
       const name = (me.data && me.data[0] && me.data[0].name) || "";
-      if (state.startsWith("a")) {
+      {
         const uid = me.data && me.data[0] && me.data[0].user_id;
         if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again from your bot page.");
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
@@ -371,26 +356,11 @@ export default {
         ctx.waitUntil(postAsBot(env, uid, "👋 JDBBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
         return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&allowed=1", 302);
       }
-      const want = String(env.BOT_USERNAME || "").toLowerCase();
-      if (want && name.toLowerCase() !== want) return page("Wrong account", `You signed in as <b>${name || "someone else"}</b>. Log out of Kick in this browser, log in as <b>${env.BOT_USERNAME}</b>, then open /login again.`);
-      await env.STORE.put("tokens", JSON.stringify(tok));
-      await env.STORE.put("botname", name);
-      let key = await env.STORE.get("sitekey");
-      if (!key) { key = randomString(24); await env.STORE.put("sitekey", key); }
-      const back = new URL(env.SITE_URL);
-      back.hash = "bot=" + encodeURIComponent(new URL(req.url).origin) + "&botkey=" + encodeURIComponent(key);
-      return Response.redirect(back.toString(), 302);
+      return page("Link expired", "Open your bot page and tap Allow again.");
     }
 
     if (url.pathname === "/health") {   // public: is the bot signed in? (no secrets)
-      const tok = await env.STORE.get("tokens");
-      return json({ ok: true, signedIn: !!tok, bot: tok ? await env.STORE.get("botname") : null, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), lastError: await env.STORE.get("lasterror"), postingAs: await env.STORE.get("postmode"), appBotError: await env.STORE.get("appbot-off"), lastRaidRaw: await env.STORE.get("lastraid") });
-    }
-
-    if (url.pathname === "/status") {
-      if (!(await checkKey(req, env))) return json({ ok: false, error: "bad key" }, 401);
-      const tok = await env.STORE.get("tokens");
-      return json({ ok: !!tok, bot: await env.STORE.get("botname") });
+      return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
     if (url.pathname === "/say" && req.method === "POST") {
@@ -425,28 +395,6 @@ export default {
       const badge = enabled && !!(await env.STORE.get("stok:" + await broadcasterId(env, slug).catch(() => 0)));
       return json({ ok: true, slug, enabled, badge, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
         custom: Object.entries(cmds).sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => ({ name: "!" + name, text: c.text, by: c.by })), clips });
-    }
-    if (url.pathname === "/enable" && req.method === "POST") {   // add JDBBot to a channel: get a code, then check it
-      const b = await req.json().catch(() => ({}));
-      const slug = normSlug(b.ch);
-      if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type a Kick channel name." }, 400);
-      if (await isEnabled(env, slug)) return json({ ok: true, enabled: true });
-      let id; try { id = await broadcasterId(env, slug); } catch (e) { return json({ ok: false, error: "Kick has no channel called " + slug + "." }, 404); }
-      let code = await env.STORE.get("pending:" + slug);
-      if (b.step !== "check") {
-        if (!code) { code = "JDB-" + randomString(6).replace(/[^A-Za-z0-9]/g, "X").slice(0, 6).toUpperCase(); await env.STORE.put("pending:" + slug, code, { expirationTtl: 6 * 3600 }); }
-        return json({ ok: true, code });
-      }
-      if (!code) return json({ ok: false, error: "That code expired. Get a new one." }, 410);
-      if (!(await publicText(env, slug)).toUpperCase().includes(code)) return json({ ok: false, error: `Kick doesn't show ${code} in your stream title or bio yet. Save it there, wait a few seconds, and check again.` }, 409);
-      const sub = await subscribeChat(env, slug).catch(e => ({ ok: false, error: String(e.message || e) }));
-      if (!sub.ok) return json({ ok: false, error: "Kick wouldn't connect the chat: " + sub.error }, 502);
-      const list = await channelList(env);
-      list.push({ slug, id, since: Date.now() });
-      await env.STORE.put("channels", JSON.stringify(list));
-      await env.STORE.delete("pending:" + slug);
-      ctx.waitUntil(postAsBot(env, id, `👋 JDBBot is here! Type !commands to see what it can do.`).catch(() => {}));
-      return json({ ok: true, enabled: true });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
       if (req.method === "POST") {
