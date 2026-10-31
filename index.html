@@ -425,16 +425,16 @@ body.cp > .wrap:not(#chanPage) { display: none !important; }
   </section>
   <section class="cp-box" id="cpCmds" hidden>
     <h3>Commands</h3>
-    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>What it does</th><th>Who</th></tr></thead><tbody id="cpBuiltins"></tbody></table></div>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Description</th><th>Who</th></tr></thead><tbody id="cpBuiltins"></tbody></table></div>
   </section>
   <section class="cp-box" id="cpCustomBox" hidden>
     <h3>This channel's commands</h3>
-    <p class="hint" id="cpCustomHint">Mods add these in chat with <code>!jdb add name text</code>. Everyone can use them.</p>
-    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Replies with</th><th>Added by</th></tr></thead><tbody id="cpCustom"></tbody></table></div>
+    <p class="hint" id="cpCustomHint">Added by mods with <code>!jdb add</code></p>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Response</th><th>Added by</th></tr></thead><tbody id="cpCustom"></tbody></table></div>
   </section>
   <section class="cp-box" id="cpClipsBox" hidden>
     <h3>Clip markers</h3>
-    <p class="hint">From <code>!clip</code>. Times are from the start of each stream, so you can find them in the VOD.</p>
+    <p class="hint">Times from stream start</p>
     <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Stream</th><th>Time</th><th>By</th></tr></thead><tbody id="cpClips"></tbody></table></div>
   </section>
 </div>
@@ -2393,13 +2393,13 @@ if (CHANPAGE !== null) {
     $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(c.does), cell(whoTag(c.who)))));
     if (!d.enabled) {
       pill("", "Not added");
-      $("cpLead").textContent = `JDBBot isn't in ${CHANPAGE}'s chat yet. These are the commands it brings.`;
+      $("cpLead").textContent = "Bot isn't added yet";
       $("cpAdd").hidden = false; return;
     }
     pill("live", "On");
-    $("cpLead").textContent = `JDBBot answers these in ${CHANPAGE}'s chat. Type !commands in chat to get this page.`;
+    $("cpLead").textContent = "Bot is active";
     $("cpCustomBox").hidden = false;
-    $("cpCustom").replaceChildren(...(d.custom.length ? d.custom.map(c => row(cell(c.name, "cmd"), cell(c.text), cell(c.by || ""))) : [row(Object.assign(cell("None yet. A mod can type !jdb add discord Join our Discord! in chat to make one."), { colSpan: 3 }))]));
+    $("cpCustom").replaceChildren(...(d.custom.length ? d.custom.map(c => row(cell(c.name, "cmd"), cell(c.text), cell(c.by || ""))) : [row(Object.assign(cell("None yet"), { colSpan: 3 }))]));
     if (d.clips && d.clips.length) {
       $("cpClipsBox").hidden = false;
       $("cpClips").replaceChildren(...d.clips.map(c => row(cell(new Date(c.stream).toLocaleDateString()), cell(`${hm(c.from)} – ${hm(c.to)}`), cell(c.by))));
