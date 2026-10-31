@@ -6,10 +6,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Kicklet commands, all pages
+      - name: Kicklet API base
         run: |
-          curl -sS -m 90 -H "X-Return-Format: html" "https://r.jina.ai/https://kicklet.app/user/JayDaB4ngnt/commands" -o r.html
-          echo "== scripts"; grep -o 'src="[^"]*"' r.html | head -20
-          echo "== api"; grep -o '"[^"]*api[^"]*"' r.html | sort -u | head -20
-          for js in $(grep -o 'src="[^"]*\.js"' r.html | sed 's/src="//;s/"$//' | head -8); do case "$js" in http*) u=$js;; *) u="https://kicklet.app$js";; esac; echo "== $u"; curl -sS -m 60 "https://r.jina.ai/$u" | grep -o '[`"'"'"'][^`"'"'"']*/api/[^`"'"'"']*[`"'"'"']' | sort -u | head -30; done
-          echo "== sel"; curl -sS -m 90 -H "X-Wait-For-Selector: body" "https://r.jina.ai/https://kicklet.app/user/JayDaB4ngnt/commands?page=2" | sed -n '/Commands/,$p' | head -40
+          curl -sS -m 60 "https://r.jina.ai/https://kicklet.app/_nuxt/B3ESJgQP.js" -o b.js; wc -c b.js
+          grep -o 'https://[a-zA-Z0-9.-]*kicklet[a-zA-Z0-9./_-]*' b.js | sort -u | head
+          grep -o '.\{80\}commands.\{80\}' b.js | head -15
+          grep -o '_nuxt/[A-Za-z0-9_.-]*\.js' b.js | sort -u | head -60 > chunks.txt; wc -l chunks.txt
+          for c in $(cat chunks.txt); do curl -sS -m 30 "https://r.jina.ai/https://kicklet.app/$c" -o c.js; if grep -q 'commands' c.js; then echo "== $c"; grep -o '.\{100\}/commands.\{60\}' c.js | head -5; grep -o 'https://[a-zA-Z0-9.-]*kicklet[a-zA-Z0-9./_-]*' c.js | sort -u | head -3; fi; done
