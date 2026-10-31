@@ -176,10 +176,17 @@ async function unsubscribe(env, slug) {
   for (const x of have.data || []) await kickApp(env, "/events/subscriptions?id=" + encodeURIComponent(x.id), { method: "DELETE" }).catch(() => {});
 }
 // ---------- access keys (Jay's dashboard) ----------
-// keys: { "JDB-XXXX-XXXX": { note, at, ch?, usedBy?, usedAt? } }. A key with ch only works for that channel
-// (that's what approving a request makes). requests: { slug: { note, at } }.
-const getKeys = async env => (await env.STORE.get("keys", "json")) || {};
-const getRequests = async env => (await env.STORE.get("requests", "json")) || {};
+// Each key is its own KV entry "key:JDB-XXXX-XXXX" with { note, at, ch?, usedBy?, usedAt? } as metadata, and each
+// request is "req:<slug>" with { note, at, approved? }, so two changes close together can't overwrite each
+// other. A key with ch only works for that channel (that's what approving a request makes).
+async function listMeta(env, prefix) {
+  const out = {}; let cursor;
+  do { const r = await env.STORE.list({ prefix, cursor }); for (const k of r.keys) out[k.name.slice(prefix.length)] = k.metadata || {}; cursor = r.list_complete ? null : r.cursor; } while (cursor);
+  return out;
+}
+const getKeys = env => listMeta(env, "key:"), getRequests = env => listMeta(env, "req:");
+const putKey = (env, k, rec) => env.STORE.put("key:" + k, "1", { metadata: rec });
+const putReq = (env, slug, rec) => env.STORE.put("req:" + slug, "1", { metadata: rec });
 async function findKey(env, key, slug) {   // a usable key for this channel: the one typed, or one made for it
   const keys = await getKeys(env);
   if (key && keys[key] && !keys[key].usedBy && (!keys[key].ch || keys[key].ch === slug)) return key;
@@ -467,9 +474,9 @@ export default {
         if (!(await isEnabled(env, slug))) {   // new channel: use up the key now that Kick says whose channel it is
           const k = await findKey(env, st.key, slug);
           if (!k) return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&err=" + (st.key ? "badkey" : "nokey"), 302);
-          const keys = await getKeys(env); keys[k].usedBy = slug; keys[k].usedAt = Date.now();
-          await env.STORE.put("keys", JSON.stringify(keys));
-          const reqs = await getRequests(env); if (reqs[slug]) { delete reqs[slug]; await env.STORE.put("requests", JSON.stringify(reqs)); }
+          const rec = (await getKeys(env))[k] || {}; rec.usedBy = slug; rec.usedAt = Date.now();
+          await putKey(env, k, rec);
+          await env.STORE.delete("req:" + slug);
         }
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
@@ -528,36 +535,40 @@ export default {
       const reqs = await getRequests(env);
       if (!reqs[slug]) {
         if (Object.keys(reqs).length >= 100) return json({ ok: false, error: "Too many requests right now. Try again later." }, 429);
-        reqs[slug] = { note: clean(b.note, 200), at: Date.now() };
-        await env.STORE.put("requests", JSON.stringify(reqs));
+        await putReq(env, slug, { note: clean(b.note, 200), at: Date.now() });
       }
       return json({ ok: true, requested: true, approved: !!(await findKey(env, "", slug)) });
     }
     if (url.pathname.startsWith("/admin/")) {
       if (!(await adminOk(req, env))) return json({ ok: false, error: "signin" }, 401);
       const b = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-      const keys = await getKeys(env), reqs = await getRequests(env);
-      const saveKeys = () => env.STORE.put("keys", JSON.stringify(keys)), saveReqs = () => env.STORE.put("requests", JSON.stringify(reqs));
+      for (const [old, put] of [["keys", putKey], ["requests", putReq]]) {   // move anything saved the old way (one big record)
+        const o = await env.STORE.get(old, "json");
+        if (o) { for (const k in o) await put(env, k, o[k]); await env.STORE.delete(old); }
+      }
+      const keys = await getKeys(env), reqs = await getRequests(env);   // listings can lag a few seconds, so changes below are applied to them too
       const op = url.pathname.slice(7);
-      if (op === "key") { const k = newKey(); keys[k] = { note: clean(b.note, 100), at: Date.now() }; await saveKeys(); }
-      else if (op === "revoke") {
-        const k = keys[b.key]; if (!k) return json({ ok: false, error: "no such key" }, 404);
-        if (k.usedBy) await removeChannel(env, k.usedBy);
-        delete keys[b.key]; await saveKeys();
-      }
-      else if (op === "approve") {
-        const slug = normSlug(b.ch); if (!reqs[slug]) return json({ ok: false, error: "no such request" }, 404);
-        keys[newKey()] = { note: "Request: " + slug, at: Date.now(), ch: slug }; reqs[slug].approved = Date.now();
-        await saveKeys(); await saveReqs();
-      }
-      else if (op === "deny") { delete reqs[normSlug(b.ch)]; await saveReqs(); }
-      else if (op === "remove") {
-        const slug = normSlug(b.ch); await removeChannel(env, slug);
-        for (const k in keys) if (keys[k].usedBy === slug) delete keys[k];
-        await saveKeys();
-      }
-      else if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
-      else if (op !== "state") return json({ ok: false, error: "not found" }, 404);
+      try {
+        if (op === "key") { const k = newKey(); keys[k] = { note: clean(b.note, 100), at: Date.now() }; await putKey(env, k, keys[k]); }
+        else if (op === "revoke") {
+          const k = clean(b.key, 20), rec = keys[k] || (await env.STORE.getWithMetadata("key:" + k)).metadata;
+          if (!rec) return json({ ok: false, error: "no such key" }, 404);
+          if (rec.usedBy) await removeChannel(env, rec.usedBy);
+          await env.STORE.delete("key:" + k); delete keys[k];
+        }
+        else if (op === "approve") {
+          const slug = normSlug(b.ch), r = reqs[slug]; if (!r) return json({ ok: false, error: "no such request" }, 404);
+          const k = newKey(); keys[k] = { note: "Request: " + slug, at: Date.now(), ch: slug }; await putKey(env, k, keys[k]);
+          r.approved = Date.now(); await putReq(env, slug, r);
+        }
+        else if (op === "deny") { const slug = normSlug(b.ch); await env.STORE.delete("req:" + slug); delete reqs[slug]; }
+        else if (op === "remove") {
+          const slug = normSlug(b.ch); await removeChannel(env, slug);
+          for (const k in keys) if (keys[k].usedBy === slug) { await env.STORE.delete("key:" + k); delete keys[k]; }
+        }
+      } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 500); }
+      if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
+      if (!["state", "key", "revoke", "approve", "deny", "remove"].includes(op)) return json({ ok: false, error: "not found" }, 404);
       return json({ ok: true, home: env.BOT_CHANNEL, channels: await channelList(env), keys: Object.entries(keys).map(([key, k]) => ({ key, ...k })).sort((a, b) => b.at - a.at),
         requests: Object.entries(reqs).map(([ch, r]) => ({ ch, ...r })).sort((a, b) => b.at - a.at) });
     }
