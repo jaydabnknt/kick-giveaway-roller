@@ -515,8 +515,9 @@ a.btn.primary { color: var(--on-accent); }
       <h3>Keys</h3>
       <form class="row" id="adKeyForm">
         <input type="text" id="adNote" placeholder="Who it's for (optional)" autocomplete="off" style="flex:1 1 180px">
-        <button class="btn primary" type="submit">Generate key</button>
+        <button class="btn primary" type="submit" id="adGen">Generate key</button>
       </form>
+      <p class="hint" id="adMsg" hidden></p>
       <div id="adKeys" class="ad-list"></div>
     </section>
     <section class="cp-box">
@@ -2614,7 +2615,7 @@ if (params.has("admin")) {
     const r = await fetchWithTimeout(BOT_URL + "/admin/" + op, 20000, { method: body ? "POST" : "GET", headers: { authorization: "Bearer " + sess, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) { try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); throw new Error("signin"); }
-    if (!j.ok) throw new Error(j.error || "failed");
+    if (!j.ok) throw new Error(j.error || "the bot answered " + r.status);
     return j;
   };
   const ago = t => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + "m ago" : m < 1440 ? Math.floor(m / 60) + "h ago" : Math.floor(m / 1440) + "d ago"; };
@@ -2638,9 +2639,17 @@ if (params.has("admin")) {
     $("adChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : "",
       c.slug === d.home ? [] : [btn("Remove", () => confirm(`Remove JDBBot from ${c.slug}?`) ? api("remove", { ch: c.slug }).then(render) : null, "danger")])));
   }
+  const adMsg = (t, bad) => { $("adMsg").textContent = t || ""; $("adMsg").hidden = !t; $("adMsg").style.color = bad ? "#ff6b6b" : ""; };
   $("adKeyForm").addEventListener("submit", async e => {
     e.preventDefault();
-    try { render(await api("key", { note: $("adNote").value.trim() })); $("adNote").value = ""; } catch (er) { if (er.message !== "signin") alert(er.message); }
+    $("adGen").disabled = true; adMsg("Making a key…");
+    try {
+      const before = new Set([...$("adKeys").querySelectorAll("b.mono")].map(x => x.textContent));
+      const d = await api("key", { note: $("adNote").value.trim() }); render(d); $("adNote").value = "";
+      const k = d.keys.find(x => !before.has(x.key));
+      adMsg(k ? "New key: " + k.key + " (tap it below to copy)" : "The bot didn't save a new key. Try again.", !k);
+    } catch (er) { if (er.message !== "signin") adMsg("Couldn't make a key: " + er.message, true); }
+    finally { $("adGen").disabled = false; }
   });
   $("adLogout").addEventListener("click", async () => { try { await api("logout", {}); } catch (e) {} try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); });
   if (!sess) showLogin();
