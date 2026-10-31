@@ -365,9 +365,79 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 @media (prefers-reduced-motion: reduce) {
   .pill.live::before, .winner-name.pop, .slot.pop, .gtb-state.open .big::before { animation: none; }
 }
+
+/* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
+body.cp > .wrap:not(#chanPage) { display: none !important; }
+#chanPage { max-width: 760px; }
+.top a.brand { color: inherit; text-decoration: none; }
+.cp-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.cp-box h2, .cp-box h3 { margin: 0; letter-spacing: -0.01em; }
+.cp-box h2 span { color: var(--accent); }
+.cp-scroll { overflow-x: auto; }
+.cp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cp-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.cp-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.cp-table tr:last-child td { border-bottom: 0; }
+.cp-table td:last-child { overflow-wrap: normal; }
+.cp-table td.cmd { font: 700 13px var(--mono); color: var(--accent); min-width: 7em; }
+.who { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.who.mods { color: #5ab0ff; border-color: color-mix(in srgb, #5ab0ff 45%, transparent); }
+.who.streamer { color: #ffd166; border-color: color-mix(in srgb, #ffd166 45%, transparent); }
+.cp-code { font: 800 24px var(--mono); color: var(--accent); letter-spacing: .06em; user-select: all; }
+.cp-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
+.cp-steps b { color: var(--fg); }
+#cpCodeBox { display: grid; gap: 10px; }
+.cp-err { color: #ff6b6b; font-size: 14px; margin: 0; }
 </style>
 </head>
 <body>
+
+<div class="wrap" id="chanPage" hidden>
+  <header class="top">
+    <a class="brand" href="./">
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></div>
+      <h1>JDB<span>Bot</span></h1>
+    </a>
+    <span class="pill" id="cpPill">Loading</span>
+  </header>
+  <section class="cp-box">
+    <h2 id="cpTitle">Find a channel</h2>
+    <p class="hint" id="cpLead">Type a Kick channel to see its JDBBot commands, or to add JDBBot to it.</p>
+    <form class="row" id="cpFind">
+      <input type="text" id="cpChan" placeholder="Kick channel name" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1 1 200px">
+      <button class="btn primary" type="submit">Open</button>
+    </form>
+  </section>
+  <section class="cp-box" id="cpAdd" hidden>
+    <h3>Add JDBBot to this channel</h3>
+    <p class="hint">Only the streamer can do this, and nobody has to sign in. Kick shows the bot a code you put on your channel, which proves it's yours.</p>
+    <div class="row"><button class="btn primary" id="cpGetCode" type="button">Get my code</button></div>
+    <div id="cpCodeBox" hidden>
+      <div class="cp-code" id="cpCode"></div>
+      <ol class="cp-steps">
+        <li>On Kick, put the code anywhere in your <b>stream title</b> or your <b>bio</b> (Settings, Profile) and save.</li>
+        <li>Come back here and press <b>Check</b>.</li>
+        <li>Once it says JDBBot is on, take the code back out. In your chat, type <b>/mod JDBBot</b> so slow mode doesn't block it.</li>
+      </ol>
+      <div class="row"><button class="btn primary" id="cpCheck" type="button">Check</button></div>
+    </div>
+    <p class="cp-err" id="cpErr" hidden></p>
+  </section>
+  <section class="cp-box" id="cpCmds" hidden>
+    <h3>Commands</h3>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>What it does</th><th>Who</th></tr></thead><tbody id="cpBuiltins"></tbody></table></div>
+  </section>
+  <section class="cp-box" id="cpCustomBox" hidden>
+    <h3>This channel's commands</h3>
+    <p class="hint" id="cpCustomHint">Mods add these in chat with <code>!jdb add name text</code>. Everyone can use them.</p>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Replies with</th><th>Added by</th></tr></thead><tbody id="cpCustom"></tbody></table></div>
+  </section>
+  <section class="cp-box" id="cpClipsBox" hidden>
+    <h3>Clip markers</h3>
+    <p class="hint">From <code>!clip</code>. Times are from the start of each stream, so you can find them in the VOD.</p>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Stream</th><th>Time</th><th>By</th></tr></thead><tbody id="cpClips"></tbody></table></div>
+  </section>
+</div>
 
 <div class="wrap">
   <header class="top">
@@ -421,6 +491,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
           <p class="hint" id="botMsg"></p>
           <div class="bot-opts" id="botOpts"></div>
           <p class="hint">JDBBot posts in the channel typed in Kick chat above. Mod it in your channel (<code>/mod JDBBot</code>) so slow mode doesn't block it.</p>
+          <p class="hint"><a id="botPageLink" style="color:var(--accent)" href="?c=">Your bot page</a> lists your commands and clip markers. Other streamers can add JDBBot to their channel from there too.</p>
         </div>
       </details>
       <details class="panel" id="chatPanel" open>
@@ -2288,6 +2359,73 @@ if (!OVERLAY) fetchWithTimeout(BOT_URL + "/health", 10000).then(r => r.json()).t
   $("botStatus").textContent = j.signedIn ? `${j.bot || "JDBBot"} is online.` : "The bot is offline right now.";
 }).catch(() => { $("botStatus").textContent = "Couldn't reach the bot right now."; });
 renderBot();
+const botPageRefresh = () => { const c = chanSlug($("channel").value); $("botPageLink").href = "?c=" + encodeURIComponent(c); };
+$("channel").addEventListener("input", botPageRefresh); botPageRefresh();
+
+// ---------- channel bot pages (?c=channel) ----------
+// One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
+// own commands added with !jdb add, its clip markers, and a way for the streamer to add the bot.
+const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : null;
+if (CHANPAGE !== null) {
+  document.body.classList.add("cp"); $("chanPage").hidden = false;
+  const pill = (cls, t) => { $("cpPill").className = "pill " + cls; $("cpPill").textContent = t; };
+  const cell = (t, cls) => { const td = document.createElement("td"); if (cls) td.className = cls; if (t instanceof Node) td.append(t); else td.textContent = t; return td; };
+  const row = (...cells) => { const tr = document.createElement("tr"); tr.append(...cells); return tr; };
+  const whoTag = w => { const s = document.createElement("span"); s.className = "who " + w.toLowerCase(); s.textContent = w; return s; };
+  const err = t => { $("cpErr").textContent = t || ""; $("cpErr").hidden = !t; };
+  const call = async (path, body) => {
+    const r = await fetchWithTimeout(BOT_URL + path, 20000, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
+    return r.json();
+  };
+  $("cpFind").addEventListener("submit", e => {
+    e.preventDefault(); const c = chanSlug($("cpChan").value).replace(/_/g, "-");
+    if (c) location.search = "?c=" + encodeURIComponent(c);
+  });
+  const hm = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+  async function loadChanPage() {
+    if (!CHANPAGE) { pill("", "JDBBot"); return; }
+    document.title = CHANPAGE + " · JDBBot";
+    $("cpChan").value = CHANPAGE; $("cpTitle").innerHTML = `JDBBot in <span>${escapeHtml(CHANPAGE)}</span>`;
+    let d; try { d = await call("/channel?ch=" + encodeURIComponent(CHANPAGE)); } catch (e) { pill("err", "Offline"); $("cpLead").textContent = "Couldn't reach JDBBot right now. Try again in a minute."; return; }
+    if (!d.ok) { pill("err", "Error"); $("cpLead").textContent = d.error || "Something went wrong."; return; }
+    $("cpFind").hidden = true;
+    $("cpCmds").hidden = false;
+    $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(c.does), cell(whoTag(c.who)))));
+    if (!d.enabled) {
+      pill("", "Not added");
+      $("cpLead").textContent = `JDBBot isn't in ${CHANPAGE}'s chat yet. These are the commands it brings.`;
+      $("cpAdd").hidden = false; return;
+    }
+    pill("live", "On");
+    $("cpLead").textContent = `JDBBot answers these in ${CHANPAGE}'s chat. Type !commands in chat to get this page.`;
+    $("cpCustomBox").hidden = false;
+    $("cpCustom").replaceChildren(...(d.custom.length ? d.custom.map(c => row(cell(c.name, "cmd"), cell(c.text), cell(c.by || ""))) : [row(Object.assign(cell("None yet. A mod can type !jdb add discord Join our Discord! in chat to make one."), { colSpan: 3 }))]));
+    if (d.clips && d.clips.length) {
+      $("cpClipsBox").hidden = false;
+      $("cpClips").replaceChildren(...d.clips.map(c => row(cell(new Date(c.stream).toLocaleDateString()), cell(`${hm(c.from)} – ${hm(c.to)}`), cell(c.by))));
+    }
+  }
+  $("cpGetCode").addEventListener("click", async () => {
+    err(""); $("cpGetCode").disabled = true;
+    try {
+      const d = await call("/enable", { ch: CHANPAGE });
+      if (d.enabled) { location.reload(); return; }
+      if (!d.ok) { err(d.error); return; }
+      $("cpCode").textContent = d.code; $("cpCodeBox").hidden = false; $("cpGetCode").hidden = true;
+    } catch (e) { err("Couldn't reach JDBBot. Check your connection."); }
+    finally { $("cpGetCode").disabled = false; }
+  });
+  $("cpCheck").addEventListener("click", async () => {
+    err(""); $("cpCheck").disabled = true; $("cpCheck").textContent = "Checking…";
+    try {
+      const d = await call("/enable", { ch: CHANPAGE, step: "check" });
+      if (d.enabled) { location.reload(); return; }
+      err(d.error || "That didn't work. Try again.");
+    } catch (e) { err("Couldn't reach JDBBot. Check your connection."); }
+    finally { $("cpCheck").disabled = false; $("cpCheck").textContent = "Check"; }
+  });
+  loadChanPage();
+}
 
 // ---------- raid thank-you ----------
 // Kick doesn't tell bots about raids, but its public chat feed shows a raid notice. The site (while connected)
