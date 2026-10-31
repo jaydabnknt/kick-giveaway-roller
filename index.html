@@ -2636,7 +2636,7 @@ if (params.has("admin")) {
       r.approved ? [btn("Clear", () => api("deny", { ch: r.ch }).then(render))] : [btn("Approve", () => api("approve", { ch: r.ch }).then(render), "primary"), btn("Deny", () => api("deny", { ch: r.ch }).then(render), "danger")])) : [empty("No requests.")]));
     $("adKeys").replaceChildren(...(d.keys.length ? d.keys.map(k => item(k.key, [k.usedBy ? "Used by " + k.usedBy : k.ch ? "For " + k.ch + ", not used yet" : "Not used yet", k.note, ago(k.at)].filter(Boolean).join(" · "),
       [btn("Revoke", () => confirm(k.usedBy ? `Revoke this key? JDBBot will also leave ${k.usedBy}.` : "Revoke this key?") ? api("revoke", { key: k.key }).then(render) : null, "danger")], true)) : [empty("No keys yet.")]));
-    $("adChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : "",
+    $("adChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : c.before ? "Joined before keys" : "",
       c.slug === d.home ? [] : [btn("Remove", () => confirm(`Remove JDBBot from ${c.slug}?`) ? api("remove", { ch: c.slug }).then(render) : null, "danger")])));
   }
   const adMsg = (t, bad) => { $("adMsg").textContent = t || ""; $("adMsg").hidden = !t; $("adMsg").style.color = bad ? "#ff6b6b" : ""; };
