@@ -6,9 +6,8 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Which raid events does Kick accept
+      - name: Can the bot find the chatroom, and does Kick's direct lookup work
         run: |
-          sleep 70
-          for n in channel.raided channel.raid channel.hosted channel.host livestream.hosted channel.followed; do
-            echo "== $n"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/try-event?name=$n"; echo
-          done
+          sleep 40
+          echo "== worker /room"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/room?ch=jaydab4ngnt"; echo
+          echo "== direct"; curl -sS -m 30 -A "Mozilla/5.0" "https://kick.com/api/v2/channels/jaydab4ngnt" | grep -o '"chatroom":{[^}]*' | head -c 300; echo
