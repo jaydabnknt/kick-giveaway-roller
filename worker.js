@@ -8,7 +8,7 @@
 
 const SCOPES = "user:read channel:read chat:write events:subscribe";
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...CORS } });
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-bot-key", "access-control-allow-methods": "GET, POST, OPTIONS" };
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-bot-key, authorization", "access-control-allow-methods": "GET, POST, OPTIONS" };
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const randomString = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
 const page = (title, body) => new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font:16px system-ui;background:#0b0e0f;color:#e8f0ea;padding:24px;max-width:520px;margin:auto"><h2>${title}</h2><p>${body}</p>`, { headers: { "content-type": "text/html;charset=utf-8" } });
@@ -175,6 +175,28 @@ async function unsubscribe(env, slug) {
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(() => ({}));
   for (const x of have.data || []) await kickApp(env, "/events/subscriptions?id=" + encodeURIComponent(x.id), { method: "DELETE" }).catch(() => {});
 }
+// ---------- access keys (Jay's dashboard) ----------
+// keys: { "JDB-XXXX-XXXX": { note, at, ch?, usedBy?, usedAt? } }. A key with ch only works for that channel
+// (that's what approving a request makes). requests: { slug: { note, at } }.
+const getKeys = async env => (await env.STORE.get("keys", "json")) || {};
+const getRequests = async env => (await env.STORE.get("requests", "json")) || {};
+async function findKey(env, key, slug) {   // a usable key for this channel: the one typed, or one made for it
+  const keys = await getKeys(env);
+  if (key && keys[key] && !keys[key].usedBy && (!keys[key].ch || keys[key].ch === slug)) return key;
+  return Object.keys(keys).find(k => keys[k].ch === slug && !keys[k].usedBy) || null;
+}
+const newKey = () => "JDB-" + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("").replace(/(.{4})(.{4})/, "$1-$2");
+async function removeChannel(env, slug) {
+  if (slug === env.BOT_CHANNEL) return;
+  const id = await broadcasterId(env, slug).catch(() => 0);
+  await env.STORE.put("channels", JSON.stringify((await channelList(env)).filter(c => c.slug !== slug)));
+  if (id) { await env.STORE.delete("stok:" + id); await unsubscribe(env, slug).catch(() => {}); }
+}
+async function adminOk(req, env) {
+  const t = (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
+  return t.length > 20 && !!(await env.STORE.get("sess:" + t));
+}
+
 const BUILTINS = [
   ["!commands", "Shows this list", "Everyone"],
   ["!uptime", "Shows stream uptime", "Everyone"],
@@ -402,29 +424,53 @@ export default {
 
     if (url.pathname === "/" ) return page("JDBBot", `This is the chat bot for Giveaway Tools. Add it to your channel from your bot page on <a style="color:#53fc18" href="${env.SITE_URL}?c=">the site</a>.`);
 
-    if (url.pathname === "/allow") {   // a streamer lets the badge bot post in their chat (once)
-      const state = "a" + randomString(24), verifier = randomString(32);
+    // /allow: a streamer lets the badge bot post in their chat. New channels need an access key from Jay's
+    // dashboard (or an approved request); channels already using the bot can re-allow without one.
+    // /admin/login: Jay signs in to the dashboard with Kick.
+    if (url.pathname === "/allow" || url.pathname === "/admin/login") {
+      const admin = url.pathname === "/admin/login";
+      const ch = normSlug(url.searchParams.get("ch")), key = clean(url.searchParams.get("key"), 40).toUpperCase();
+      if (!admin) {
+        const back = err => Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(ch) + "&err=" + err, 302);
+        if (!ch) return Response.redirect(env.SITE_URL + "?add", 302);
+        if (!(await isEnabled(env, ch)) && !(await findKey(env, key, ch))) return back(key ? "badkey" : "nokey");
+      }
+      const state = (admin ? "d" : "a") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-      await env.STORE.put("oauth:" + state, verifier, { expirationTtl: 600 });
+      await env.STORE.put("oauth:" + state, JSON.stringify({ v: verifier, key, ch }), { expirationTtl: 600 });
       const u = new URL("https://id.kick.com/oauth/authorize");
-      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
+      for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: admin ? "user:read" : SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
       return Response.redirect(u.toString(), 302);
     }
 
     if (url.pathname === "/callback") {
       const code = url.searchParams.get("code"), state = url.searchParams.get("state") || "";
       if (url.searchParams.get("error")) return page("Sign-in cancelled", "Kick said: " + url.searchParams.get("error"));
-      const verifier = await env.STORE.get("oauth:" + state);
-      if (!code || !verifier) return page("Link expired", "Open your bot page and tap Allow again.");
+      const saved = await env.STORE.get("oauth:" + state);
+      if (!code || !saved) return page("Link expired", "Open your bot page and tap Allow again.");
+      const st = saved.startsWith("{") ? JSON.parse(saved) : { v: saved }, verifier = st.v;
       await env.STORE.delete("oauth:" + state);
       const tok = await tokenRequest(env, { grant_type: "authorization_code", redirect_uri: redirectUri(req), code, code_verifier: verifier });
       const me = await fetch("https://api.kick.com/public/v1/users", { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
       const name = (me.data && me.data[0] && me.data[0].name) || "";
+      const uid = me.data && me.data[0] && me.data[0].user_id;
+      if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again.");
+      if (state.startsWith("d")) {   // dashboard sign-in: only the home channel's owner gets in
+        if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of JDBBot.");
+        const sess = randomString(32);
+        await env.STORE.put("sess:" + sess, String(uid), { expirationTtl: 30 * 86400 });
+        return Response.redirect(env.SITE_URL + "?admin#s=" + sess, 302);
+      }
       {
-        const uid = me.data && me.data[0] && me.data[0].user_id;
-        if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again from your bot page.");
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
+        if (!(await isEnabled(env, slug))) {   // new channel: use up the key now that Kick says whose channel it is
+          const k = await findKey(env, st.key, slug);
+          if (!k) return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&err=" + (st.key ? "badkey" : "nokey"), 302);
+          const keys = await getKeys(env); keys[k].usedBy = slug; keys[k].usedAt = Date.now();
+          await env.STORE.put("keys", JSON.stringify(keys));
+          const reqs = await getRequests(env); if (reqs[slug]) { delete reqs[slug]; await env.STORE.put("requests", JSON.stringify(reqs)); }
+        }
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
         const list = await channelList(env);
@@ -469,8 +515,51 @@ export default {
       let clips = [];
       if (enabled) clips = ((await env.STORE.get("clips:" + await broadcasterId(env, slug).catch(() => 0), "json")) || []).slice(0, 50);
       const badge = enabled && !!(await env.STORE.get("stok:" + await broadcasterId(env, slug).catch(() => 0)));
-      return json({ ok: true, slug, enabled, badge, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
+      const requested = !enabled && !!(await getRequests(env))[slug], approved = !enabled && !!(await findKey(env, "", slug));
+      return json({ ok: true, slug, enabled, badge, requested, approved, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
         custom: Object.entries(cmds).sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => ({ name: "!" + name, text: c.text, by: c.by })), clips });
+    }
+    if (url.pathname === "/request" && req.method === "POST") {   // a streamer asks Jay for access
+      const b = await req.json().catch(() => ({}));
+      const slug = normSlug(b.ch);
+      if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type your Kick channel name." }, 400);
+      if (await isEnabled(env, slug)) return json({ ok: true, enabled: true });
+      try { await broadcasterId(env, slug); } catch (e) { return json({ ok: false, error: "Kick has no channel called " + slug + "." }, 404); }
+      const reqs = await getRequests(env);
+      if (!reqs[slug]) {
+        if (Object.keys(reqs).length >= 100) return json({ ok: false, error: "Too many requests right now. Try again later." }, 429);
+        reqs[slug] = { note: clean(b.note, 200), at: Date.now() };
+        await env.STORE.put("requests", JSON.stringify(reqs));
+      }
+      return json({ ok: true, requested: true, approved: !!(await findKey(env, "", slug)) });
+    }
+    if (url.pathname.startsWith("/admin/")) {
+      if (!(await adminOk(req, env))) return json({ ok: false, error: "signin" }, 401);
+      const b = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+      const keys = await getKeys(env), reqs = await getRequests(env);
+      const saveKeys = () => env.STORE.put("keys", JSON.stringify(keys)), saveReqs = () => env.STORE.put("requests", JSON.stringify(reqs));
+      const op = url.pathname.slice(7);
+      if (op === "key") { const k = newKey(); keys[k] = { note: clean(b.note, 100), at: Date.now() }; await saveKeys(); }
+      else if (op === "revoke") {
+        const k = keys[b.key]; if (!k) return json({ ok: false, error: "no such key" }, 404);
+        if (k.usedBy) await removeChannel(env, k.usedBy);
+        delete keys[b.key]; await saveKeys();
+      }
+      else if (op === "approve") {
+        const slug = normSlug(b.ch); if (!reqs[slug]) return json({ ok: false, error: "no such request" }, 404);
+        keys[newKey()] = { note: "Request: " + slug, at: Date.now(), ch: slug }; reqs[slug].approved = Date.now();
+        await saveKeys(); await saveReqs();
+      }
+      else if (op === "deny") { delete reqs[normSlug(b.ch)]; await saveReqs(); }
+      else if (op === "remove") {
+        const slug = normSlug(b.ch); await removeChannel(env, slug);
+        for (const k in keys) if (keys[k].usedBy === slug) delete keys[k];
+        await saveKeys();
+      }
+      else if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
+      else if (op !== "state") return json({ ok: false, error: "not found" }, 404);
+      return json({ ok: true, home: env.BOT_CHANNEL, channels: await channelList(env), keys: Object.entries(keys).map(([key, k]) => ({ key, ...k })).sort((a, b) => b.at - a.at),
+        requests: Object.entries(reqs).map(([ch, r]) => ({ ch, ...r })).sort((a, b) => b.at - a.at) });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
       if (req.method === "POST") {
