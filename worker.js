@@ -179,14 +179,28 @@ async function unsubscribe(env, slug) {
 // Each key is its own KV entry "key:JDB-XXXX-XXXX" with { note, at, ch?, usedBy?, usedAt? } as metadata, and each
 // request is "req:<slug>" with { note, at, approved? }, so two changes close together can't overwrite each
 // other. A key with ch only works for that channel (that's what approving a request makes).
+// KV listings can show an old copy for up to a minute, so a key revoked a moment ago would come back on the
+// next change. Every change is also written to one small "recent" record (read directly, so it's current),
+// which is laid over the listing for 10 minutes.
 async function listMeta(env, prefix) {
   const out = {}; let cursor;
   do { const r = await env.STORE.list({ prefix, cursor }); for (const k of r.keys) out[k.name.slice(prefix.length)] = k.metadata || {}; cursor = r.list_complete ? null : r.cursor; } while (cursor);
+  if (prefix === "key:" || prefix === "req:") {
+    const recent = (await env.STORE.get("recent", "json")) || {};
+    for (const n in recent) if (n.startsWith(prefix)) { const k = n.slice(prefix.length); if (recent[n].rec) out[k] = recent[n].rec; else delete out[k]; }
+  }
   return out;
 }
+async function saveMeta(env, name, rec) {   // rec null deletes
+  if (rec) await env.STORE.put(name, "1", { metadata: rec }); else await env.STORE.delete(name);
+  const recent = (await env.STORE.get("recent", "json")) || {}, now = Date.now();
+  for (const n in recent) if (now - recent[n].t > 600000) delete recent[n];
+  recent[name] = { t: now, rec: rec || null };
+  await env.STORE.put("recent", JSON.stringify(recent));
+}
 const getKeys = env => listMeta(env, "key:"), getRequests = env => listMeta(env, "req:");
-const putKey = (env, k, rec) => env.STORE.put("key:" + k, "1", { metadata: rec });
-const putReq = (env, slug, rec) => env.STORE.put("req:" + slug, "1", { metadata: rec });
+const putKey = (env, k, rec) => saveMeta(env, "key:" + k, rec);
+const putReq = (env, slug, rec) => saveMeta(env, "req:" + slug, rec);
 async function findKey(env, key, slug) {   // a usable key for this channel: the one typed, or one made for it
   const keys = await getKeys(env);
   if (key && keys[key] && !keys[key].usedBy && (!keys[key].ch || keys[key].ch === slug)) return key;
@@ -499,7 +513,7 @@ export default {
           if (!k) return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&err=" + (st.key ? "badkey" : "nokey"), 302);
           const rec = (await getKeys(env))[k] || {}; rec.usedBy = slug; rec.usedAt = Date.now();
           await putKey(env, k, rec);
-          await env.STORE.delete("req:" + slug);
+          await putReq(env, slug, null);
         }
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
@@ -577,17 +591,17 @@ export default {
           const k = clean(b.key, 20), rec = keys[k] || (await env.STORE.getWithMetadata("key:" + k)).metadata;
           if (!rec) return json({ ok: false, error: "no such key" }, 404);
           if (rec.usedBy) await removeChannel(env, rec.usedBy);
-          await env.STORE.delete("key:" + k); delete keys[k];
+          await putKey(env, k, null); delete keys[k];
         }
         else if (op === "approve") {
           const slug = normSlug(b.ch), r = reqs[slug]; if (!r) return json({ ok: false, error: "no such request" }, 404);
           const k = newKey(); keys[k] = { note: "Request: " + slug, at: Date.now(), ch: slug }; await putKey(env, k, keys[k]);
           r.approved = Date.now(); await putReq(env, slug, r);
         }
-        else if (op === "deny") { const slug = normSlug(b.ch); await env.STORE.delete("req:" + slug); delete reqs[slug]; }
+        else if (op === "deny") { const slug = normSlug(b.ch); await putReq(env, slug, null); delete reqs[slug]; }
         else if (op === "remove") {
           const slug = normSlug(b.ch); await removeChannel(env, slug);
-          for (const k in keys) if (keys[k].usedBy === slug) { await env.STORE.delete("key:" + k); delete keys[k]; }
+          for (const k in keys) if (keys[k].usedBy === slug) { await putKey(env, k, null); delete keys[k]; }
         }
       } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 500); }
       if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
