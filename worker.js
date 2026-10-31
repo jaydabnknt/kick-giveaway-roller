@@ -112,8 +112,8 @@ async function kickApp(env, path, init = {}) {
   if (!r.ok) throw new Error(`Kick API ${path} -> ${r.status} ${JSON.stringify(data).slice(0, 300)}`);
   return data;
 }
-async function subscribeChat(env) {
-  const id = await broadcasterId(env, env.BOT_CHANNEL);
+async function subscribeChat(env, slug = env.BOT_CHANNEL) {
+  const id = await broadcasterId(env, slug);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
   const want = ["chat.message.sent", ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
   const got = new Set((have.data || []).map(x => x.event || x.name));
@@ -148,26 +148,74 @@ async function postAsBot(env, broadcasterUserId, text) {
   if (!(await env.STORE.get("appbot-off"))) {
     try {
       await kickApp(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "bot" }) });
-      await env.STORE.put("postmode", "app bot");
+      await setOnce(env, "postmode", "app bot");
       return;
     } catch (e) {
       await env.STORE.put("appbot-off", String(e.message || e).slice(0, 300), { expirationTtl: 3600 });
     }
   }
   await kickApi(env, "/chat", { method: "POST", body: JSON.stringify({ broadcaster_user_id: broadcasterUserId, content, type: "user" }) });
-  await env.STORE.put("postmode", "JDBBot account");
+  await setOnce(env, "postmode", "JDBBot account");
 }
+async function setOnce(env, k, v) { if ((await env.STORE.get(k)) !== v) await env.STORE.put(k, v); }
+
+// Short-lived flags (repeat deliveries, cooldowns) are kept in memory: KV's free plan only allows 1,000
+// writes a day, and a busy chat would use that up. A flag can be lost when Cloudflare restarts the worker;
+// that only means a command might answer twice.
+const flags = new Map();
+function flag(k, secs) {
+  const now = Date.now();
+  if (flags.size > 5000) for (const [x, t] of flags) if (t < now) flags.delete(x);
+  if ((flags.get(k) || 0) > now) return false;
+  flags.set(k, now + secs * 1000); return true;
+}
+
+// ---------- channels that use JDBBot ----------
+// Any streamer can add the bot from their page on the site (?c=name): they get a short code, put it in their
+// stream title or channel bio for a moment, and the bot checks it there. Nobody signs in to anything.
+const normSlug = v => String(v || "").trim().toLowerCase().replace(/^https?:\/\/(www\.)?kick\.com\//, "").replace(/[/?#].*$/, "").replace(/^@/, "").replace(/_/g, "-");
+async function channelList(env) {
+  const list = (await env.STORE.get("channels", "json")) || [];
+  if (!list.some(c => c.slug === env.BOT_CHANNEL)) list.unshift({ slug: env.BOT_CHANNEL, since: 0 });
+  return list;
+}
+const isEnabled = async (env, slug) => (await channelList(env)).some(c => c.slug === normSlug(slug));
+async function publicText(env, slug) {   // everything public that the streamer can edit: title, bio
+  const ch = await channelInfo(env, slug).catch(() => null);
+  const v2 = await fetch("https://kick.com/api/v2/channels/" + encodeURIComponent(slug), { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } }).then(r => r.ok ? r.text() : "").catch(() => "");
+  return [ch && ch.channel_description, ch && ch.stream_title, v2].join(" ");
+}
+async function unsubscribe(env, slug) {
+  const id = await broadcasterId(env, slug);
+  const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(() => ({}));
+  for (const x of have.data || []) await kickApp(env, "/events/subscriptions?id=" + encodeURIComponent(x.id), { method: "DELETE" }).catch(() => {});
+}
+const BUILTINS = [
+  ["!commands", "Links to this page", "Everyone"],
+  ["!clip [seconds]", "Marks a clip of the last 30 seconds (5 to 120) so the streamer can cut it from the VOD", "Everyone"],
+  ["!uptime", "Shows how long the stream has been live", "Everyone"],
+  ["!so name", "Shouts out a streamer with their channel link", "Mods"],
+  ["!jdb add name text", "Adds a new command, !name, that replies with the text. {user} becomes whoever used it", "Mods"],
+  ["!jdb edit name text", "Changes what a command replies", "Mods"],
+  ["!jdb del name", "Deletes a command", "Mods"],
+  ["!jdb leave", "Removes JDBBot from the channel", "Streamer"]
+];
+const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb"]);
 async function onChat(env, ev) {
   const text = String(ev.content || "").trim(), who = (ev.sender && ev.sender.username) || "";
-  const chan = ev.broadcaster || {}, bid = chan.user_id;
+  const chan = ev.broadcaster || {}, bid = chan.user_id, slug = normSlug(chan.channel_slug || chan.username);
   if (!text.startsWith("!") || !bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
   const [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
-  const dk = "msg:" + (ev.message_id || "");           // the same chat message can arrive twice
-  if (ev.message_id) { if (await env.STORE.get(dk)) return; await env.STORE.put(dk, "1", { expirationTtl: 600 }); }
+  if (ev.message_id && !flag("msg:" + ev.message_id, 600)) return;   // the same chat message can arrive twice
+  if (!(await isEnabled(env, slug))) return;
   const cdKey = "cd:" + bid + ":" + cmd;                      // a few seconds' cooldown per command
-  if (await env.STORE.get(cdKey)) return;
+  const cooldown = secs => flag(cdKey, secs);
+  if (flags.get(cdKey) > Date.now()) return;
+  const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
+  const isStreamer = normSlug(who) === slug || badges.includes("broadcaster");
+  const isMod = isStreamer || badges.some(b => /moderator|^mod$/.test(b));
   if (cmd === "!clip") {
-    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
+    cooldown(60);
     const secs = Math.min(120, Math.max(5, parseInt(arg, 10) || 30));
     const start = await liveStart(env, bid);
     if (!start) return postAsBot(env, bid, `@${who} the stream isn't live, so there's nothing to clip.`);
@@ -178,23 +226,54 @@ async function onChat(env, ev) {
     return postAsBot(env, bid, `📌 @${who} marked a clip: ${hms(end - secs)} to ${hms(end)} of this stream (last ${secs}s). Saved for the streamer to cut from the VOD.`);
   }
   if (cmd === "!uptime") {
-    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
+    cooldown(60);
     const start = await liveStart(env, bid);
     return postAsBot(env, bid, start ? `⏱️ Live for ${hms((Date.now() - start) / 1000)}` : "The stream is offline.");
   }
   if (cmd === "!so") {
-    const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
-    const isMod = badges.some(b => /broadcaster|moderator|mod/.test(b)) || who.toLowerCase() === String(env.BOT_CHANNEL).toLowerCase();
     if (!isMod) return;
     const target = arg.replace(/^@/, "").replace(/^https?:\/\/(www\.)?kick\.com\//i, "").replace(/[^A-Za-z0-9_-]/g, "");
     if (!target) return postAsBot(env, bid, "Usage: !so name");
-    await env.STORE.put(cdKey, "1", { expirationTtl: 10 });
+    cooldown(10);
     return postAsBot(env, bid, await shoutout(env, target));
   }
   if (cmd === "!commands") {
-    await env.STORE.put(cdKey, "1", { expirationTtl: 60 });
-    return postAsBot(env, bid, "Commands: !clip [seconds] marks a clip of the last 30s (or up to 120s) · !uptime shows how long the stream has been live · !so name shouts out a streamer (mods)");
+    cooldown(30);
+    return postAsBot(env, bid, `📋 Commands for this channel, and who can use them: ${env.SITE_URL}?c=${slug}`);
   }
+  const key = "cmds:" + slug;
+  if (cmd === "!jdb") {
+    if (!isMod) return;
+    const m = text.match(/^!jdb\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
+    const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
+    const cmds = (await env.STORE.get(key, "json")) || {};
+    const usage = "Usage: !jdb add name text · !jdb edit name text · !jdb del name";
+    if (sub === "leave") {
+      if (!isStreamer) return;
+      if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
+      await postAsBot(env, bid, "👋 JDBBot is leaving this channel. Add it back any time from " + env.SITE_URL + "?c=" + slug);
+      await env.STORE.put("channels", JSON.stringify((await channelList(env)).filter(c => c.slug !== slug)));
+      return unsubscribe(env, slug);
+    }
+    if (sub !== "add" && sub !== "edit" && !/^(del|delete|remove)$/.test(sub)) return postAsBot(env, bid, usage);
+    if (!/^[a-z0-9_]{1,20}$/.test(name)) return postAsBot(env, bid, usage);
+    if (RESERVED.has(name)) return postAsBot(env, bid, `!${name} is built in, so pick another name.`);
+    if (sub === "add" || sub === "edit") {
+      if (!reply) return postAsBot(env, bid, usage);
+      if (sub === "add" && cmds[name]) return postAsBot(env, bid, `!${name} already exists. Use !jdb edit ${name} text to change it.`);
+      if (sub === "edit" && !cmds[name]) return postAsBot(env, bid, `There's no !${name} yet. Use !jdb add ${name} text.`);
+      if (sub === "add" && Object.keys(cmds).length >= 100) return postAsBot(env, bid, "This channel already has 100 commands. Delete one first.");
+      cmds[name] = { text: reply, by: who, at: Date.now() };
+      await env.STORE.put(key, JSON.stringify(cmds));
+      return postAsBot(env, bid, sub === "add" ? `✅ Added !${name}` : `✏️ Updated !${name}`);
+    }
+    if (!cmds[name]) return postAsBot(env, bid, `There's no !${name}.`);
+    delete cmds[name];
+    await env.STORE.put(key, JSON.stringify(cmds));
+    return postAsBot(env, bid, `🗑️ Deleted !${name}`);
+  }
+  const custom = ((await env.STORE.get(key, "json")) || {})[cmd.slice(1)];
+  if (custom) { cooldown(5); return postAsBot(env, bid, custom.text.replace(/\{user\}/gi, "@" + who)); }
 }
 async function channelInfo(env, slug) {
   slug = String(slug).toLowerCase().replace(/_/g, "-");
@@ -216,8 +295,8 @@ async function onRaid(env, ev) {
   const slug = String(raider.channel_slug || name).toLowerCase().replace(/_/g, "-");
   await postAsBot(env, bid, `🚨 Thank you ${name} for the raid${viewers ? " with " + viewers + " viewers" : ""}! Everyone go check them out and drop a follow: https://kick.com/${slug}`);
 }
-async function clipsPage(env) {
-  const id = await broadcasterId(env, env.BOT_CHANNEL);
+async function clipsPage(env, slug) {
+  const id = await broadcasterId(env, slug || env.BOT_CHANNEL);
   const list = (await env.STORE.get("clips:" + id, "json")) || [];
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const rows = list.map(c => `<tr><td>${new Date(c.stream).toISOString().slice(0, 10)}</td><td><b>${hms(c.from)} – ${hms(c.to)}</b></td><td>${esc(c.by)}</td><td>${c.secs}s</td></tr>`).join("");
@@ -225,7 +304,9 @@ async function clipsPage(env) {
 }
 
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(subscribeChat(env).catch(() => {})); },   // keep the chat subscription alive
+  async scheduled(event, env, ctx) {   // keep every channel's chat subscription alive
+    ctx.waitUntil((async () => { for (const c of await channelList(env)) await subscribeChat(env, c.slug).catch(() => {}); })());
+  },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -234,8 +315,7 @@ export default {
       const body = await req.text();
       if (!(await verifyKick(req, body).catch(() => false))) return new Response("bad signature", { status: 401 });
       const mid = req.headers.get("kick-event-message-id");
-      if (await env.STORE.get("seen:" + mid)) return new Response("dup");
-      await env.STORE.put("seen:" + mid, "1", { expirationTtl: 600 });
+      if (!flag("seen:" + mid, 600)) return new Response("dup");
       const type = req.headers.get("kick-event-type") || "";
       const fail = e => env.STORE.put("lasterror", String(e.message || e));
       if (type === "chat.message.sent") ctx.waitUntil(onChat(env, JSON.parse(body)).catch(fail));
@@ -245,9 +325,11 @@ export default {
     }
     if (url.pathname === "/setup") {       // harmless: (re)subscribes BOT_CHANNEL's chat to /webhook
       await env.STORE.delete("appbot-off");   // and lets the app bot be tried again right away
-      try { return json(await subscribeChat(env)); } catch (e) { return json({ ok: false, error: String(e.message || e) }, 502); }
+      const out = {};
+      for (const c of await channelList(env)) out[c.slug] = await subscribeChat(env, c.slug).catch(e => ({ ok: false, error: String(e.message || e) }));
+      return json(out);
     }
-    if (url.pathname === "/clips") return clipsPage(env);
+    if (url.pathname === "/clips") return clipsPage(env, normSlug(url.searchParams.get("ch")));
     if (url.pathname === "/try-event") {   // which event names does Kick accept? (one at a time, BOT_CHANNEL only)
       const name = clean(url.searchParams.get("name"), 60);
       try {
@@ -304,6 +386,7 @@ export default {
       const body = await req.json().catch(() => ({}));
       const tpl = TEMPLATES[body.event];
       const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
+      if (!keyed && !(await isEnabled(env, body.channel))) return json({ ok: false, error: "JDBBot isn't added to this channel yet" }, 403);
       if (!keyed && !(await rateOk(env, clean(body.channel).toLowerCase()))) return json({ ok: false, error: "slow down" }, 429);
       if (!text) return json({ ok: false, error: "empty" }, 400);
       if (body.event === "raid") {           // the site and every OBS overlay may all see the same raid; thank it once
@@ -318,6 +401,38 @@ export default {
       } catch (e) {
         return json({ ok: false, error: String(e.message || e) }, 502);
       }
+    }
+    if (url.pathname === "/channel") {   // public info for a channel's page on the site
+      const slug = normSlug(url.searchParams.get("ch"));
+      if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "bad channel" }, 400);
+      const enabled = await isEnabled(env, slug);
+      const cmds = (await env.STORE.get("cmds:" + slug, "json")) || {};
+      let clips = [];
+      if (enabled) clips = ((await env.STORE.get("clips:" + await broadcasterId(env, slug).catch(() => 0), "json")) || []).slice(0, 50);
+      return json({ ok: true, slug, enabled, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
+        custom: Object.entries(cmds).sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => ({ name: "!" + name, text: c.text, by: c.by })), clips });
+    }
+    if (url.pathname === "/enable" && req.method === "POST") {   // add JDBBot to a channel: get a code, then check it
+      const b = await req.json().catch(() => ({}));
+      const slug = normSlug(b.ch);
+      if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type a Kick channel name." }, 400);
+      if (await isEnabled(env, slug)) return json({ ok: true, enabled: true });
+      let id; try { id = await broadcasterId(env, slug); } catch (e) { return json({ ok: false, error: "Kick has no channel called " + slug + "." }, 404); }
+      let code = await env.STORE.get("pending:" + slug);
+      if (b.step !== "check") {
+        if (!code) { code = "JDB-" + randomString(6).replace(/[^A-Za-z0-9]/g, "X").slice(0, 6).toUpperCase(); await env.STORE.put("pending:" + slug, code, { expirationTtl: 6 * 3600 }); }
+        return json({ ok: true, code });
+      }
+      if (!code) return json({ ok: false, error: "That code expired. Get a new one." }, 410);
+      if (!(await publicText(env, slug)).toUpperCase().includes(code)) return json({ ok: false, error: `Kick doesn't show ${code} in your stream title or bio yet. Save it there, wait a few seconds, and check again.` }, 409);
+      const sub = await subscribeChat(env, slug).catch(e => ({ ok: false, error: String(e.message || e) }));
+      if (!sub.ok) return json({ ok: false, error: "Kick wouldn't connect the chat: " + sub.error }, 502);
+      const list = await channelList(env);
+      list.push({ slug, id, since: Date.now() });
+      await env.STORE.put("channels", JSON.stringify(list));
+      await env.STORE.delete("pending:" + slug);
+      ctx.waitUntil(postAsBot(env, id, `👋 JDBBot is here! Type !commands to see what it can do.`).catch(() => {}));
+      return json({ ok: true, enabled: true });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
       if (req.method === "POST") {
