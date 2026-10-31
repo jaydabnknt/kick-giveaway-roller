@@ -6,7 +6,7 @@
 //          POST /say {channel, event, data} from the site, POST /webhook from Kick (chat commands)
 //          GET /channel?ch= for the site's bot pages, /room?ch=, /clips?ch=, /health, /setup
 
-const SCOPES = "user:read channel:read chat:write events:subscribe";
+const SCOPES = "user:read channel:read chat:write events:subscribe moderation:ban";
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...CORS } });
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-bot-key", "access-control-allow-methods": "GET, POST, OPTIONS" };
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -177,28 +177,139 @@ async function unsubscribe(env, slug) {
 }
 const BUILTINS = [
   ["!commands", "Shows this list", "Everyone"],
-  ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!uptime", "Shows stream uptime", "Everyone"],
+  ["!followage", "Shows how long you've followed", "Everyone"],
+  ["!followers", "Shows the follower count", "Everyone"],
+  ["!points", "Shows your points", "Everyone"],
+  ["!watchtime", "Shows your watchtime", "Everyone"],
+  ["!top", "Shows the top 5 by points", "Everyone"],
+  ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
-  ["!jdb add name text", "Adds a command", "Mods"],
-  ["!jdb edit name text", "Edits a command", "Mods"],
-  ["!jdb del name", "Deletes a command", "Mods"],
+  ["!cmd add name text", "Adds a command", "Mods"],
+  ["!cmd edit name text", "Edits a command", "Mods"],
+  ["!cmd del name", "Deletes a command", "Mods"],
+  ["!banall text", "Bans everyone who just said it", "Mods"],
+  ["!timeoutall [min] text", "Times out everyone who just said it", "Mods"],
+  ["!editcounter name number", "Sets a command's {count}", "Streamer"],
   ["!jdb leave", "Removes the bot", "Streamer"]
 ];
-const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb"]);
+const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "cmd", "followage", "followers", "points", "watchtime", "top", "banall", "timeoutall", "editcounter"]);
+
+// Recent chat per channel (for !banall / !timeoutall) and chat activity (for !points / !watchtime / !top).
+// Kick doesn't tell bots who is watching, so someone counts as watching for up to 10 minutes after each
+// message they send while the stream is live: 1 point per minute. Totals are saved to KV every 5 minutes.
+const recent = new Map(), pending = new Map(), lastSave = new Map(), liveCache = new Map();
+async function isLive(env, bid) {
+  const c = liveCache.get(bid);
+  if (c && Date.now() - c.at < 60000) return c.live;
+  const live = !!(await liveStart(env, bid));
+  liveCache.set(bid, { live, at: Date.now() }); return live;
+}
+async function loyalty(env, slug) {   // saved totals plus what hasn't been saved yet
+  const saved = (await env.STORE.get("loyal:" + slug, "json")) || {};
+  for (const [name, p] of pending.get(slug) || []) { const t = saved[name] || (saved[name] = { m: 0 }); t.m += p.m; }
+  return saved;
+}
+async function noteChat(env, slug, bid, ev, who, isMod) {
+  const list = recent.get(slug) || []; recent.set(slug, list);
+  list.push({ uid: ev.sender && ev.sender.user_id, name: who, text: String(ev.content || "").toLowerCase(), mod: isMod, at: Date.now() });
+  if (list.length > 400) list.splice(0, list.length - 400);
+  if (!(await isLive(env, bid))) return;
+  const key = who.toLowerCase(), map = pending.get(slug) || new Map(); pending.set(slug, map);
+  const p = map.get(key) || { m: 0, last: 0 }, now = Date.now();
+  if (p.last) p.m += Math.min(10, (now - p.last) / 60000);
+  p.last = now; map.set(key, p);
+  if (now - (lastSave.get(slug) || now - 1) < 300000) { if (!lastSave.has(slug)) lastSave.set(slug, now); return; }
+  lastSave.set(slug, now);
+  const all = await loyalty(env, slug);
+  for (const q of map.values()) q.m = 0;
+  await env.STORE.put("loyal:" + slug, JSON.stringify(all));
+}
+function since(t) {   // "1 year, 2 months, 5 days"
+  const a = new Date(t), b = new Date(Date.now());
+  let mo = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+  if (b.getUTCDate() < a.getUTCDate()) mo--;
+  const from = new Date(a); from.setUTCMonth(a.getUTCMonth() + mo);
+  const d = Math.floor((b - from) / 86400000), y = Math.floor(mo / 12); mo %= 12;
+  const part = (n, w) => n ? `${n} ${w}${n === 1 ? "" : "s"}` : "";
+  return [part(y, "year"), part(mo, "month"), part(d, "day")].filter(Boolean).join(", ") || "less than a day";
+}
+const dur = mins => { mins = Math.floor(mins); const d = Math.floor(mins / 1440), h = Math.floor(mins / 60) % 24, m = mins % 60; return [d && d + "d", h && h + "h", m + "m"].filter(Boolean).join(" "); };
+async function kickV2(path) {
+  const r = await fetch("https://kick.com/api/v2/" + path, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
+  return r.ok ? r.text() : "";
+}
+async function massBan(env, slug, bid, phrase, minutes) {
+  const since = Date.now() - 5 * 60000, ids = new Map();
+  for (const m of recent.get(slug) || []) if (m.at >= since && !m.mod && m.uid && !m.text.startsWith("!") && m.text.includes(phrase)) ids.set(m.uid, m.name);
+  let n = 0;
+  for (const uid of ids.keys()) {
+    const body = { broadcaster_user_id: bid, user_id: uid, reason: (minutes ? "timeoutall: " : "banall: ") + phrase.slice(0, 80) };
+    if (minutes) body.duration = minutes;
+    try { await kickApi(env, "/moderation/bans", { method: "POST", body: JSON.stringify(body) }, "stok:" + bid); n++; } catch (e) { await env.STORE.put("lasterror", String(e.message || e).slice(0, 300)); }
+  }
+  return { n, found: ids.size };
+}
 async function onChat(env, ev) {
   const text = String(ev.content || "").trim(), who = (ev.sender && ev.sender.username) || "";
   const chan = ev.broadcaster || {}, bid = chan.user_id, slug = normSlug(chan.channel_slug || chan.username);
-  if (!text.startsWith("!") || !bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
-  const [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
+  if (!bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
   if (ev.message_id && !flag("msg:" + ev.message_id, 600)) return;   // the same chat message can arrive twice
   if (!(await isEnabled(env, slug))) return;
-  const cdKey = "cd:" + bid + ":" + cmd;                      // a few seconds' cooldown per command
-  const cooldown = secs => flag(cdKey, secs);
-  if (flags.get(cdKey) > Date.now()) return;
   const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
   const isStreamer = normSlug(who) === slug || badges.includes("broadcaster");
   const isMod = isStreamer || badges.some(b => /moderator|^mod$/.test(b));
+  await noteChat(env, slug, bid, ev, who, isMod).catch(() => {});
+  if (!text.startsWith("!")) return;
+  let [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
+  if (cmd === "!cmd") cmd = "!jdb";                             // Kicklet's name for it
+  const cdKey = "cd:" + bid + ":" + cmd;                      // a few seconds' cooldown per command
+  const cooldown = secs => flag(cdKey, secs);
+  if (flags.get(cdKey) > Date.now()) return;
+  const target = (arg || who).replace(/^@/, "").replace(/[^A-Za-z0-9_-]/g, "");
+  if (cmd === "!followage") {
+    cooldown(5);
+    const t = await kickV2(`channels/${slug}/users/${encodeURIComponent(target.toLowerCase())}`).catch(() => "");
+    const m = t.match(/"following_since"\s*:\s*"([^"]+)"/);
+    if (!m) return postAsBot(env, bid, `@${target} isn't following ${chan.username || slug}.`);
+    return postAsBot(env, bid, `@${target} has been following for ${since(Date.parse(m[1]))}`);
+  }
+  if (cmd === "!followers") {
+    cooldown(15);
+    const t = await kickV2("channels/" + slug).catch(() => ""), m = t.match(/"followers_?[cC]ount"\s*:\s*(\d+)/);
+    return postAsBot(env, bid, m ? `${chan.username || slug} has ${Number(m[1]).toLocaleString("en-US")} followers` : "Couldn't get the follower count right now.");
+  }
+  if (cmd === "!points" || cmd === "!watchtime") {
+    cooldown(5);
+    const t = (await loyalty(env, slug))[target.toLowerCase()] || { m: 0 };
+    return postAsBot(env, bid, cmd === "!points" ? `@${target} has ${Math.floor(t.m).toLocaleString("en-US")} points` : `@${target} has watched for ${dur(t.m)}`);
+  }
+  if (cmd === "!top") {
+    cooldown(15);
+    const top = Object.entries(await loyalty(env, slug)).sort((a, b) => b[1].m - a[1].m).slice(0, 5);
+    return postAsBot(env, bid, top.length ? "🏆 " + top.map(([n, t], i) => `${i + 1}. ${n} (${Math.floor(t.m).toLocaleString("en-US")})`).join(" · ") : "No points yet.");
+  }
+  if (cmd === "!banall" || cmd === "!timeoutall") {
+    if (!isMod) return;
+    let rest = text.replace(/^\S+\s*/, ""), minutes = 0;
+    if (cmd === "!timeoutall") { const mm = rest.match(/^(\d+)\s+/); minutes = mm ? Math.min(10080, Math.max(1, +mm[1])) : 10; if (mm) rest = rest.slice(mm[0].length); }
+    const phrase = rest.trim().toLowerCase();
+    if (phrase.length < 2) return postAsBot(env, bid, `Usage: ${cmd === "!banall" ? "!banall text" : "!timeoutall [minutes] text"}`);
+    cooldown(10);
+    if (!(await env.STORE.get("stok:" + bid))) return;
+    const r = await massBan(env, slug, bid, phrase, minutes);
+    if (r.found && !r.n) return postAsBot(env, bid, "Kick wouldn't let me. The streamer needs to tap Allow again on the bot page.");
+    return postAsBot(env, bid, r.found ? `🔨 ${minutes ? "Timed out" : "Banned"} ${r.n} ${r.n === 1 ? "user" : "users"}${minutes ? " for " + minutes + "m" : ""}` : "Nobody said that in the last 5 minutes.");
+  }
+  if (cmd === "!editcounter") {
+    if (!isStreamer) return;
+    const mm = text.match(/^!editcounter\s+!?([a-z0-9_]{1,20})\s+(-?\d+)/i);
+    if (!mm) return postAsBot(env, bid, "Usage: !editcounter name number");
+    const cmds = (await env.STORE.get("cmds:" + slug, "json")) || {}, c = cmds[mm[1].toLowerCase()];
+    if (!c) return postAsBot(env, bid, `There's no !${mm[1].toLowerCase()}.`);
+    c.count = +mm[2]; await env.STORE.put("cmds:" + slug, JSON.stringify(cmds));
+    return postAsBot(env, bid, `✏️ !${mm[1].toLowerCase()} counter set to ${c.count}`);
+  }
   if (cmd === "!clip") {
     cooldown(60);
     const secs = Math.min(120, Math.max(5, parseInt(arg, 10) || 30));
@@ -229,10 +340,10 @@ async function onChat(env, ev) {
   const key = "cmds:" + slug;
   if (cmd === "!jdb") {
     if (!isMod) return;
-    const m = text.match(/^!jdb\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
+    const m = text.match(/^!(?:jdb|cmd)\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
     const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
     const cmds = (await env.STORE.get(key, "json")) || {};
-    const usage = "Usage: !jdb add name text · !jdb edit name text · !jdb del name";
+    const usage = "Usage: !cmd add name text · !cmd edit name text · !cmd del name";
     if (sub === "leave") {
       if (!isStreamer) return;
       if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
@@ -258,8 +369,12 @@ async function onChat(env, ev) {
     await env.STORE.put(key, JSON.stringify(cmds));
     return postAsBot(env, bid, `🗑️ Deleted !${name}`);
   }
-  const custom = ((await env.STORE.get(key, "json")) || {})[cmd.slice(1)];
-  if (custom) { cooldown(5); return postAsBot(env, bid, custom.text.replace(/\{user\}/gi, "@" + who)); }
+  const all = (await env.STORE.get(key, "json")) || {}, custom = all[cmd.slice(1)];
+  if (custom) {
+    cooldown(5);
+    if (/\{count\}/i.test(custom.text)) { custom.count = (custom.count || 0) + 1; await env.STORE.put(key, JSON.stringify(all)); }
+    return postAsBot(env, bid, custom.text.replace(/\{user\}/gi, "@" + who).replace(/\{touser\}/gi, "@" + target).replace(/\{count\}/gi, String(custom.count || 0)));
+  }
 }
 async function channelInfo(env, slug) {
   slug = String(slug).toLowerCase().replace(/_/g, "-");
