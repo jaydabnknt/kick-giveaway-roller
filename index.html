@@ -50,6 +50,12 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mark { flex: none; width: 34px; height: 34px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
 .mark svg { width: 20px; height: 20px; }
+button.mark { border: 0; padding: 0; cursor: pointer; transition: transform .12s; }
+button.mark:hover { transform: scale(1.06); }
+.menu { position: fixed; z-index: 50; top: 64px; left: max(16px, calc(50% - 574px)); min-width: 230px; display: grid; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px -12px rgb(0 0 0 / .7); }
+.menu a { padding: 11px 12px; border-radius: 8px; color: var(--fg); text-decoration: none; font-weight: 600; font-size: 15px; }
+.menu a:hover { background: var(--panel-2); }
+.menu a.add { color: var(--accent); }
 h1 { margin: 0; font-weight: 900; font-size: clamp(20px, 3.2vw, 28px); letter-spacing: -0.03em; line-height: 1; white-space: nowrap; }
 h1 span { color: var(--accent); }
 
@@ -389,13 +395,18 @@ a.btn.primary { color: var(--on-accent); }
 </style>
 </head>
 <body>
+<nav class="menu" id="siteMenu" hidden>
+  <a href="./">Giveaway tools</a>
+  <a id="menuMyBot" href="?c=">My bot page</a>
+  <a class="add" href="https://jdbbot.jdbbot.workers.dev/allow">Add JDBBot to your channel</a>
+</nav>
 
 <div class="wrap" id="chanPage" hidden>
   <header class="top">
-    <a class="brand" href="./">
-      <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></div>
+    <div class="brand">
+      <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
       <h1>JDB<span>Bot</span></h1>
-    </a>
+    </div>
     <span class="pill" id="cpPill">Loading</span>
   </header>
   <section class="cp-box">
@@ -436,7 +447,7 @@ a.btn.primary { color: var(--on-accent); }
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></div>
+      <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
       <h1>Giveaway <span>Tools</span></h1>
     </div>
     <span class="pill" id="connPill">Offline</span>
@@ -2355,6 +2366,17 @@ if (!OVERLAY) fetchWithTimeout(BOT_URL + "/health", 10000).then(r => r.json()).t
 renderBot();
 const botPageRefresh = () => { const c = chanSlug($("channel").value); $("botPageLink").href = "?c=" + encodeURIComponent(c); };
 $("channel").addEventListener("input", botPageRefresh); botPageRefresh();
+
+// Top-left menu: the site, your bot page, and adding JDBBot to a channel.
+const menu = $("siteMenu");
+function setMenu(open) {
+  menu.hidden = !open;
+  document.querySelectorAll("[data-menu]").forEach(b => b.setAttribute("aria-expanded", String(open)));
+  if (open) { const c = params.has("c") ? chanSlug(params.get("c")) : chanSlug($("channel").value); $("menuMyBot").href = "?c=" + encodeURIComponent(c); }
+}
+document.querySelectorAll("[data-menu]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setMenu(menu.hidden); }));
+document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) setMenu(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
 
 // ---------- channel bot pages (?c=channel) ----------
 // One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
