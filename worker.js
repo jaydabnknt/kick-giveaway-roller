@@ -84,7 +84,7 @@ async function rateOk(env, channel) {
 }
 function fromSite(req, env) {
   const o = req.headers.get("origin") || "";
-  return o === new URL(env.SITE_URL).origin;
+  return o === new URL(env.SITE_URL).origin || o === "https://jaydabnknt.github.io" || /^https:\/\/([a-z0-9-]+\.)?jdbbot(-[a-z0-9]+)?\.pages\.dev$/.test(o);
 }
 
 async function checkKey(req, env) {
