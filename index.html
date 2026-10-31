@@ -412,6 +412,19 @@ a.feat:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 .feat .tag { justify-self: start; color: var(--accent); font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
 .home-foot { color: var(--muted); font-size: 13px; text-align: center; padding: 6px 0 18px; }
 
+/* Owner dashboard (?admin) */
+body.admin > .wrap:not(#adminPage) { display: none !important; }
+#adminPage { max-width: 760px; }
+#adBody[hidden] { display: none !important; }
+.ad-list { display: grid; gap: 8px; }
+.ad-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.ad-item .main { flex: 1 1 180px; min-width: 0; display: grid; gap: 2px; }
+.ad-item .main b { overflow-wrap: anywhere; }
+.ad-item .main b.mono { font: 700 15px var(--mono); color: var(--accent); cursor: pointer; }
+.ad-item .main span { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ad-item .btn { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.btn.danger { color: #ff6b6b; }
+
 /* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
 body.cp > .wrap:not(#chanPage) { display: none !important; }
 #chanPage { max-width: 760px; }
@@ -439,7 +452,8 @@ a.btn.primary { color: var(--on-accent); }
   <a href="./">Home</a>
   <a href="?tools">Giveaway tools</a>
   <a id="menuMyBot" href="?c=">My bot page</a>
-  <a class="add" href="https://jdbbot.jdbbot.workers.dev/allow">Add JDBBot to your channel</a>
+  <a class="add" href="?add">Add JDBBot to your channel</a>
+  <a href="?admin">Dashboard</a>
 </nav>
 
 <div class="wrap" id="homePage" hidden>
@@ -453,7 +467,7 @@ a.btn.primary { color: var(--on-accent); }
     <h2>Free Kick bot.<br><span>No setup.</span></h2>
     <p>Your streaming toolkit.</p>
     <div class="row">
-      <a class="btn primary" href="https://jdbbot.jdbbot.workers.dev/allow">Add to Kick</a>
+      <a class="btn primary" href="?add">Add to Kick</a>
       <a class="btn" href="?tools">Open giveaway tools</a>
     </div>
   </section>
@@ -474,6 +488,40 @@ a.btn.primary { color: var(--on-accent); }
     </form>
   </section>
   <p class="home-foot">Made by JayDaB4ngnt</p>
+</div>
+
+<div class="wrap" id="adminPage" hidden>
+  <header class="top">
+    <div class="brand">
+      <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
+      <h1>Dash<span>board</span></h1>
+    </div>
+    <button class="btn" id="adLogout" type="button" hidden>Log out</button>
+  </header>
+  <section class="cp-box" id="adLogin" hidden>
+    <h3>Owner only</h3>
+    <p class="hint">Log in with the Kick account that owns JDBBot.</p>
+    <div class="row"><a class="btn primary" id="adLoginBtn" href="#">Log in with Kick</a></div>
+    <p class="cp-err" id="adErr" hidden></p>
+  </section>
+  <div id="adBody" hidden style="display:grid;gap:18px">
+    <section class="cp-box">
+      <h3>Requests <span class="badge" id="adReqCount"></span></h3>
+      <div id="adReqs" class="ad-list"></div>
+    </section>
+    <section class="cp-box">
+      <h3>Keys</h3>
+      <form class="row" id="adKeyForm">
+        <input type="text" id="adNote" placeholder="Who it's for (optional)" autocomplete="off" style="flex:1 1 180px">
+        <button class="btn primary" type="submit">Generate key</button>
+      </form>
+      <div id="adKeys" class="ad-list"></div>
+    </section>
+    <section class="cp-box">
+      <h3>Channels using the bot</h3>
+      <div id="adChans" class="ad-list"></div>
+    </section>
+  </div>
 </div>
 
 <div class="wrap" id="chanPage" hidden>
@@ -499,9 +547,14 @@ a.btn.primary { color: var(--on-accent); }
   </section>
   <section class="cp-box" id="cpAdd" hidden>
     <h3>Add JDBBot</h3>
-    <p class="hint">Tap Allow on Kick, logged in as this channel. That's it.</p>
-    <div class="row"><a class="btn primary" id="cpAllow2" href="#">Add with Kick</a></div>
+    <p class="hint" id="cpAddHint">Enter your access key, then tap Allow on Kick logged in as this channel.</p>
+    <form class="row" id="cpKeyForm">
+      <input type="text" id="cpKey" placeholder="JDB-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1 1 180px">
+      <button class="btn primary" type="submit">Add with Kick</button>
+    </form>
     <p class="cp-err" id="cpErr" hidden></p>
+    <div class="row" id="cpReqRow"><span class="hint">No key?</span><button class="btn" id="cpRequest" type="button">Request access</button></div>
+    <p class="hint" id="cpReqMsg" hidden></p>
   </section>
   <section class="cp-box" id="cpCmds" hidden>
     <h3>Commands</h3>
@@ -2469,13 +2522,13 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
 // own commands added with !jdb add, its clip markers, and a way for the streamer to add the bot.
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
-const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !location.hash;
+const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !location.hash;
 if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "JDBBot"; }
 $("homeFind").addEventListener("submit", e => {
   e.preventDefault(); const c = chanSlug($("homeChan").value).replace(/_/g, "-");
   if (c) location.search = "?c=" + encodeURIComponent(c);
 });
-const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : null;
+const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : params.has("add") ? "" : null;
 if (CHANPAGE !== null) {
   document.body.classList.add("cp"); $("chanPage").hidden = false;
   const pill = (cls, t) => { $("cpPill").className = "pill " + cls; $("cpPill").textContent = t; };
@@ -2493,19 +2546,28 @@ if (CHANPAGE !== null) {
   });
   const hm = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
   async function loadChanPage() {
-    if (!CHANPAGE) { pill("", "JDBBot"); return; }
+    if (!CHANPAGE) {
+      pill("", "JDBBot");
+      if (params.has("add")) { $("cpTitle").textContent = "Add JDBBot"; $("cpLead").textContent = "Type your Kick channel to start."; }
+      return;
+    }
     document.title = CHANPAGE + " · JDBBot";
     $("cpChan").value = CHANPAGE; $("cpTitle").innerHTML = `JDBBot in <span>${escapeHtml(CHANPAGE)}</span>`;
     let d; try { d = await call("/channel?ch=" + encodeURIComponent(CHANPAGE)); } catch (e) { pill("err", "Offline"); $("cpLead").textContent = "Couldn't reach JDBBot right now. Try again in a minute."; return; }
     if (!d.ok) { pill("err", "Error"); $("cpLead").textContent = d.error || "Something went wrong."; return; }
     $("cpFind").hidden = true;
     $("cpCmds").hidden = false;
-    $("cpAllow").href = $("cpAllow2").href = BOT_URL + "/allow";
+    $("cpAllow").href = BOT_URL + "/allow?ch=" + encodeURIComponent(CHANPAGE);
     $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(c.does), cell(whoTag(c.who)))));
     if (!d.enabled) {
       pill("", "Not added");
       $("cpLead").textContent = "Bot isn't added yet";
-      $("cpAdd").hidden = false; return;
+      $("cpAdd").hidden = false;
+      const e = params.get("err");
+      if (e) err(e === "badkey" ? "That key doesn't work. It may be used, revoked or for another channel." : "You need an access key first.");
+      if (d.approved) { $("cpAddHint").textContent = "Your request was approved. Tap Add with Kick, no key needed."; $("cpReqRow").hidden = true; err(""); }
+      else if (d.requested) { $("cpReqRow").hidden = true; reqMsg("Access requested. Come back here once it's approved."); }
+      return;
     }
     pill("live", "On");
     $("cpLead").textContent = d.badge ? "Bot is active, with the bot badge" : "Bot is active";
@@ -2517,7 +2579,70 @@ if (CHANPAGE !== null) {
       $("cpClips").replaceChildren(...d.clips.map(c => row(cell(new Date(c.stream).toLocaleDateString()), cell(`${hm(c.from)} – ${hm(c.to)}`), cell(c.by))));
     }
   }
+  const reqMsg = t => { $("cpReqMsg").textContent = t; $("cpReqMsg").hidden = !t; };
+  $("cpKeyForm").addEventListener("submit", e => {
+    e.preventDefault();
+    location.href = BOT_URL + "/allow?ch=" + encodeURIComponent(CHANPAGE) + "&key=" + encodeURIComponent($("cpKey").value.trim().toUpperCase());
+  });
+  $("cpRequest").addEventListener("click", async () => {
+    $("cpRequest").disabled = true; err("");
+    try {
+      const d = await call("/request", { ch: CHANPAGE });
+      if (d.enabled) { location.reload(); return; }
+      if (!d.ok) { err(d.error); return; }
+      $("cpReqRow").hidden = true; reqMsg("Access requested. Come back here once it's approved.");
+    } catch (e) { err("Couldn't reach JDBBot. Check your connection."); }
+    finally { $("cpRequest").disabled = false; }
+  });
   loadChanPage();
+}
+
+// ---------- owner dashboard (?admin) ----------
+// Only the Kick account that owns JDBBot can sign in (the bot checks it). Keys gate who can add the bot;
+// requests from the Add page show up here to approve or deny.
+if (params.has("admin")) {
+  document.body.classList.add("admin"); $("adminPage").hidden = false; document.title = "Dashboard · JDBBot";
+  const SESS_LS = "kick-admin-session";
+  const hs = location.hash.match(/^#s=([\w-]+)/);
+  if (hs) { try { localStorage.setItem(SESS_LS, hs[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
+  let sess = ""; try { sess = localStorage.getItem(SESS_LS) || ""; } catch (e) {}
+  $("adLoginBtn").href = BOT_URL + "/admin/login";
+  const showLogin = msg => { $("adLogin").hidden = false; $("adBody").hidden = true; $("adLogout").hidden = true; $("adErr").textContent = msg || ""; $("adErr").hidden = !msg; };
+  const api = async (op, body) => {
+    const r = await fetchWithTimeout(BOT_URL + "/admin/" + op, 20000, { method: body ? "POST" : "GET", headers: { authorization: "Bearer " + sess, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); throw new Error("signin"); }
+    if (!j.ok) throw new Error(j.error || "failed");
+    return j;
+  };
+  const ago = t => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + "m ago" : m < 1440 ? Math.floor(m / 60) + "h ago" : Math.floor(m / 1440) + "d ago"; };
+  const item = (title, sub, buttons, mono) => {
+    const d = document.createElement("div"); d.className = "ad-item";
+    const main = document.createElement("div"); main.className = "main";
+    const b = document.createElement("b"); b.textContent = title; if (mono) { b.className = "mono"; b.title = "Tap to copy"; b.addEventListener("click", () => { navigator.clipboard && navigator.clipboard.writeText(title).then(() => { b.textContent = "Copied"; setTimeout(() => (b.textContent = title), 1000); }).catch(() => {}); }); }
+    const s = document.createElement("span"); s.textContent = sub;
+    main.append(b, s); d.append(main, ...buttons); return d;
+  };
+  const btn = (label, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + (cls || ""); b.textContent = label; b.addEventListener("click", async () => { b.disabled = true; try { await fn(); } catch (e) { if (e.message !== "signin") alert(e.message); } finally { b.disabled = false; } }); return b; };
+  const empty = t => { const p = document.createElement("p"); p.className = "hint"; p.textContent = t; return p; };
+  function render(d) {
+    $("adLogin").hidden = true; $("adBody").hidden = false; $("adLogout").hidden = false;
+    const open = d.requests.filter(r => !r.approved);
+    $("adReqCount").textContent = open.length || "";
+    $("adReqs").replaceChildren(...(d.requests.length ? d.requests.map(r => item(r.ch, (r.approved ? "Approved, waiting for them to add it" : "Asked " + ago(r.at)) + (r.note ? " · " + r.note : ""),
+      r.approved ? [btn("Clear", () => api("deny", { ch: r.ch }).then(render))] : [btn("Approve", () => api("approve", { ch: r.ch }).then(render), "primary"), btn("Deny", () => api("deny", { ch: r.ch }).then(render), "danger")])) : [empty("No requests.")]));
+    $("adKeys").replaceChildren(...(d.keys.length ? d.keys.map(k => item(k.key, [k.usedBy ? "Used by " + k.usedBy : k.ch ? "For " + k.ch + ", not used yet" : "Not used yet", k.note, ago(k.at)].filter(Boolean).join(" · "),
+      [btn("Revoke", () => confirm(k.usedBy ? `Revoke this key? JDBBot will also leave ${k.usedBy}.` : "Revoke this key?") ? api("revoke", { key: k.key }).then(render) : null, "danger")], true)) : [empty("No keys yet.")]));
+    $("adChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : "",
+      c.slug === d.home ? [] : [btn("Remove", () => confirm(`Remove JDBBot from ${c.slug}?`) ? api("remove", { ch: c.slug }).then(render) : null, "danger")])));
+  }
+  $("adKeyForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { render(await api("key", { note: $("adNote").value.trim() })); $("adNote").value = ""; } catch (er) { if (er.message !== "signin") alert(er.message); }
+  });
+  $("adLogout").addEventListener("click", async () => { try { await api("logout", {}); } catch (e) {} try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); });
+  if (!sess) showLogin();
+  else api("state").then(render).catch(e => { if (e.message !== "signin") showLogin("Couldn't reach JDBBot right now."); });
 }
 
 // ---------- raid thank-you ----------
