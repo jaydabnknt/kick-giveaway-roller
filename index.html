@@ -417,14 +417,14 @@ a.feat:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 /* Owner dashboard (?admin) */
 body.admin > .wrap:not(#adminPage) { display: none !important; }
 #adminPage { max-width: 760px; }
-#adBody[hidden] { display: none !important; }
-.ad-list { display: grid; gap: 8px; }
-.ad-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
-.ad-item .main { flex: 1 1 180px; min-width: 0; display: grid; gap: 2px; }
-.ad-item .main b { overflow-wrap: anywhere; }
-.ad-item .main b.mono { font: 700 15px var(--mono); color: var(--accent); cursor: pointer; }
-.ad-item .main span { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-.ad-item .btn { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+#dbBody[hidden] { display: none !important; }
+.dash-list { display: grid; gap: 8px; }
+.dash-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.dash-item .main { flex: 1 1 180px; min-width: 0; display: grid; gap: 2px; }
+.dash-item .main b { overflow-wrap: anywhere; }
+.dash-item .main b.mono { font: 700 15px var(--mono); color: var(--accent); cursor: pointer; }
+.dash-item .main span { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.dash-item .btn { min-height: 34px; padding: 6px 12px; font-size: 13px; }
 .btn.danger { color: #ff6b6b; }
 
 /* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
@@ -498,31 +498,31 @@ a.btn.primary { color: var(--on-accent); }
       <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
       <a class="h1link" href="./" aria-label="Home"><h1>Dash<span>board</span></h1></a>
     </div>
-    <button class="btn" id="adLogout" type="button" hidden>Log out</button>
+    <button class="btn" id="dbLogout" type="button" hidden>Log out</button>
   </header>
-  <section class="cp-box" id="adLogin" hidden>
+  <section class="cp-box" id="dbLogin" hidden>
     <h3>Owner only</h3>
     <p class="hint">Log in with the Kick account that owns JDBBot.</p>
-    <div class="row"><a class="btn primary" id="adLoginBtn" href="#">Log in with Kick</a></div>
-    <p class="cp-err" id="adErr" hidden></p>
+    <div class="row"><a class="btn primary" id="dbLoginBtn" href="#">Log in with Kick</a></div>
+    <p class="cp-err" id="dbErr" hidden></p>
   </section>
-  <div id="adBody" hidden style="display:grid;gap:18px">
+  <div id="dbBody" hidden style="display:grid;gap:18px">
     <section class="cp-box">
-      <h3>Requests <span class="badge" id="adReqCount"></span></h3>
-      <div id="adReqs" class="ad-list"></div>
+      <h3>Requests <span class="badge" id="dbReqCount"></span></h3>
+      <div id="dbReqs" class="dash-list"></div>
     </section>
     <section class="cp-box">
       <h3>Keys</h3>
-      <form class="row" id="adKeyForm">
-        <input type="text" id="adNote" placeholder="Who it's for (optional)" autocomplete="off" style="flex:1 1 180px">
-        <button class="btn primary" type="submit" id="adGen">Generate key</button>
+      <form class="row" id="dbKeyForm">
+        <input type="text" id="dbNote" placeholder="Who it's for (optional)" autocomplete="off" style="flex:1 1 180px">
+        <button class="btn primary" type="submit" id="dbGen">Generate key</button>
       </form>
-      <p class="hint" id="adMsg" hidden></p>
-      <div id="adKeys" class="ad-list"></div>
+      <p class="hint" id="dbMsg" hidden></p>
+      <div id="dbKeys" class="dash-list"></div>
     </section>
     <section class="cp-box">
       <h3>Channels using the bot</h3>
-      <div id="adChans" class="ad-list"></div>
+      <div id="dbChans" class="dash-list"></div>
     </section>
   </div>
 </div>
@@ -2609,8 +2609,8 @@ if (params.has("admin")) {
   const hs = location.hash.match(/^#s=([\w-]+)/);
   if (hs) { try { localStorage.setItem(SESS_LS, hs[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
   let sess = ""; try { sess = localStorage.getItem(SESS_LS) || ""; } catch (e) {}
-  $("adLoginBtn").href = BOT_URL + "/admin/login";
-  const showLogin = msg => { $("adLogin").hidden = false; $("adBody").hidden = true; $("adLogout").hidden = true; $("adErr").textContent = msg || ""; $("adErr").hidden = !msg; };
+  $("dbLoginBtn").href = BOT_URL + "/admin/login";
+  const showLogin = msg => { $("dbLogin").hidden = false; $("dbBody").hidden = true; $("dbLogout").hidden = true; $("dbErr").textContent = msg || ""; $("dbErr").hidden = !msg; };
   const api = async (op, body) => {
     const r = await fetchWithTimeout(BOT_URL + "/admin/" + op, 20000, { method: body ? "POST" : "GET", headers: { authorization: "Bearer " + sess, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
@@ -2620,7 +2620,7 @@ if (params.has("admin")) {
   };
   const ago = t => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + "m ago" : m < 1440 ? Math.floor(m / 60) + "h ago" : Math.floor(m / 1440) + "d ago"; };
   const item = (title, sub, buttons, mono) => {
-    const d = document.createElement("div"); d.className = "ad-item";
+    const d = document.createElement("div"); d.className = "dash-item";
     const main = document.createElement("div"); main.className = "main";
     const b = document.createElement("b"); b.textContent = title; if (mono) { b.className = "mono"; b.title = "Tap to copy"; b.addEventListener("click", () => { navigator.clipboard && navigator.clipboard.writeText(title).then(() => { b.textContent = "Copied"; setTimeout(() => (b.textContent = title), 1000); }).catch(() => {}); }); }
     const s = document.createElement("span"); s.textContent = sub;
@@ -2629,29 +2629,29 @@ if (params.has("admin")) {
   const btn = (label, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + (cls || ""); b.textContent = label; b.addEventListener("click", async () => { b.disabled = true; try { await fn(); } catch (e) { if (e.message !== "signin") alert(e.message); } finally { b.disabled = false; } }); return b; };
   const empty = t => { const p = document.createElement("p"); p.className = "hint"; p.textContent = t; return p; };
   function render(d) {
-    $("adLogin").hidden = true; $("adBody").hidden = false; $("adLogout").hidden = false;
+    $("dbLogin").hidden = true; $("dbBody").hidden = false; $("dbLogout").hidden = false;
     const open = d.requests.filter(r => !r.approved);
-    $("adReqCount").textContent = open.length || "";
-    $("adReqs").replaceChildren(...(d.requests.length ? d.requests.map(r => item(r.ch, (r.approved ? "Approved, waiting for them to add it" : "Asked " + ago(r.at)) + (r.note ? " · " + r.note : ""),
+    $("dbReqCount").textContent = open.length || "";
+    $("dbReqs").replaceChildren(...(d.requests.length ? d.requests.map(r => item(r.ch, (r.approved ? "Approved, waiting for them to add it" : "Asked " + ago(r.at)) + (r.note ? " · " + r.note : ""),
       r.approved ? [btn("Clear", () => api("deny", { ch: r.ch }).then(render))] : [btn("Approve", () => api("approve", { ch: r.ch }).then(render), "primary"), btn("Deny", () => api("deny", { ch: r.ch }).then(render), "danger")])) : [empty("No requests.")]));
-    $("adKeys").replaceChildren(...(d.keys.length ? d.keys.map(k => item(k.key, [k.usedBy ? "Used by " + k.usedBy : k.ch ? "For " + k.ch + ", not used yet" : "Not used yet", k.note, ago(k.at)].filter(Boolean).join(" · "),
+    $("dbKeys").replaceChildren(...(d.keys.length ? d.keys.map(k => item(k.key, [k.usedBy ? "Used by " + k.usedBy : k.ch ? "For " + k.ch + ", not used yet" : "Not used yet", k.note, ago(k.at)].filter(Boolean).join(" · "),
       [btn("Revoke", () => confirm(k.usedBy ? `Revoke this key? JDBBot will also leave ${k.usedBy}.` : "Revoke this key?") ? api("revoke", { key: k.key }).then(render) : null, "danger")], true)) : [empty("No keys yet.")]));
-    $("adChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : c.before ? "Joined before keys" : "",
+    $("dbChans").replaceChildren(...d.channels.map(c => item(c.slug, c.slug === d.home ? "Home channel" : c.since ? "Added " + ago(c.since) : c.before ? "Joined before keys" : "",
       c.slug === d.home ? [] : [btn("Remove", () => confirm(`Remove JDBBot from ${c.slug}?`) ? api("remove", { ch: c.slug }).then(render) : null, "danger")])));
   }
-  const adMsg = (t, bad) => { $("adMsg").textContent = t || ""; $("adMsg").hidden = !t; $("adMsg").style.color = bad ? "#ff6b6b" : ""; };
-  $("adKeyForm").addEventListener("submit", async e => {
+  const dbMsg = (t, bad) => { $("dbMsg").textContent = t || ""; $("dbMsg").hidden = !t; $("dbMsg").style.color = bad ? "#ff6b6b" : ""; };
+  $("dbKeyForm").addEventListener("submit", async e => {
     e.preventDefault();
-    $("adGen").disabled = true; adMsg("Making a key…");
+    $("dbGen").disabled = true; dbMsg("Making a key…");
     try {
-      const before = new Set([...$("adKeys").querySelectorAll("b.mono")].map(x => x.textContent));
-      const d = await api("key", { note: $("adNote").value.trim() }); render(d); $("adNote").value = "";
+      const before = new Set([...$("dbKeys").querySelectorAll("b.mono")].map(x => x.textContent));
+      const d = await api("key", { note: $("dbNote").value.trim() }); render(d); $("dbNote").value = "";
       const k = d.keys.find(x => !before.has(x.key));
-      adMsg(k ? "New key: " + k.key + " (tap it below to copy)" : "The bot didn't save a new key. Try again.", !k);
-    } catch (er) { if (er.message !== "signin") adMsg("Couldn't make a key: " + er.message, true); }
-    finally { $("adGen").disabled = false; }
+      dbMsg(k ? "New key: " + k.key + " (tap it below to copy)" : "The bot didn't save a new key. Try again.", !k);
+    } catch (er) { if (er.message !== "signin") dbMsg("Couldn't make a key: " + er.message, true); }
+    finally { $("dbGen").disabled = false; }
   });
-  $("adLogout").addEventListener("click", async () => { try { await api("logout", {}); } catch (e) {} try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); });
+  $("dbLogout").addEventListener("click", async () => { try { await api("logout", {}); } catch (e) {} try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); });
   if (!sess) showLogin();
   else api("state").then(render).catch(e => { if (e.message !== "signin") showLogin("Couldn't reach JDBBot right now."); });
 }
