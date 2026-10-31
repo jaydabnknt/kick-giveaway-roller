@@ -191,14 +191,14 @@ async function unsubscribe(env, slug) {
   for (const x of have.data || []) await kickApp(env, "/events/subscriptions?id=" + encodeURIComponent(x.id), { method: "DELETE" }).catch(() => {});
 }
 const BUILTINS = [
-  ["!commands", "Links to this page", "Everyone"],
-  ["!clip [seconds]", "Marks a clip of the last 30 seconds (5 to 120) so the streamer can cut it from the VOD", "Everyone"],
-  ["!uptime", "Shows how long the stream has been live", "Everyone"],
-  ["!so name", "Shouts out a streamer with their channel link", "Mods"],
-  ["!jdb add name text", "Adds a new command, !name, that replies with the text. {user} becomes whoever used it", "Mods"],
-  ["!jdb edit name text", "Changes what a command replies", "Mods"],
+  ["!commands", "Shows this list", "Everyone"],
+  ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
+  ["!uptime", "Shows stream uptime", "Everyone"],
+  ["!so name", "Shoutout a streamer", "Mods"],
+  ["!jdb add name text", "Adds a command", "Mods"],
+  ["!jdb edit name text", "Edits a command", "Mods"],
   ["!jdb del name", "Deletes a command", "Mods"],
-  ["!jdb leave", "Removes JDBBot from the channel", "Streamer"]
+  ["!jdb leave", "Removes the bot", "Streamer"]
 ];
 const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb"]);
 async function onChat(env, ev) {
