@@ -6,8 +6,9 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Can the bot find the chatroom, and does Kick's direct lookup work
+      - name: Check the new bot routes
         run: |
-          sleep 40
-          echo "== worker /room"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/room?ch=jaydab4ngnt"; echo
-          echo "== direct"; curl -sS -m 30 -A "Mozilla/5.0" "https://kick.com/api/v2/channels/jaydab4ngnt" | grep -o '"chatroom":{[^}]*' | head -c 300; echo
+          sleep 75
+          echo "== channel"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/channel?ch=jaydab4ngnt" | head -c 400; echo
+          echo "== setup"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/setup" | head -c 400; echo
+          echo "== health"; curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/health"; echo
