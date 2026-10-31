@@ -372,6 +372,22 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
   .pill.live::before, .winner-name.pop, .slot.pop, .gtb-state.open .big::before { animation: none; }
 }
 
+/* Home page (the site root) */
+body.home > .wrap:not(#homePage) { display: none !important; }
+#homePage { max-width: 960px; gap: 22px; }
+.hero { padding: 34px 22px; border-radius: 16px; border: 1px solid var(--line); background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%), var(--panel); display: grid; gap: 14px; }
+.hero h2 { margin: 0; font-size: clamp(30px, 7vw, 52px); font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+.hero h2 span { color: var(--accent); }
+.hero p { margin: 0; color: var(--muted); font-size: 16px; max-width: 46ch; }
+.hero .row .btn { min-height: 46px; padding: 10px 20px; font-size: 15px; }
+.feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; color: inherit; text-decoration: none; }
+a.feat:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.feat b { font-size: 16px; }
+.feat span { color: var(--muted); font-size: 14px; }
+.feat .tag { justify-self: start; color: var(--accent); font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.home-foot { color: var(--muted); font-size: 13px; text-align: center; padding: 6px 0 18px; }
+
 /* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
 body.cp > .wrap:not(#chanPage) { display: none !important; }
 #chanPage { max-width: 760px; }
@@ -396,10 +412,46 @@ a.btn.primary { color: var(--on-accent); }
 </head>
 <body>
 <nav class="menu" id="siteMenu" hidden>
-  <a href="./">Giveaway tools</a>
+  <a href="./">Home</a>
+  <a href="?tools">Giveaway tools</a>
   <a id="menuMyBot" href="?c=">My bot page</a>
   <a class="add" href="https://jdbbot.jdbbot.workers.dev/allow">Add JDBBot to your channel</a>
 </nav>
+
+<div class="wrap" id="homePage" hidden>
+  <header class="top">
+    <div class="brand">
+      <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
+      <h1>JDB<span>Bot</span></h1>
+    </div>
+    <a class="btn" href="?tools">Giveaway tools</a>
+  </header>
+  <section class="hero">
+    <h2>Free Kick bot.<br><span>No setup.</span></h2>
+    <p>Chat commands, giveaways, slot calls and raid shoutouts for your Kick stream.</p>
+    <div class="row">
+      <a class="btn primary" href="https://jdbbot.jdbbot.workers.dev/allow">Add to Kick</a>
+      <a class="btn" href="?tools">Open giveaway tools</a>
+    </div>
+  </section>
+  <div class="feats">
+    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Giveaway roller</b><span>Chat enters with a keyword. Spin the reel, get a winner.</span></a>
+    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Guess the balance</b><span>Chat guesses, closest wins.</span></a>
+    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Slot calls</b><span>Take calls from chat and track your bonus hunt.</span></a>
+    <div class="feat"><span class="tag">Bot</span><b>Chat commands</b><span>!followage, !uptime, !so, !clip and your own commands.</span></div>
+    <div class="feat"><span class="tag">Bot</span><b>Raid shoutouts</b><span>Thanks raiders and links their channel.</span></div>
+    <div class="feat"><span class="tag">OBS</span><b>Overlays</b><span>Show the reel and slot calls on stream.</span></div>
+  </div>
+  <section class="cp-box">
+    <h3>Find a channel</h3>
+    <p class="hint">See a channel's commands.</p>
+    <form class="row" id="homeFind">
+      <input type="text" id="homeChan" placeholder="Kick channel name" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1 1 200px">
+      <button class="btn primary" type="submit">Open</button>
+    </form>
+  </section>
+  <p class="home-foot">Made by JayDaB4ngnt</p>
+</div>
 
 <div class="wrap" id="chanPage" hidden>
   <header class="top">
@@ -2381,6 +2433,13 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // ---------- channel bot pages (?c=channel) ----------
 // One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
 // own commands added with !jdb add, its clip markers, and a way for the streamer to add the bot.
+// Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
+const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !location.hash;
+if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "JDBBot"; }
+$("homeFind").addEventListener("submit", e => {
+  e.preventDefault(); const c = chanSlug($("homeChan").value).replace(/_/g, "-");
+  if (c) location.search = "?c=" + encodeURIComponent(c);
+});
 const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : null;
 if (CHANPAGE !== null) {
   document.body.classList.add("cp"); $("chanPage").hidden = false;
