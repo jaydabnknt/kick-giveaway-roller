@@ -387,6 +387,8 @@ body.cp > .wrap:not(#chanPage) { display: none !important; }
 .cp-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
 .cp-steps b { color: var(--fg); }
 #cpCodeBox { display: grid; gap: 10px; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+a.btn.primary { color: var(--on-accent); }
 .cp-err { color: #ff6b6b; font-size: 14px; margin: 0; }
 </style>
 </head>
@@ -408,10 +410,17 @@ body.cp > .wrap:not(#chanPage) { display: none !important; }
       <button class="btn primary" type="submit">Open</button>
     </form>
   </section>
+  <section class="cp-box" id="cpBadge" hidden>
+    <h3>Bot badge</h3>
+    <p class="hint">Tap Allow on Kick once, logged in as this channel. The bot then posts with the bot badge.</p>
+    <div class="row"><a class="btn primary" id="cpAllow" href="#">Allow</a></div>
+  </section>
   <section class="cp-box" id="cpAdd" hidden>
-    <h3>Add JDBBot to this channel</h3>
-    <p class="hint">Only the streamer can do this, and nobody has to sign in. Kick shows the bot a code you put on your channel, which proves it's yours.</p>
-    <div class="row"><button class="btn primary" id="cpGetCode" type="button">Get my code</button></div>
+    <h3>Add JDBBot</h3>
+    <p class="hint">Tap Allow on Kick, logged in as this channel. Comes with the bot badge.</p>
+    <div class="row"><a class="btn primary" id="cpAllow2" href="#">Add with Kick</a></div>
+    <p class="hint">Or without Kick: put a code in your title or bio.</p>
+    <div class="row"><button class="btn" id="cpGetCode" type="button">Get a code</button></div>
     <div id="cpCodeBox" hidden>
       <div class="cp-code" id="cpCode"></div>
       <ol class="cp-steps">
@@ -2390,6 +2399,7 @@ if (CHANPAGE !== null) {
     if (!d.ok) { pill("err", "Error"); $("cpLead").textContent = d.error || "Something went wrong."; return; }
     $("cpFind").hidden = true;
     $("cpCmds").hidden = false;
+    $("cpAllow").href = $("cpAllow2").href = BOT_URL + "/allow";
     $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(c.does), cell(whoTag(c.who)))));
     if (!d.enabled) {
       pill("", "Not added");
@@ -2397,7 +2407,8 @@ if (CHANPAGE !== null) {
       $("cpAdd").hidden = false; return;
     }
     pill("live", "On");
-    $("cpLead").textContent = "Bot is active";
+    $("cpLead").textContent = d.badge ? "Bot is active, with the bot badge" : "Bot is active";
+    $("cpBadge").hidden = !!d.badge;
     $("cpCustomBox").hidden = false;
     $("cpCustom").replaceChildren(...(d.custom.length ? d.custom.map(c => row(cell(c.name, "cmd"), cell(c.text), cell(c.by || ""))) : [row(Object.assign(cell("None yet"), { colSpan: 3 }))]));
     if (d.clips && d.clips.length) {
