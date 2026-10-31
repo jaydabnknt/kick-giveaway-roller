@@ -72,7 +72,8 @@ const TEMPLATES = {
   callsClose: d => `🔒 Slot calls are closed! ${plural(+d.n || 0, "call", "calls")} in.`,
   nowPlaying: d => at(d.name) && `▶️ Now playing ${clean(d.slot, 60)}, called by ${at(d.name)}`,
   bonus: d => at(d.name) && `🎁 ${clean(d.slot, 60)} (called by ${at(d.name)}) hit ${/^[aeiou]/i.test(clean(d.type)) ? "an" : "a"} ${clean(d.type, 10)} bonus! ${+d.n || 1} in the bonus hunt.`,
-  callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`
+  callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`,
+  raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
 async function rateOk(env, channel) {
   const k = "rl:" + channel + ":" + Math.floor(Date.now() / 60000);
@@ -305,6 +306,11 @@ export default {
       const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
       if (!keyed && !(await rateOk(env, clean(body.channel).toLowerCase()))) return json({ ok: false, error: "slow down" }, 429);
       if (!text) return json({ ok: false, error: "empty" }, 400);
+      if (body.event === "raid") {           // the site and every OBS overlay may all see the same raid; thank it once
+        const k = "raid:" + clean(body.channel).toLowerCase() + ":" + at(body.data && body.data.name).toLowerCase();
+        if (await env.STORE.get(k)) return json({ ok: true, duplicate: true });
+        await env.STORE.put(k, "1", { expirationTtl: 900 });
+      }
       try {
         const id = await broadcasterId(env, body.channel);
         await postAsBot(env, id, text);
@@ -312,6 +318,24 @@ export default {
       } catch (e) {
         return json({ ok: false, error: String(e.message || e) }, 502);
       }
+    }
+    if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
+      if (req.method === "POST") {
+        if (!fromSite(req, env)) return json({ ok: false, error: "not allowed" }, 403);
+        const b = await req.json().catch(() => ({}));
+        const slug = clean(b.ch, 40).toLowerCase(), id = Number(b.id);
+        if (!/^[a-z0-9_-]{1,40}$/.test(slug) || !(id > 0)) return json({ ok: false, error: "bad room" }, 400);
+        await env.STORE.put("room:" + slug, String(id));
+        return json({ ok: true });
+      }
+      const slug = clean(url.searchParams.get("ch"), 40).toLowerCase().replace(/^@/, "");
+      let id = Number(await env.STORE.get("room:" + slug)) || null;
+      if (!id && slug) {                // Kick often blocks this from servers, so the site's copy above comes first
+        const t = await fetch("https://kick.com/api/v2/channels/" + encodeURIComponent(slug), { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } }).then(r => r.ok ? r.text() : "").catch(() => "");
+        const m = t.match(/"chatroom"\s*:\s*\{[^{}]*?"id"\s*:\s*(\d+)/);
+        if (m) { id = Number(m[1]); await env.STORE.put("room:" + slug, String(id)); }
+      }
+      return json({ ok: !!id, id });
     }
     return json({ ok: false, error: "not found" }, 404);
   }
