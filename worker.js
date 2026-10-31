@@ -199,6 +199,29 @@ async function removeChannel(env, slug) {
   await env.STORE.put("channels", JSON.stringify((await channelList(env)).filter(c => c.slug !== slug)));
   if (id) { await env.STORE.delete("stok:" + id); await unsubscribe(env, slug).catch(() => {}); }
 }
+// Channels that pressed Allow before the dashboard existed (or whose join got lost when two saves of the list
+// overlapped) still have a streamer token "stok:<id>". Put any of those back on the list.
+async function syncChannels(env) {
+  const list = await channelList(env), have = new Set(list.map(c => String(c.id || "")));
+  let names = null, changed = false;
+  for (const uid of Object.keys(await listMeta(env, "stok:"))) {
+    if (have.has(uid)) continue;
+    let slug = await kickApp(env, "/channels?broadcaster_user_id=" + uid).then(d => d.data && d.data[0] && d.data[0].slug).catch(() => null);
+    if (!slug) {   // Kick didn't answer: look for the name we saved for this id
+      if (!names) { names = {}; for (const k of Object.keys(await listMeta(env, "ch:"))) names[await env.STORE.get("ch:" + k)] = k; }
+      slug = names[uid];
+    }
+    if (!slug) continue;
+    slug = normSlug(slug);
+    const c = list.find(x => x.slug === slug);
+    if (c) { if (!c.id) { c.id = Number(uid); changed = true; } continue; }
+    list.push({ slug, id: Number(uid), since: 0, before: true }); changed = true;
+    await env.STORE.put("ch:" + slug, uid);
+    await subscribeChat(env, slug).catch(() => {});
+  }
+  if (changed) await env.STORE.put("channels", JSON.stringify(list));
+  return list;
+}
 async function adminOk(req, env) {
   const t = (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
   return t.length > 20 && !!(await env.STORE.get("sess:" + t));
@@ -569,7 +592,7 @@ export default {
       } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 500); }
       if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
       if (!["state", "key", "revoke", "approve", "deny", "remove"].includes(op)) return json({ ok: false, error: "not found" }, 404);
-      return json({ ok: true, home: env.BOT_CHANNEL, channels: await channelList(env), keys: Object.entries(keys).map(([key, k]) => ({ key, ...k })).sort((a, b) => b.at - a.at),
+      return json({ ok: true, home: env.BOT_CHANNEL, channels: op === "state" ? await syncChannels(env) : await channelList(env), keys: Object.entries(keys).map(([key, k]) => ({ key, ...k })).sort((a, b) => b.at - a.at),
         requests: Object.entries(reqs).map(([ch, r]) => ({ ch, ...r })).sort((a, b) => b.at - a.at) });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
