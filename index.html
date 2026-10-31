@@ -2576,7 +2576,7 @@ function showTab(name) {
   if (activeTab !== "slots" && chat.parentElement !== desk) { desk.prepend(chat); chat.after($("botPanel")); }   // the slot browser doesn't use chat
   if (OVERLAY) return;
   try { localStorage.setItem(TAB_KEY, activeTab); } catch (e) {}
-  if (location.hash !== "#" + activeTab) history.replaceState(null, "", "#" + activeTab);
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);   // the tab is remembered, not put in the address
 }
 tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
