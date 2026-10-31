@@ -1,0 +1,21 @@
+name: deploy-pages
+# Publishes the site (index.html) to Cloudflare Pages as well as GitHub Pages.
+on:
+  push:
+    branches: [gh-pages]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy to Cloudflare Pages
+        run: |
+          mkdir dist && cp index.html dist/
+          npx -y wrangler@4 pages project create jdbbot --production-branch main 2>&1 | tail -3 || true
+          npx -y wrangler@4 pages deploy dist --project-name jdbbot --branch main --commit-dirty=true 2>&1 | tee out.txt
+          echo "SITE URL: $(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' out.txt | head -1)"
