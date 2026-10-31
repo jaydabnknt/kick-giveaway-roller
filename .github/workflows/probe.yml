@@ -6,10 +6,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Kicklet commands page
+      - name: Kicklet commands, other routes
         run: |
-          curl -sS -m 30 -A "Mozilla/5.0" "https://kicklet.app/user/JayDaB4ngnt/commands" -o page.html -w "%{http_code} %{size_download}\n"
-          head -c 3000 page.html; echo
-          echo "== scripts"; grep -o 'src="[^"]*\.js"' page.html | head
-          echo "== api hints"; grep -o 'https://[a-z.]*kicklet[a-z./]*' page.html | sort -u | head -20
-          for u in "https://api.kicklet.app/user/JayDaB4ngnt/commands" "https://kicklet.app/api/user/JayDaB4ngnt/commands" "https://api.kicklet.app/api/user/JayDaB4ngnt/commands" "https://api.kicklet.app/v1/user/JayDaB4ngnt/commands"; do echo "== $u"; curl -sS -m 20 -A "Mozilla/5.0" "$u" | head -c 1500; echo; done
+          for p in api/user/jaydab4ngnt/commands api/users/JayDaB4ngnt/commands api/channel/JayDaB4ngnt/commands api/channels/jaydab4ngnt/commands api/public/user/JayDaB4ngnt/commands api/v1/user/JayDaB4ngnt/commands api/user/JayDaB4ngnt api/commands/JayDaB4ngnt api/public/commands/JayDaB4ngnt; do echo "== $p"; curl -sS -m 20 -A "Mozilla/5.0" "https://kicklet.app/$p" | head -c 600; echo; done
+          echo "== jina"; curl -sS -m 60 "https://r.jina.ai/https://kicklet.app/user/JayDaB4ngnt/commands" | head -c 6000; echo
