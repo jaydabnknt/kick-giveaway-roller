@@ -184,12 +184,13 @@ const BUILTINS = [
   ["!top", "Shows the top 5 by watchtime", "Everyone"],
   ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
+  ["!gtb start / stop", "Opens or closes GTB guesses (site open)", "Mods"],
   ["!jdb add name text", "Adds a command", "Mods"],
   ["!jdb edit name text", "Edits a command", "Mods"],
   ["!jdb del name", "Deletes a command", "Mods"],
   ["!jdb leave", "Removes the bot", "Streamer"]
 ];
-const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "followage", "followers", "watchtime", "top"]);
+const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "gtb", "followage", "followers", "watchtime", "top"]);
 
 // Chat activity for !watchtime / !top. Kick doesn't tell bots who is watching, so someone counts as watching
 // for up to 10 minutes after each message they send while the stream is live. Totals are saved to KV every
