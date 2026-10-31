@@ -9,7 +9,7 @@ crons = ["17 */6 * * *"]
 [vars]
 BOT_USERNAME = "JDBBot"
 BOT_CHANNEL = "jaydab4ngnt"
-SITE_URL = "https://jaydabnknt.github.io/kick-giveaway-roller/"
+SITE_URL = "https://jdbbot.pages.dev/"
 
 [[kv_namespaces]]
 binding = "STORE"
