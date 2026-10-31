@@ -6,7 +6,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Badge status
+      - name: Kicklet commands page
         run: |
-          curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/channel?ch=jaydab4ngnt" | grep -o '"enabled":[a-z]*,"badge":[a-z]*'; echo
-          curl -sS -m 30 "https://jdbbot.jdbbot.workers.dev/health"; echo
+          curl -sS -m 30 -A "Mozilla/5.0" "https://kicklet.app/user/JayDaB4ngnt/commands" -o page.html -w "%{http_code} %{size_download}\n"
+          head -c 3000 page.html; echo
+          echo "== scripts"; grep -o 'src="[^"]*\.js"' page.html | head
+          echo "== api hints"; grep -o 'https://[a-z.]*kicklet[a-z./]*' page.html | sort -u | head -20
+          for u in "https://api.kicklet.app/user/JayDaB4ngnt/commands" "https://kicklet.app/api/user/JayDaB4ngnt/commands" "https://api.kicklet.app/api/user/JayDaB4ngnt/commands" "https://api.kicklet.app/v1/user/JayDaB4ngnt/commands"; do echo "== $u"; curl -sS -m 20 -A "Mozilla/5.0" "$u" | head -c 1500; echo; done
