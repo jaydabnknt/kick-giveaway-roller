@@ -4,6 +4,30 @@
 <meta charset="utf-8">
 <title>Kick Giveaway Tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+// The site moved to jdbbot.pages.dev. Old github.io links forward there; the first time, this browser's saved
+// giveaway, GTB, calls and settings data comes along in the address and is filled in on the new site.
+(function () {
+  try {
+    if (location.hostname === "jaydabnknt.github.io") {
+      var p = new URLSearchParams(location.search), move = "";
+      if (!p.has("overlay") && !localStorage.getItem("kick-moved")) {
+        var o = {};
+        for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^kick-/.test(k) && !/avatars|slots-cache/.test(k)) o[k] = localStorage.getItem(k); }
+        move = "#move=" + encodeURIComponent(JSON.stringify(o));
+        localStorage.setItem("kick-moved", "1");
+      }
+      location.replace("https://jdbbot.pages.dev/" + location.search + (move || location.hash));
+      return;
+    }
+    if (location.hash.indexOf("#move=") === 0) {
+      var d = JSON.parse(decodeURIComponent(location.hash.slice(6)));
+      for (var key in d) if (localStorage.getItem(key) === null) localStorage.setItem(key, d[key]);
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch (e) {}
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
