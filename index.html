@@ -1392,7 +1392,7 @@ els.connect.addEventListener("click", async () => {
   try { id = await lookupChatroom(slug); }
   catch (e) { setPill("err", "Not found"); showError(`Kick has no channel called <b>${escapeHtml(slug)}</b>. Check the spelling.`); return; }
   finally { els.connect.disabled = false; }
-  if (id) { connect(id); return; }
+  if (id) { tellBotRoom(slug, id); connect(id); return; }
   setPill("wait", "Need chatroom ID");
   els.lookupMsg.innerHTML = `Couldn't look up <b>${escapeHtml(slug)}</b> automatically this time. Kick blocked both the direct lookup and the relay services. You only need to do this once per channel, because the page remembers the ID:`;
   els.lookupLink.href = `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
@@ -1405,7 +1405,7 @@ els.useId.addEventListener("click", () => {
   if (!found) { els.chatroomId.setCustomValidity("Paste the chatroom number, or the whole page from kick.com"); els.chatroomId.reportValidity(); return; }
   els.chatroomId.setCustomValidity("");
   const id = found; const slug = slugOf(els.channel.value);
-  if (slug) { state.chatroomIds[slug] = id; save(); }
+  if (slug) { state.chatroomIds[slug] = id; save(); tellBotRoom(slug, id); }
   els.chatroomId.value = String(id); els.lookupHelp.hidden = true; connect(id);
 });
 els.chatroomId.addEventListener("input", () => els.chatroomId.setCustomValidity(""));
@@ -1471,6 +1471,9 @@ function openSocket() {
     } else if (msg.event === "App\\Events\\ChatMessageEvent") {
       let d; try { d = typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data; } catch (e) { return; }
       onChat(d);
+    } else {
+      const r = raidFrom(msg);
+      if (r && S.channel && bot.enabled && bot.on.raid) thankRaid(S.channel, r);
     }
   };
   ws.onclose = () => {
@@ -2241,7 +2244,7 @@ const BOT_LS = "kick-giveaway-bot", BOT_URL = "https://jdbbot.jdbbot.workers.dev
 const BOT_EVENTS = [
   ["winner", "Giveaway winner", true], ["gtbOpen", "GTB opened", true], ["gtbClose", "GTB closed", true], ["gtbWin", "GTB winner", true],
   ["callsOpen", "Calls opened", true], ["callsClose", "Calls closed", true], ["nowPlaying", "Now playing a call", true],
-  ["bonus", "Call hit a bonus", true], ["callAck", "Reply to every !call", false]
+  ["bonus", "Call hit a bonus", true], ["raid", "Thank raiders", true], ["callAck", "Reply to every !call", false]
 ];
 var bot = { enabled: true, on: Object.fromEntries(BOT_EVENTS.map(e => [e[0], e[2]])) };
 try { const b = JSON.parse(localStorage.getItem(BOT_LS) || "{}"); bot.on = { ...bot.on, ...(b.on || {}) }; if (typeof b.enabled === "boolean") bot.enabled = b.enabled; } catch (e) {}
@@ -2285,6 +2288,59 @@ if (!OVERLAY) fetchWithTimeout(BOT_URL + "/health", 10000).then(r => r.json()).t
   $("botStatus").textContent = j.signedIn ? `${j.bot || "JDBBot"} is online.` : "The bot is offline right now.";
 }).catch(() => { $("botStatus").textContent = "Couldn't reach the bot right now."; });
 renderBot();
+
+// ---------- raid thank-you ----------
+// Kick doesn't tell bots about raids, but its public chat feed shows a raid notice. The site (while connected)
+// and every OBS overlay (open whenever OBS is) watch for it and ask JDBBot to thank the raider; the bot only
+// posts the first one it hears about.
+function tellBotRoom(slug, id) {
+  fetchWithTimeout(BOT_URL + "/room", 10000, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ch: slug, id }) }).catch(() => {});
+}
+function raidFrom(msg) {
+  const ev = String(msg.event || "");
+  if (ev.startsWith("pusher") || !/host|raid/i.test(ev)) return null;
+  let d = msg.data; try { if (typeof d === "string") d = JSON.parse(d); } catch (e) { return null; }
+  d = d || {};
+  const u = d.raider || d.host || d.user || {};
+  const name = d.host_username || d.raider_username || u.username || u.slug || d.username;
+  if (!name) return null;
+  return { name: String(name), viewers: Number(d.number_viewers ?? d.viewers ?? d.viewer_count ?? 0) || 0 };
+}
+const raidSeen = new Map();
+function thankRaid(channel, r) {
+  const k = r.name.toLowerCase();
+  if (k === slugOf(channel) || Date.now() - (raidSeen.get(k) || 0) < 600000) return;
+  raidSeen.set(k, Date.now());
+  fetchWithTimeout(BOT_URL + "/say", 15000, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ channel, event: "raid", data: r }) }).catch(() => {});
+}
+async function raidRoom(slug) {
+  const p = Number(params.get("room")); if (p > 0) return p;
+  try { const j = await (await fetchWithTimeout(`${BOT_URL}/room?ch=${encodeURIComponent(slug)}`, 10000)).json(); if (j.id) return j.id; } catch (e) {}
+  const t = await fetchKickChannel(slug).catch(() => null), id = typeof t === "string" && chatroomFromText(t);
+  if (id) { tellBotRoom(slug, id); return id; }
+  return null;
+}
+async function watchRaids(slug) {
+  let room = null, wait = 15000;
+  while (!(room = await raidRoom(slug))) { await new Promise(r => setTimeout(r, wait)); wait = Math.min(300000, wait * 2); }
+  let keys = [], fails = 0;
+  const open = async () => {
+    if (!keys.length) keys = [await negotiatePusher(), PUSHER_DEFAULT].filter(Boolean);
+    let s; try { s = new WebSocket(pusherUrl(keys[0])); } catch (e) { setTimeout(open, 30000); return; }
+    s.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.event === "pusher:connection_established") {
+        fails = 0;
+        for (const ch of [`chatrooms.${room}.v2`, `chatrooms.${room}`]) s.send(JSON.stringify({ event: "pusher:subscribe", data: { auth: "", channel: ch } }));
+      } else if (m.event === "pusher:ping") s.send(JSON.stringify({ event: "pusher:pong", data: {} }));
+      else if (m.event === "pusher:error") { keys.shift(); try { s.close(); } catch (e) {} }
+      else { const r = raidFrom(m); if (r) thankRaid(slug, r); }
+    };
+    s.onclose = () => setTimeout(open, Math.min(60000, 2000 * 2 ** Math.min(fails++, 5)));
+  };
+  open();
+}
+if (OVERLAY && params.get("ch") && params.get("raids") !== "0") watchRaids(chanSlug(params.get("ch")));
 
 // ---------- tabs ----------
 // One chat connection serves both tabs; the Kick chat panel moves to whichever tab is showing.
