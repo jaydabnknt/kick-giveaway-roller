@@ -251,9 +251,9 @@ const BUILTINS = [
   ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
   ["!gtb start / stop", "Opens or closes GTB guesses (site open)", "Mods"],
-  ["!jdb add name text", "Adds a command", "Mods"],
-  ["!jdb edit name text", "Edits a command", "Mods"],
-  ["!jdb del name", "Deletes a command", "Mods"],
+  ["!jdb add command text", "Adds a command", "Mods"],
+  ["!jdb edit command text", "Edits a command", "Mods"],
+  ["!jdb del command", "Deletes a command", "Mods"],
   ["!jdb leave", "Removes the bot", "Streamer"]
 ];
 const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "gtb", "followage", "followers", "watchtime", "top"]);
@@ -370,7 +370,7 @@ async function onChat(env, ev) {
     const m = text.match(/^!jdb\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
     const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
     const cmds = (await env.STORE.get(key, "json")) || {};
-    const usage = "Usage: !jdb add name text · !jdb edit name text · !jdb del name";
+    const usage = "Usage: !jdb add command text · !jdb edit command text · !jdb del command";
     if (sub === "leave") {
       if (!isStreamer) return;
       if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
