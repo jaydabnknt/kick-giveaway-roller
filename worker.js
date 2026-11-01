@@ -362,7 +362,7 @@ async function onChat(env, ev) {
   }
   if (cmd === "!commands") {
     cooldown(30);
-    return postAsBot(env, bid, `📋 Commands for this channel, and who can use them: ${env.SITE_URL}?c=${slug}`);
+    return postAsBot(env, bid, `Here are the available commands: ${env.SITE_URL}?c=${slug}`);
   }
   const key = "cmds:" + slug;
   if (cmd === "!jdb") {
