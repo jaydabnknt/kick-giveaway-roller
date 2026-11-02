@@ -75,6 +75,12 @@ const TEMPLATES = {
   callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`,
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
+const STREAMER_ONLY = new Set(["gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
+async function streamerSession(req, env) {
+  const t = bearer(req);
+  return t.length > 20 ? await env.STORE.get("ss:" + t, "json") : null;
+}
 async function rateOk(env, channel) {
   const k = "rl:" + channel + ":" + Math.floor(Date.now() / 60000);
   const n = Number(await env.STORE.get(k) || 0);
@@ -471,15 +477,16 @@ export default {
     // /allow: a streamer lets the badge bot post in their chat. New channels need an access key from Jay's
     // dashboard (or an approved request); channels already using the bot can re-allow without one.
     // /admin/login: Jay signs in to the dashboard with Kick.
-    if (url.pathname === "/allow" || url.pathname === "/admin/login") {
-      const admin = url.pathname === "/admin/login";
+    // /login: a streamer proves who they are, so only they can run GTB and slot calls for their channel.
+    if (url.pathname === "/allow" || url.pathname === "/admin/login" || url.pathname === "/login") {
+      const admin = url.pathname !== "/allow", streamer = url.pathname === "/login";
       const ch = normSlug(url.searchParams.get("ch")), key = clean(url.searchParams.get("key"), 40).toUpperCase();
       if (!admin) {
         const back = err => Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(ch) + "&err=" + err, 302);
         if (!ch) return Response.redirect(env.SITE_URL + "?add", 302);
         if (!(await isEnabled(env, ch)) && !(await findKey(env, key, ch))) return back(key ? "badkey" : "nokey");
       }
-      const state = (admin ? "d" : "a") + randomString(24), verifier = randomString(32);
+      const state = (streamer ? "s" : admin ? "d" : "a") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
       await env.STORE.put("oauth:" + state, JSON.stringify({ v: verifier, key, ch }), { expirationTtl: 600 });
       const u = new URL("https://id.kick.com/oauth/authorize");
@@ -499,6 +506,13 @@ export default {
       const name = (me.data && me.data[0] && me.data[0].name) || "";
       const uid = me.data && me.data[0] && me.data[0].user_id;
       if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again.");
+      if (state.startsWith("s")) {   // streamer sign-in for the tools page (separate from the dashboard's sessions)
+        const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
+        const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
+        const sess = randomString(32);
+        await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug }), { expirationTtl: 30 * 86400 });
+        return Response.redirect(env.SITE_URL + "?tools#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
+      }
       if (state.startsWith("d")) {   // dashboard sign-in: only the home channel's owner gets in
         if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of JDBBot.");
         const sess = randomString(32);
@@ -529,10 +543,20 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/me") {   // which channel the tools page is signed in as
+      const me = await streamerSession(req, env);
+      if (me && req.method === "POST") { await env.STORE.delete("ss:" + bearer(req)); return json({ ok: true }); }
+      return me ? json({ ok: true, slug: me.slug }) : json({ ok: false, error: "signin" }, 401);
+    }
     if (url.pathname === "/say" && req.method === "POST") {
       const keyed = await checkKey(req, env);
       if (!keyed && !fromSite(req, env)) return json({ ok: false, error: "not allowed" }, 403);
       const body = await req.json().catch(() => ({}));
+      if (!keyed && STREAMER_ONLY.has(body.event)) {   // GTB and slot calls: only the channel's own streamer
+        const me = await streamerSession(req, env);
+        const mine = me && (me.slug === normSlug(body.channel) || me.uid === await broadcasterId(env, body.channel).catch(() => -1));
+        if (!mine) return json({ ok: false, error: "Only the streamer can run this. Log in with Kick on the site." }, 403);
+      }
       const tpl = TEMPLATES[body.event];
       const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
       if (!keyed && !(await isEnabled(env, body.channel))) return json({ ok: false, error: "JDBBot isn't added to this channel yet" }, 403);
