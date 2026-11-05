@@ -416,6 +416,7 @@ body.settings > .wrap:not(#settingsPage) { display: none !important; }
 #settingsPage { max-width: 760px; }
 .set-nav { display: flex; gap: 6px; flex-wrap: wrap; }
 .set-nav button { flex: 1 1 0; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 700 14px var(--sans, inherit); cursor: pointer; }
+.set-nav button[hidden] { display: none; }
 .set-nav button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .set-prof { display: flex; align-items: center; gap: 14px; }
 .set-prof .acct-btn { width: 64px; height: 64px; font-size: 26px; cursor: default; }
@@ -575,6 +576,7 @@ a.btn.primary { color: var(--on-accent); }
       <button type="button" role="tab" data-set="account" aria-selected="true">Account</button>
       <button type="button" role="tab" data-set="obs" aria-selected="false">OBS</button>
       <button type="button" role="tab" data-set="presets" aria-selected="false">Presets</button>
+      <button type="button" role="tab" data-set="experimental" aria-selected="false" id="setExpTab" hidden>Experimental</button>
     </nav>
     <section class="cp-box" data-setview="account">
       <div class="set-prof"><span class="acct-btn" id="setAv"></span><div><b id="setName"></b><span class="hint" id="setChan"></span></div></div>
@@ -587,6 +589,11 @@ a.btn.primary { color: var(--on-accent); }
       <div class="field"><label for="setOvG">Giveaway roller (600 × 640)</label><div class="inline"><input type="text" class="ov-link" id="setOvG" readonly><button class="btn" type="button" data-copy="setOvG">Copy</button></div></div>
       <div class="field"><label for="setOvC">Slot calls (500 × 600)</label><div class="inline"><input type="text" class="ov-link" id="setOvC" readonly><button class="btn" type="button" data-copy="setOvC">Copy</button></div></div>
       <p class="hint">Guess the Balance doesn't have an overlay yet.</p>
+    </section>
+    <section class="cp-box" data-setview="experimental" hidden>
+      <h3>Experimental</h3>
+      <p class="hint">Private test features, only on your account. They're saved on this device.</p>
+      <div id="setExpList" class="dash-list"></div>
     </section>
     <section class="cp-box" data-setview="presets" hidden>
       <h3>Presets</h3>
@@ -2949,6 +2956,15 @@ $("pfClose").addEventListener("click", () => { $("pfDlg").close(); });
 $("pfDlg").addEventListener("close", () => { profileFor = ""; });
 $("pfDlg").addEventListener("click", e => { if (e.target === $("pfDlg")) $("pfDlg").close(); });
 
+// ---------- experimental (owner only) ----------
+// Jay's private test features. Add one to EXPERIMENTS as [id, label, description] and check it with exp("id").
+// They only switch on for the owner's signed-in account, and are saved on this device.
+const OWNER = "jaydab4ngnt", EXP_LS = "kick-experimental";
+const EXPERIMENTS = [];
+let expOn = {}; try { expOn = JSON.parse(localStorage.getItem(EXP_LS) || "{}"); } catch (e) {}
+const isOwner = () => !!(streamer.tok && streamer.slug === OWNER);
+const exp = id => isOwner() && !!expOn[id];
+
 // ---------- settings (?settings) ----------
 // Account (your profile, and removing the bot), OBS overlay links for every tool, and presets (later).
 if (params.has("settings")) {
@@ -2964,6 +2980,15 @@ if (params.has("settings")) {
     $("setName").textContent = streamer.name || streamer.slug; $("setChan").textContent = "kick.com/" + streamer.slug;
     $("setOvG").value = `${ovBase}?overlay=giveaway&ch=${streamer.slug}`; $("setOvC").value = `${ovBase}?overlay=calls&ch=${streamer.slug}`;
     $("setLeave").hidden = streamer.slug === "jaydab4ngnt";   // the home channel keeps the bot
+    $("setExpTab").hidden = !isOwner();
+    $("setExpList").replaceChildren(...(EXPERIMENTS.length ? EXPERIMENTS.map(([id, label, about]) => {
+      const row = document.createElement("label"); row.className = "dash-item sw";
+      const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!expOn[id];
+      c.addEventListener("change", () => { expOn[id] = c.checked; try { localStorage.setItem(EXP_LS, JSON.stringify(expOn)); } catch (e) {} });
+      const main = document.createElement("div"); main.className = "main";
+      main.append(Object.assign(document.createElement("b"), { textContent: label }), Object.assign(document.createElement("span"), { textContent: about || "" }));
+      row.append(c, main); return row;
+    }) : [Object.assign(document.createElement("p"), { className: "hint", textContent: "No experiments yet. Ask for one \"for Jay\" and it shows up here." })]));
   };
   document.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("[data-set]").forEach(x => x.setAttribute("aria-selected", String(x === b)));
