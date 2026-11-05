@@ -409,10 +409,10 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 .acct-head { padding: 10px 12px 8px; font-weight: 800; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-wrap: anywhere; }
 .acct-menu .soon { margin-left: 6px; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .acct-menu a.out { color: #ff6b6b; }
-body.locked #toolsPage > :not(.top):not(#toolsGate) { display: none !important; }
-body.locked #connPill { display: none; }
-#toolsGate { max-width: 520px; width: 100%; justify-self: center; margin-top: 24px; }
-#toolsGate[hidden] { display: none !important; }
+body.guest #toolsPage .tabs, body.guest #botPanel { display: none !important; }
+#chanRow[hidden], #chanSigned[hidden] { display: none !important; }
+.hero .cp-err { color: #ff6b6b; font-size: 14px; }
+@media (max-width: 440px) { .top:has(.acct) .pill { font-size: 0; gap: 0; padding: 8px; } }
 
 /* Home page (the site root) */
 body.home > .wrap:not(#homePage) { display: none !important; }
@@ -475,7 +475,7 @@ a.btn.primary { color: var(--on-accent); }
 <nav class="menu" id="siteMenu" hidden>
   <a href="./">Home</a>
   <a href="?tools">Tools</a>
-  <a class="add" href="?add">Add JDBBot to your channel</a>
+  <a class="add" id="menuAdd" href="?add">Add JDBBot to your channel</a>
   <a href="?admin">Owner Dashboard</a>
 </nav>
 
@@ -497,27 +497,11 @@ a.btn.primary { color: var(--on-accent); }
     <h2>Free Kick bot.<br><span>No setup.</span></h2>
     <p>Your streaming toolkit.</p>
     <div class="row">
-      <a class="btn primary" href="?add">Add to Kick</a>
-      <a class="btn" href="?tools">Open giveaway tools</a>
+      <a class="btn primary" id="homeAdd" href="#">Add to your Kick chat</a>
+      <a class="btn primary" id="homeTools" href="?tools" hidden>Open tools</a>
     </div>
+    <p class="cp-err" id="homeErr" hidden></p>
   </section>
-  <div class="feats">
-    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Giveaway roller</b><span>Chat enters with a keyword. Spin the reel, get a winner.</span></a>
-    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Guess the balance</b><span>Chat guesses, closest wins.</span></a>
-    <a class="feat" href="?tools"><span class="tag">Tools</span><b>Slot calls</b><span>Take calls from chat and track your bonus hunt.</span></a>
-    <div class="feat"><span class="tag">Bot</span><b>Chat commands</b><span>!followage, !uptime, !so, !clip and your own commands.</span></div>
-    <div class="feat"><span class="tag">Bot</span><b>Raid shoutouts</b><span>Thanks raiders and links their channel.</span></div>
-    <div class="feat"><span class="tag">OBS</span><b>Overlays</b><span>Show the reel and slot calls on stream.</span></div>
-  </div>
-  <section class="cp-box">
-    <h3>Find a channel</h3>
-    <p class="hint">See a channel's commands.</p>
-    <form class="row" id="homeFind">
-      <input type="text" id="homeChan" placeholder="Kick channel name" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1 1 200px">
-      <button class="btn primary" type="submit">Open</button>
-    </form>
-  </section>
-  <p class="home-foot">Made by JayDaB4ngnt</p>
 </div>
 
 <div class="wrap" id="adminPage" hidden>
@@ -578,13 +562,12 @@ a.btn.primary { color: var(--on-accent); }
   </section>
   <section class="cp-box" id="cpAdd" hidden>
     <h3>Add JDBBot</h3>
-    <p class="hint" id="cpAddHint">Enter your access key, then tap Allow on Kick logged in as this channel.</p>
+    <p class="hint" id="cpAddHint">Tap Add with Kick while you're logged in to Kick as this channel.</p>
     <form class="row" id="cpKeyForm">
-      <input type="text" id="cpKey" placeholder="JDB-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1 1 180px">
       <button class="btn primary" type="submit">Add with Kick</button>
     </form>
     <p class="cp-err" id="cpErr" hidden></p>
-    <div class="row" id="cpReqRow"><span class="hint">No key?</span><button class="btn" id="cpRequest" type="button">Request access</button></div>
+    <div class="row" id="cpReqRow" hidden><span class="hint">No key?</span><button class="btn" id="cpRequest" type="button">Request access</button></div>
     <p class="hint" id="cpReqMsg" hidden></p>
   </section>
   <section class="cp-box" id="cpCmds" hidden>
@@ -618,11 +601,6 @@ a.btn.primary { color: var(--on-accent); }
     <span class="pill" id="connPill">Offline</span>
   </header>
 
-  <section class="cp-box" id="toolsGate" hidden>
-    <h2>Sign in to use the <span>tools</span></h2>
-    <p class="hint" id="toolsGateMsg">The giveaway tools are for approved streamers. Log in with your Kick account to use them.</p>
-    <div class="row"><a class="btn primary" id="toolsGateBtn" href="#">Log in with Kick</a></div>
-  </section>
 
   <nav class="tabs" role="tablist" aria-label="Giveaway type">
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
@@ -673,7 +651,8 @@ a.btn.primary { color: var(--on-accent); }
       <details class="panel" id="chatPanel" open>
         <summary>Kick chat</summary>
         <div class="panel-body">
-          <div class="inline">
+          <p class="hint" id="chanSigned" hidden></p>
+          <div class="inline" id="chanRow">
             <div class="field">
               <label for="channel">Channel</label>
               <input type="text" id="channel" placeholder="e.g. trainwreckstv" autocomplete="off" spellcheck="false" autocapitalize="off">
@@ -2515,26 +2494,22 @@ if (!OVERLAY) {
 const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && (params.has("tools") || !!location.hash);
 let meChecked = false;
 const loginUrl = () => BOT_URL + "/login?back=" + encodeURIComponent(location.search);
+let autoConnected = false;
+const signedIn = () => !!(streamer.tok && streamer.approved !== false);
+// Signed out: only the giveaway roller, on any chat you pick. Signed in: every tool, always on your own chat.
 function applyGate() {
   if (!ON_TOOLS) return;
-  const msg = $("toolsGateMsg"), btn = $("toolsGateBtn");
-  let locked = true;
-  if (!streamer.tok) { $("toolsGate").querySelector("h2").innerHTML = "Sign in to use the <span>tools</span>"; msg.textContent = "The giveaway tools are for approved streamers. Log in with your Kick account to use them."; btn.textContent = "Log in with Kick"; btn.href = loginUrl(); btn.hidden = false; }
-  else if (streamer.approved === undefined && !meChecked) { msg.textContent = "Checking your account…"; btn.hidden = true; }
-  else if (!streamer.approved) {
-    $("toolsGate").querySelector("h2").innerHTML = "Not approved <span>yet</span>";
-    msg.textContent = `Your channel ${streamer.slug} isn't approved to use the tools yet. Ask for access on your bot page.`;
-    btn.textContent = "Request access"; btn.href = "?c=" + encodeURIComponent(streamer.slug); btn.hidden = false;
-  } else {
-    locked = false;
-    const ch = $("channel");
-    if (!sameChan(chanSlug(ch.value), streamer.slug)) { ch.value = streamer.slug; S.channel = streamer.slug; save(); ch.dispatchEvent(new Event("input")); }
-    ch.readOnly = true; ch.title = "Your channel (you're signed in as " + streamer.slug + ")";
-  }
-  document.body.classList.toggle("locked", locked); $("toolsGate").hidden = !locked;
+  const on = signedIn();
+  document.body.classList.toggle("guest", !on);
+  $("chanRow").hidden = on; $("chanSigned").hidden = !on;
+  if (!on) return;
+  const ch = $("channel");
+  if (!sameChan(chanSlug(ch.value), streamer.slug)) { ch.value = streamer.slug; S.channel = streamer.slug; save(); ch.dispatchEvent(new Event("input")); }
+  $("chanSigned").replaceChildren("Using your chat: ", Object.assign(document.createElement("b"), { textContent: streamer.slug }));
+  if (!autoConnected) { autoConnected = true; els.connect.click(); }
 }
 function streamerGate() {
-  if (streamer.tok && streamer.approved && sameChan(streamer.slug, chanSlug($("channel").value))) return true;
+  if (signedIn()) return true;
   applyGate(); return false;
 }
 // Top-right account button: the Kick profile picture, with Presets, My commands and Sign out.
@@ -2577,7 +2552,8 @@ if (!OVERLAY) {
   if (streamer.tok) fetchWithTimeout(BOT_URL + "/me", 10000, { headers: { authorization: "Bearer " + streamer.tok } }).then(async r => {
     if (r.status === 401) { streamer = { tok: "", slug: "" }; saveStreamer(); return; }
     const j = await r.json().catch(() => ({}));
-    if (j.ok) { Object.assign(streamer, { slug: j.slug, name: j.name, pic: j.pic, approved: !!j.approved }); saveStreamer(); }
+    if (j.ok && !j.approved) { const was = !!streamer.tok; streamer = { tok: "", slug: "" }; saveStreamer(); if (was && ON_TOOLS) location.reload(); return; }   // the bot left their chat
+    if (j.ok) { Object.assign(streamer, { slug: j.slug, name: j.name, pic: j.pic, approved: true }); saveStreamer(); }
   }).catch(() => {}).finally(() => { meChecked = true; renderAcct(); applyGate(); });
 }
 
@@ -2591,7 +2567,7 @@ try { const b = JSON.parse(localStorage.getItem(BOT_LS) || "{}"); bot.on = { ...
 const saveBot = () => { if (OVERLAY) return; try { localStorage.setItem(BOT_LS, JSON.stringify(bot)); } catch (e) {} };
 const botQueue = []; let botBusy = false;
 function botSay(event, data) {
-  if (OVERLAY || !bot || !bot.enabled || (event !== "test" && !bot.on[event])) return;
+  if (OVERLAY || !bot || !bot.enabled || !signedIn() || (event !== "test" && !bot.on[event])) return;
   const channel = $("channel").value.trim();
   if (!channel) { $("botMsg").textContent = "Type your channel in Kick chat so the bot knows where to post."; return; }
   botQueue.push({ channel, event, data: data || {} }); botPump();
@@ -2647,10 +2623,11 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
 const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !location.hash;
 if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "JDBBot"; }
-$("homeFind").addEventListener("submit", e => {
-  e.preventDefault(); const c = chanSlug($("homeChan").value).replace(/_/g, "-");
-  if (c) location.search = "?c=" + encodeURIComponent(c);
-});
+$("homeAdd").href = BOT_URL + "/allow"; $("menuAdd").href = BOT_URL + "/allow";
+if (HOME) {
+  if (streamer.tok) { $("homeAdd").hidden = true; $("homeTools").hidden = false; }
+  if (params.get("err") === "notadded") { $("homeErr").textContent = "You have to add the bot to your Kick chat first, then you can sign in."; $("homeErr").hidden = false; history.replaceState(null, "", location.pathname); }
+}
 const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : params.has("add") ? "" : null;
 if (CHANPAGE !== null) {
   document.body.classList.add("cp"); $("chanPage").hidden = false;
@@ -2687,9 +2664,6 @@ if (CHANPAGE !== null) {
       $("cpLead").textContent = "Bot isn't added yet";
       $("cpAdd").hidden = false;
       const e = params.get("err");
-      if (e) err(e === "badkey" ? "That key doesn't work. It may be used, revoked or for another channel." : "You need an access key first.");
-      if (d.approved) { $("cpAddHint").textContent = "Your request was approved. Tap Add with Kick, no key needed."; $("cpReqRow").hidden = true; err(""); }
-      else if (d.requested) { $("cpReqRow").hidden = true; reqMsg("Access requested. Come back here once it's approved."); }
       return;
     }
     pill("live", "On");
@@ -2747,7 +2721,7 @@ if (CHANPAGE !== null) {
   const reqMsg = t => { $("cpReqMsg").textContent = t; $("cpReqMsg").hidden = !t; };
   $("cpKeyForm").addEventListener("submit", e => {
     e.preventDefault();
-    location.href = BOT_URL + "/allow?ch=" + encodeURIComponent(CHANPAGE) + "&key=" + encodeURIComponent($("cpKey").value.trim().toUpperCase());
+    location.href = BOT_URL + "/allow?ch=" + encodeURIComponent(CHANPAGE);
   });
   $("cpRequest").addEventListener("click", async () => {
     $("cpRequest").disabled = true; err("");
@@ -2877,7 +2851,7 @@ const TAB_KEY = "kick-giveaway-tab";
 let activeTab = "roller";
 const tabBtns = document.querySelectorAll(".tabs [data-tab]");
 function showTab(name) {
-  activeTab = ["gtb", "calls"].includes(name) ? name : "roller";   // Slots tab is switched off for now; its code is kept
+  activeTab = ["gtb", "calls"].includes(name) && !document.body.classList.contains("guest") ? name : "roller";   // Slots tab is switched off for now; its code is kept
   if (activeTab === "slots" && !sl.loaded && !OVERLAY) loadSlots();
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
