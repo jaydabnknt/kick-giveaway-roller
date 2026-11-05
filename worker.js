@@ -175,6 +175,7 @@ async function channelList(env) {
   if (!list.some(c => c.slug === env.BOT_CHANNEL)) list.unshift({ slug: env.BOT_CHANNEL, since: 0 });
   return list;
 }
+const isBanned = async (env, slug) => ((await env.STORE.get("banned", "json")) || []).some(x => x.slug === normSlug(slug));
 const isEnabled = async (env, slug) => (await channelList(env)).some(c => c.slug === normSlug(slug));
 async function unsubscribe(env, slug) {
   const id = await broadcasterId(env, slug);
@@ -509,6 +510,7 @@ export default {
       if (state.startsWith("s")) {   // sign in: only works once the bot is in your chat
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
+        if (await isBanned(env, slug)) return Response.redirect(env.SITE_URL + "?err=banned", 302);
         if (!(await isEnabled(env, slug))) return Response.redirect(env.SITE_URL + "?err=notadded", 302);
         return signIn(slug, st.back === undefined ? "?tools" : st.back);
       }
@@ -521,6 +523,7 @@ export default {
       {
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
+        if (await isBanned(env, slug)) return Response.redirect(env.SITE_URL + "?err=banned", 302);
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
         const list = await channelList(env);
@@ -622,35 +625,23 @@ export default {
     if (url.pathname.startsWith("/admin/")) {
       if (!(await adminOk(req, env))) return json({ ok: false, error: "signin" }, 401);
       const b = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-      for (const [old, put] of [["keys", putKey], ["requests", putReq]]) {   // move anything saved the old way (one big record)
-        const o = await env.STORE.get(old, "json");
-        if (o) { for (const k in o) await put(env, k, o[k]); await env.STORE.delete(old); }
-      }
-      const keys = await getKeys(env), reqs = await getRequests(env);   // listings can lag a few seconds, so changes below are applied to them too
-      const op = url.pathname.slice(7);
+      // The dashboard lists every channel with the bot, and keeps a banned list: banned streamers can't add it.
+      const op = url.pathname.slice(7), banned = (await env.STORE.get("banned", "json")) || [];
+      if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
+      if (!["state", "ban", "unban"].includes(op)) return json({ ok: false, error: "not found" }, 404);
       try {
-        if (op === "key") { const k = newKey(); keys[k] = { note: clean(b.note, 100), at: Date.now() }; await putKey(env, k, keys[k]); }
-        else if (op === "revoke") {
-          const k = clean(b.key, 20), rec = keys[k] || (await env.STORE.getWithMetadata("key:" + k)).metadata;
-          if (!rec) return json({ ok: false, error: "no such key" }, 404);
-          if (rec.usedBy) await removeChannel(env, rec.usedBy);
-          await putKey(env, k, null); delete keys[k];
-        }
-        else if (op === "approve") {
-          const slug = normSlug(b.ch), r = reqs[slug]; if (!r) return json({ ok: false, error: "no such request" }, 404);
-          const k = newKey(); keys[k] = { note: "Request: " + slug, at: Date.now(), ch: slug }; await putKey(env, k, keys[k]);
-          r.approved = Date.now(); await putReq(env, slug, r);
-        }
-        else if (op === "deny") { const slug = normSlug(b.ch); await putReq(env, slug, null); delete reqs[slug]; }
-        else if (op === "remove") {
-          const slug = normSlug(b.ch); await removeChannel(env, slug);
-          for (const k in keys) if (keys[k].usedBy === slug) { await putKey(env, k, null); delete keys[k]; }
+        const slug = normSlug(b.ch);
+        if (op === "ban") {
+          if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type a Kick channel name." }, 400);
+          if (slug === env.BOT_CHANNEL) return json({ ok: false, error: "You can't ban your own channel." }, 400);
+          if (!banned.some(x => x.slug === slug)) { banned.push({ slug, at: Date.now() }); await env.STORE.put("banned", JSON.stringify(banned)); }
+          if (await isEnabled(env, slug)) await removeChannel(env, slug);   // banning also takes the bot out of their chat
+        } else if (op === "unban") {
+          const i = banned.findIndex(x => x.slug === slug);
+          if (i >= 0) { banned.splice(i, 1); await env.STORE.put("banned", JSON.stringify(banned)); }
         }
       } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 500); }
-      if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
-      if (!["state", "key", "revoke", "approve", "deny", "remove"].includes(op)) return json({ ok: false, error: "not found" }, 404);
-      return json({ ok: true, home: env.BOT_CHANNEL, channels: op === "state" ? await syncChannels(env) : await channelList(env), keys: Object.entries(keys).map(([key, k]) => ({ key, ...k })).sort((a, b) => b.at - a.at),
-        requests: Object.entries(reqs).map(([ch, r]) => ({ ch, ...r })).sort((a, b) => b.at - a.at) });
+      return json({ ok: true, home: env.BOT_CHANNEL, channels: op === "state" ? await syncChannels(env) : await channelList(env), banned: banned.slice().sort((x, y) => y.at - x.at) });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
       if (req.method === "POST") {
