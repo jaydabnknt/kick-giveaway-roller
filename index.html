@@ -1286,7 +1286,11 @@ function syncModeUI() {
   modeBtns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === S.entryMode)));
 }
 modeBtns.forEach(b => b.addEventListener("click", () => { S.entryMode = b.dataset.mode; syncModeUI(); save(); }));
-$("optExpire").addEventListener("change", () => { S.expire = $("optExpire").checked; save(); sweepInactive(); renderEntries(); });
+$("optExpire").addEventListener("change", () => {
+  S.expire = $("optExpire").checked;
+  if (S.expire) { const now = Date.now(); for (const e of state.entries.values()) if (e.src === "chat") e.seen = Math.max(e.seen || 0, now); }   // the quiet timer starts now, so nobody drops out the moment it's turned on
+  save(); renderEntries();
+});
 $("expireMins").addEventListener("input", () => { const v = Math.round(Number($("expireMins").value)); if (v >= 1) { S.expireMins = Math.min(240, v); save(); } });
 $("optLuck").addEventListener("change", () => { S.luck = $("optLuck").checked; save(); changed(); });
 syncModeUI();
