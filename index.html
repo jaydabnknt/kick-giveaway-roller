@@ -508,7 +508,7 @@ a.btn.primary { color: var(--on-accent); }
   <a href="./">Home</a>
   <a href="?tools">Tools</a>
   <a class="add" id="menuAdd" href="?add">Add JDBBot to your channel</a>
-  <a href="?admin">Owner Dashboard</a>
+  <a href="?admin" id="menuAdmin" hidden>Admin</a>
 </nav>
 
 <nav class="menu acct-menu" id="acctMenu" hidden>
@@ -594,7 +594,7 @@ a.btn.primary { color: var(--on-accent); }
   <header class="top">
     <div class="brand">
       <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
-      <a class="h1link" href="./" aria-label="Home"><h1>Dash<span>board</span></h1></a>
+      <a class="h1link" href="./" aria-label="Home"><h1>Ad<span>min</span></h1></a>
     </div>
     <button class="btn" id="dbLogout" type="button" hidden>Log out</button>
   </header>
@@ -2723,6 +2723,7 @@ function setAcctMenu(open, from) {
 }
 function renderAcct() {
   if (OVERLAY) return;
+  $("menuAdmin").hidden = !(streamer.tok && streamer.slug === "jaydab4ngnt");   // only the owner sees Admin in the menu
   for (const top of document.querySelectorAll("header.top")) {
     let slot = top.querySelector(".acct");
     if (!slot) { slot = document.createElement("div"); slot.className = "acct"; top.append(slot); }
@@ -2984,7 +2985,7 @@ if (params.has("settings")) {
 // Only the Kick account that owns JDBBot can sign in (the bot checks it). Lists every channel with the bot,
 // and a banned list: banned streamers can't add it.
 if (params.has("admin")) {
-  document.body.classList.add("admin"); $("adminPage").hidden = false; document.title = "Dashboard · JDBBot";
+  document.body.classList.add("admin"); $("adminPage").hidden = false; document.title = "Admin · JDBBot";
   const SESS_LS = "kick-admin-session";
   const hs = location.hash.match(/^#s=([\w-]+)/);
   if (hs) { try { localStorage.setItem(SESS_LS, hs[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
