@@ -463,6 +463,12 @@ body.cp > .wrap:not(#chanPage) { display: none !important; }
 a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
 a.btn.primary { color: var(--on-accent); }
 .cp-err { color: #ff6b6b; font-size: 14px; margin: 0; }
+.cmd-form { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.cmd-form[hidden] { display: none !important; }
+.cmd-acts { white-space: nowrap; text-align: right; }
+.cmd-acts .btn { min-height: 32px; padding: 4px 10px; font-size: 13px; margin-left: 4px; }
+#cpCustomHint code { white-space: nowrap; }
+@media (max-width: 600px) { .cp-table.owner th:nth-child(3), .cp-table.owner td:nth-child(3) { display: none; } }
 </style>
 </head>
 <body>
@@ -584,12 +590,18 @@ a.btn.primary { color: var(--on-accent); }
   </section>
   <section class="cp-box" id="cpCmds" hidden>
     <h3>Commands</h3>
-    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Description</th><th>Who</th></tr></thead><tbody id="cpBuiltins"></tbody></table></div>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Who</th></tr></thead><tbody id="cpBuiltins"></tbody></table></div>
   </section>
   <section class="cp-box" id="cpCustomBox" hidden>
     <h3>This channel's commands</h3>
     <p class="hint" id="cpCustomHint">Added by mods with <code>!jdb add</code>. Use {user}, {touser} or {count} in the text</p>
-    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Response</th><th>Added by</th></tr></thead><tbody id="cpCustom"></tbody></table></div>
+    <form class="cmd-form" id="cmdForm" hidden>
+      <div class="field"><label for="cmdName">Command</label><input type="text" id="cmdName" placeholder="!discord" maxlength="21" autocomplete="off" spellcheck="false" autocapitalize="off"></div>
+      <div class="field"><label for="cmdText">Response</label><input type="text" id="cmdText" placeholder="Join the Discord: discord.gg/…" maxlength="400" autocomplete="off"></div>
+      <div class="row"><button class="btn primary" type="submit" id="cmdSave">Add command</button><button class="btn" type="button" id="cmdCancel" hidden>Cancel</button></div>
+      <p class="cp-err" id="cmdErr" hidden></p>
+    </form>
+    <div class="cp-scroll"><table class="cp-table"><thead><tr><th>Command</th><th>Response</th><th>Added by</th><th id="cmdActHead" hidden></th></tr></thead><tbody id="cpCustom"></tbody></table></div>
   </section>
   <section class="cp-box" id="cpClipsBox" hidden>
     <h3>Clip markers</h3>
@@ -1830,13 +1842,6 @@ function gtbOnChat(name, text, sender) {
   const t = text.toLowerCase();
   if (t !== cmd && !t.startsWith(cmd + " ")) return null;
   const word = t.slice(cmd.length).trim();
-  if (/^(start|open|stop|close|end)$/.test(word)) {         // mods: "!gtb start" / "!gtb stop"
-    if (!isModOrStreamer(name, sender)) return { tag: "mods only", ok: false };
-    const start = /^(start|open)$/.test(word);
-    if (start === gtb.open) return { tag: start ? "already open" : "already closed", ok: false };
-    (start ? gEl.start : gEl.stop).click();
-    return { tag: start ? "guesses opened" : "guesses closed", ok: true };
-  }
   if (!gtb.open) return { tag: "guesses closed", ok: false };
   if (gtb.subs && !isSub(sender)) return { tag: "subs only", ok: false };
   const amount = parseAmount(text.slice(cmd.length));
@@ -2678,7 +2683,7 @@ if (CHANPAGE !== null) {
     $("cpFind").hidden = true;
     $("cpCmds").hidden = false;
     $("cpAllow").href = BOT_URL + "/allow?ch=" + encodeURIComponent(CHANPAGE);
-    $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(c.does), cell(whoTag(c.who)))));
+    $("cpBuiltins").replaceChildren(...d.builtins.map(c => row(cell(c.name, "cmd"), cell(whoTag(c.who)))));
     if (!d.enabled) {
       pill("", "Not added");
       $("cpLead").textContent = "Bot isn't added yet";
@@ -2693,12 +2698,54 @@ if (CHANPAGE !== null) {
     $("cpLead").textContent = d.badge ? "Bot is active, with the bot badge" : "Bot is active";
     $("cpBadge").hidden = !!d.badge;
     $("cpCustomBox").hidden = false;
-    $("cpCustom").replaceChildren(...(d.custom.length ? d.custom.map(c => row(cell(c.name, "cmd"), cell(c.text), cell(c.by || ""))) : [row(Object.assign(cell("None yet"), { colSpan: 3 }))]));
+    owner = !!(streamer.tok && sameChan(streamer.slug, CHANPAGE));
+    if (owner) { $("cmdForm").hidden = false; $("cmdActHead").hidden = false; $("cpCustom").closest("table").classList.add("owner"); $("cpCustomHint").innerHTML = "Add and edit them here, or mods can use <code>!jdb add</code> in chat. Use {user}, {touser} or {count} in the text"; }
+    renderCustom(d.custom);
     if (d.clips && d.clips.length) {
       $("cpClipsBox").hidden = false;
       $("cpClips").replaceChildren(...d.clips.map(c => row(cell(new Date(c.stream).toLocaleDateString()), cell(`${hm(c.from)} – ${hm(c.to)}`), cell(c.by))));
     }
   }
+  // Custom commands: anyone sees them; the signed-in streamer can add, edit and delete their own here.
+  let owner = false, editing = "";
+  const cmdErr = t => { $("cmdErr").textContent = t || ""; $("cmdErr").hidden = !t; };
+  const resetForm = () => { editing = ""; $("cmdName").value = ""; $("cmdText").value = ""; $("cmdSave").textContent = "Add command"; $("cmdCancel").hidden = true; cmdErr(""); };
+  function renderCustom(list) {
+    const cols = owner ? 4 : 3;
+    $("cpCustom").replaceChildren(...(list.length ? list.map(c => {
+      const cells = [cell(c.name, "cmd"), cell(c.text), cell(c.by || "")];
+      if (owner) {
+        const td = document.createElement("td"); td.className = "cmd-acts";
+        const ed = document.createElement("button"); ed.type = "button"; ed.className = "btn"; ed.textContent = "Edit";
+        ed.addEventListener("click", () => { editing = c.name.slice(1); $("cmdName").value = c.name; $("cmdText").value = c.text; $("cmdSave").textContent = "Save"; $("cmdCancel").hidden = false; cmdErr(""); $("cmdForm").scrollIntoView({ behavior: "smooth", block: "center" }); $("cmdText").focus(); });
+        const del = document.createElement("button"); del.type = "button"; del.className = "btn danger"; del.textContent = "Delete";
+        del.addEventListener("click", async () => {
+          if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Sure?"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 2500); return; }
+          del.disabled = true; await saveCmd({ action: "delete", name: c.name.slice(1) }); });
+        td.append(ed, del); cells.push(td);
+      }
+      return row(...cells);
+    }) : [row(Object.assign(cell("None yet"), { colSpan: cols }))]));
+  }
+  async function saveCmd(body) {
+    cmdErr("");
+    try {
+      const r = await fetchWithTimeout(BOT_URL + "/cmds", 20000, { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + streamer.tok }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { cmdErr(j.error || "Couldn't save that."); return false; }
+      renderCustom(j.custom); return true;
+    } catch (e) { cmdErr("Couldn't reach JDBBot. Check your connection."); return false; }
+  }
+  $("cmdForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("cmdName").value.trim().replace(/^!/, "").toLowerCase(), text = $("cmdText").value.trim();
+    if (!name) { $("cmdName").focus(); return; }
+    if (!text) { $("cmdText").focus(); return; }
+    $("cmdSave").disabled = true;
+    if (await saveCmd({ action: "save", name, text, old: editing })) resetForm();
+    $("cmdSave").disabled = false;
+  });
+  $("cmdCancel").addEventListener("click", resetForm);
   const reqMsg = t => { $("cpReqMsg").textContent = t; $("cpReqMsg").hidden = !t; };
   $("cpKeyForm").addEventListener("submit", e => {
     e.preventDefault();
