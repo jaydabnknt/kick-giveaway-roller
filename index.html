@@ -398,6 +398,22 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
   .pill.live::before, .winner-name.pop, .slot.pop, .gtb-state.open .big::before { animation: none; }
 }
 
+/* Account button (top right) and the tools sign-in gate */
+.top > .brand { margin-right: auto; }
+.acct { flex: none; display: flex; align-items: center; }
+.acct .btn { min-height: 36px; padding: 6px 14px; font-size: 14px; }
+.acct-btn { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--accent); padding: 0; overflow: hidden; background: var(--panel-2); cursor: pointer; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: var(--accent); }
+.acct-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acct-btn:hover { transform: scale(1.05); }
+.acct-menu { left: auto; min-width: 200px; }
+.acct-head { padding: 10px 12px 8px; font-weight: 800; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-wrap: anywhere; }
+.acct-menu .soon { margin-left: 6px; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.acct-menu a.out { color: #ff6b6b; }
+body.locked #toolsPage > :not(.top):not(#toolsGate) { display: none !important; }
+body.locked #connPill { display: none; }
+#toolsGate { max-width: 520px; width: 100%; justify-self: center; margin-top: 24px; }
+#toolsGate[hidden] { display: none !important; }
+
 /* Home page (the site root) */
 body.home > .wrap:not(#homePage) { display: none !important; }
 #homePage { max-width: 960px; gap: 22px; }
@@ -456,6 +472,13 @@ a.btn.primary { color: var(--on-accent); }
   <a id="menuMyBot" href="?c=">My bot page</a>
   <a class="add" href="?add">Add JDBBot to your channel</a>
   <a href="?admin">Dashboard</a>
+</nav>
+
+<nav class="menu acct-menu" id="acctMenu" hidden>
+  <div class="acct-head" id="acctName"></div>
+  <a href="#" id="acctPresets">Presets <span class="soon">Soon</span></a>
+  <a href="?c=" id="acctCmds">My commands</a>
+  <a href="#" id="acctOut" class="out">Sign out</a>
 </nav>
 
 <div class="wrap" id="homePage" hidden>
@@ -575,7 +598,7 @@ a.btn.primary { color: var(--on-accent); }
   </section>
 </div>
 
-<div class="wrap">
+<div class="wrap" id="toolsPage">
   <header class="top">
     <div class="brand">
       <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
@@ -583,6 +606,12 @@ a.btn.primary { color: var(--on-accent); }
     </div>
     <span class="pill" id="connPill">Offline</span>
   </header>
+
+  <section class="cp-box" id="toolsGate" hidden>
+    <h2>Sign in to use the <span>tools</span></h2>
+    <p class="hint" id="toolsGateMsg">The giveaway tools are for approved streamers. Log in with your Kick account to use them.</p>
+    <div class="row"><a class="btn primary" id="toolsGateBtn" href="#">Log in with Kick</a></div>
+  </section>
 
   <nav class="tabs" role="tablist" aria-label="Giveaway type">
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
@@ -641,7 +670,6 @@ a.btn.primary { color: var(--on-accent); }
             <button class="btn primary" id="connectBtn" type="button">Connect</button>
             <button class="btn" id="disconnectBtn" type="button" hidden>Disconnect</button>
           </div>
-          <p class="hint" id="streamerLine"></p>
           <div class="notice info" id="lookupHelp" hidden>
             <div id="lookupMsg"></div>
             <p class="hint" style="margin-top:8px">Open <a id="lookupLink" href="https://kick.com/api/v2/channels/" target="_blank" rel="noopener">this page on kick.com</a>, copy the number after <code>"chatroom":{"id":</code> and paste it below. Pasting the whole page works too.</p>
@@ -760,7 +788,6 @@ a.btn.primary { color: var(--on-accent); }
             <button class="btn primary" id="gtbStart" type="button">Start guessing</button>
             <button class="btn" id="gtbStop" type="button">Stop guesses</button>
           </div>
-          <p class="hint streamer-gate" hidden></p>
           <p class="hint" id="gtbHow">Chat types <code id="gtbExample">!gtb 1250</code>. One guess per person, and their first one counts.</p>
         </div>
       </div>
@@ -845,7 +872,6 @@ a.btn.primary { color: var(--on-accent); }
             <button class="btn primary" id="callsStart" type="button">Start calls</button>
             <button class="btn" id="callsStop" type="button">Stop calls</button>
           </div>
-          <p class="hint streamer-gate" hidden></p>
           <p class="hint">Chat types <code id="callsExample">!call Gates of Olympus</code>. Each person can call <b id="callsMaxText">1 slot</b>.</p>
         </div>
       </div>
@@ -2480,36 +2506,75 @@ if (!OVERLAY) {
     if (streamer.slug && !$("channel").value.trim()) { $("channel").value = streamer.slug; S.channel = streamer.slug; save(); }
   }
 }
-function renderStreamer() {
-  const line = $("streamerLine"), chan = chanSlug($("channel").value);
-  if (streamer.tok) {
-    line.replaceChildren(`Logged in with Kick as ${streamer.slug}. `);
-    const out = document.createElement("a"); out.href = "#"; out.textContent = "Log out"; out.style.color = "var(--accent)";
-    out.addEventListener("click", e => { e.preventDefault();
-      fetchWithTimeout(BOT_URL + "/me", 10000, { method: "POST", headers: { authorization: "Bearer " + streamer.tok } }).catch(() => {});
-      streamer = { tok: "", slug: "" }; saveStreamer(); renderStreamer(); });
-    line.append(out);
-  } else line.textContent = "Streamers: log in with Kick to start GTB and slot calls.";
-  for (const g of document.querySelectorAll(".streamer-gate")) {
-    if (g.dataset.shown !== "1") { g.hidden = true; continue; }
-    const login = document.createElement("a"); login.href = BOT_URL + "/login"; login.textContent = "Log in with Kick"; login.style.color = "var(--accent)";
-    const mine = streamer.tok && sameChan(streamer.slug, chan);
-    g.hidden = !!mine;
-    if (!chan) g.replaceChildren("Type your channel in Kick chat first.");
-    else if (streamer.tok) g.replaceChildren(`Only the streamer can start this. You're logged in as ${streamer.slug}, not ${chan}. `, login);
-    else g.replaceChildren(`Only the streamer can start this. `, login, ` as ${chan} first.`);
+// The tools page is only for approved streamers (their channel has JDBBot, added with a key from Jay or an
+// approved request). Signed in, the channel box is locked to their own channel.
+const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && (params.has("tools") || !!location.hash);
+let meChecked = false;
+const loginUrl = () => BOT_URL + "/login?back=" + encodeURIComponent(location.search);
+function applyGate() {
+  if (!ON_TOOLS) return;
+  const msg = $("toolsGateMsg"), btn = $("toolsGateBtn");
+  let locked = true;
+  if (!streamer.tok) { $("toolsGate").querySelector("h2").innerHTML = "Sign in to use the <span>tools</span>"; msg.textContent = "The giveaway tools are for approved streamers. Log in with your Kick account to use them."; btn.textContent = "Log in with Kick"; btn.href = loginUrl(); btn.hidden = false; }
+  else if (streamer.approved === undefined && !meChecked) { msg.textContent = "Checking your account…"; btn.hidden = true; }
+  else if (!streamer.approved) {
+    $("toolsGate").querySelector("h2").innerHTML = "Not approved <span>yet</span>";
+    msg.textContent = `Your channel ${streamer.slug} isn't approved to use the tools yet. Ask for access on your bot page.`;
+    btn.textContent = "Request access"; btn.href = "?c=" + encodeURIComponent(streamer.slug); btn.hidden = false;
+  } else {
+    locked = false;
+    const ch = $("channel");
+    if (!sameChan(chanSlug(ch.value), streamer.slug)) { ch.value = streamer.slug; S.channel = streamer.slug; save(); ch.dispatchEvent(new Event("input")); }
+    ch.readOnly = true; ch.title = "Your channel (you're signed in as " + streamer.slug + ")";
   }
+  document.body.classList.toggle("locked", locked); $("toolsGate").hidden = !locked;
 }
 function streamerGate() {
-  if (streamer.tok && sameChan(streamer.slug, chanSlug($("channel").value))) return true;
-  for (const g of document.querySelectorAll(".streamer-gate")) g.dataset.shown = "1";
-  renderStreamer(); return false;
+  if (streamer.tok && streamer.approved && sameChan(streamer.slug, chanSlug($("channel").value))) return true;
+  applyGate(); return false;
+}
+// Top-right account button: the Kick profile picture, with Presets, My commands and Sign out.
+const acctMenu = $("acctMenu");
+function setAcctMenu(open, from) {
+  acctMenu.hidden = !open;
+  document.querySelectorAll(".acct-btn").forEach(b => b.setAttribute("aria-expanded", String(open)));
+  if (open && from) { const r = from.getBoundingClientRect(); acctMenu.style.top = (r.bottom + 8) + "px"; acctMenu.style.right = Math.max(12, innerWidth - r.right) + "px"; }
+}
+function renderAcct() {
+  if (OVERLAY) return;
+  for (const top of document.querySelectorAll("header.top")) {
+    let slot = top.querySelector(".acct");
+    if (!slot) { slot = document.createElement("div"); slot.className = "acct"; top.append(slot); }
+    if (!streamer.tok) {
+      const a = document.createElement("a"); a.className = "btn"; a.textContent = "Log in"; a.href = "#";
+      a.addEventListener("click", e => { e.preventDefault(); location.href = loginUrl(); });
+      slot.replaceChildren(a); continue;
+    }
+    const b = document.createElement("button"); b.type = "button"; b.className = "acct-btn";
+    b.setAttribute("aria-label", "Account menu for " + (streamer.name || streamer.slug)); b.setAttribute("aria-haspopup", "true"); b.setAttribute("aria-expanded", "false");
+    const initial = () => { b.replaceChildren((streamer.name || streamer.slug || "?").charAt(0).toUpperCase()); };
+    if (streamer.pic) { const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = streamer.pic; img.onerror = initial; b.append(img); } else initial();
+    b.addEventListener("click", e => { e.stopPropagation(); setAcctMenu(acctMenu.hidden, b); });
+    slot.replaceChildren(b);
+  }
+  $("acctName").textContent = streamer.name || streamer.slug || "";
+  $("acctCmds").href = "?c=" + encodeURIComponent(streamer.slug || "");
 }
 if (!OVERLAY) {
-  $("channel").addEventListener("input", renderStreamer); renderStreamer();
-  if (streamer.tok) fetchWithTimeout(BOT_URL + "/me", 10000, { headers: { authorization: "Bearer " + streamer.tok } }).then(r => {
-    if (r.status === 401) { streamer = { tok: "", slug: "" }; saveStreamer(); renderStreamer(); }
-  }).catch(() => {});
+  document.addEventListener("click", e => { if (!acctMenu.hidden && !acctMenu.contains(e.target)) setAcctMenu(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") setAcctMenu(false); });
+  addEventListener("resize", () => setAcctMenu(false));
+  $("acctPresets").addEventListener("click", e => { e.preventDefault(); setAcctMenu(false); });   // presets: coming later
+  $("acctOut").addEventListener("click", e => { e.preventDefault();
+    fetchWithTimeout(BOT_URL + "/me", 10000, { method: "POST", headers: { authorization: "Bearer " + streamer.tok } }).catch(() => {}).finally(() => {
+      streamer = { tok: "", slug: "" }; saveStreamer(); location.reload(); });
+  });
+  renderAcct(); applyGate();
+  if (streamer.tok) fetchWithTimeout(BOT_URL + "/me", 10000, { headers: { authorization: "Bearer " + streamer.tok } }).then(async r => {
+    if (r.status === 401) { streamer = { tok: "", slug: "" }; saveStreamer(); return; }
+    const j = await r.json().catch(() => ({}));
+    if (j.ok) { Object.assign(streamer, { slug: j.slug, name: j.name, pic: j.pic, approved: !!j.approved }); saveStreamer(); }
+  }).catch(() => {}).finally(() => { meChecked = true; renderAcct(); applyGate(); });
 }
 
 const BOT_EVENTS = [
