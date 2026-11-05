@@ -75,7 +75,7 @@ const TEMPLATES = {
   callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`,
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
-const STREAMER_ONLY = new Set(["gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+const STREAMER_ONLY = new Set(["test", "winner", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
 const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
 async function streamerSession(req, env) {
   const t = bearer(req);
@@ -488,7 +488,8 @@ export default {
       }
       const state = (streamer ? "s" : admin ? "d" : "a") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-      await env.STORE.put("oauth:" + state, JSON.stringify({ v: verifier, key, ch }), { expirationTtl: 600 });
+      const back = /^\?(tools|admin|add|c=[a-z0-9_-]{0,40})?$/.test(url.searchParams.get("back") || "") ? url.searchParams.get("back") : "?tools";
+      await env.STORE.put("oauth:" + state, JSON.stringify({ v: verifier, key, ch, back }), { expirationTtl: 600 });
       const u = new URL("https://id.kick.com/oauth/authorize");
       for (const [k, v] of Object.entries({ client_id: env.KICK_CLIENT_ID, response_type: "code", redirect_uri: redirectUri(req), scope: admin ? "user:read" : SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })) u.searchParams.set(k, v);
       return Response.redirect(u.toString(), 302);
@@ -510,8 +511,9 @@ export default {
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
         const sess = randomString(32);
-        await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug }), { expirationTtl: 30 * 86400 });
-        return Response.redirect(env.SITE_URL + "?tools#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
+        const pic = String((me.data[0] && me.data[0].profile_picture) || "");
+        await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug, name: name || slug, pic: /^https:\/\//.test(pic) ? pic : "" }), { expirationTtl: 30 * 86400 });
+        return Response.redirect(env.SITE_URL + (st.back === undefined ? "?tools" : st.back) + "#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
       }
       if (state.startsWith("d")) {   // dashboard sign-in: only the home channel's owner gets in
         if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of JDBBot.");
@@ -546,7 +548,8 @@ export default {
     if (url.pathname === "/me") {   // which channel the tools page is signed in as
       const me = await streamerSession(req, env);
       if (me && req.method === "POST") { await env.STORE.delete("ss:" + bearer(req)); return json({ ok: true }); }
-      return me ? json({ ok: true, slug: me.slug }) : json({ ok: false, error: "signin" }, 401);
+      // approved = the channel has the bot (added with a key from Jay or an approved request)
+      return me ? json({ ok: true, slug: me.slug, name: me.name || me.slug, pic: me.pic || "", approved: await isEnabled(env, me.slug) }) : json({ ok: false, error: "signin" }, 401);
     }
     if (url.pathname === "/say" && req.method === "POST") {
       const keyed = await checkKey(req, env);
