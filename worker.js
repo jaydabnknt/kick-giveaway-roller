@@ -257,8 +257,7 @@ const BUILTINS = [
   ["!top", "Shows the top 5 by watchtime", "Everyone"],
   ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
-  ["!jdb add/edit/delete", "Adds, edits or deletes a command", "Mods"],
-  ["!jdb leave", "Removes the bot", "Streamer"]
+  ["!jdb add/edit/delete", "Adds, edits or deletes a command", "Mods"]
 ];
 const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "gtb", "followage", "followers", "watchtime", "top"]);
 
@@ -375,14 +374,6 @@ async function onChat(env, ev) {
     const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
     const cmds = (await env.STORE.get(key, "json")) || {};
     const usage = "Usage: !jdb add command text · !jdb edit command text · !jdb delete command";
-    if (sub === "leave") {
-      if (!isStreamer) return;
-      if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
-      await postAsBot(env, bid, "👋 JDBBot is leaving this channel. Add it back any time from " + env.SITE_URL + "?c=" + slug);
-      await env.STORE.put("channels", JSON.stringify((await channelList(env)).filter(c => c.slug !== slug)));
-      await env.STORE.delete("stok:" + bid);
-      return unsubscribe(env, slug);
-    }
     if (sub !== "add" && sub !== "edit" && !/^(del|delete|remove)$/.test(sub)) return postAsBot(env, bid, usage);
     if (!/^[a-z0-9_]{1,20}$/.test(name)) return postAsBot(env, bid, usage);
     if (RESERVED.has(name)) return postAsBot(env, bid, `!${name} is built in, so pick another name.`);
@@ -545,6 +536,15 @@ export default {
       if (me && req.method === "POST") { await env.STORE.delete("ss:" + bearer(req)); return json({ ok: true }); }
       // approved = the channel has the bot (added with a key from Jay or an approved request)
       return me ? json({ ok: true, slug: me.slug, name: me.name || me.slug, pic: me.pic || "", approved: await isEnabled(env, me.slug) }) : json({ ok: false, error: "signin" }, 401);
+    }
+    if (url.pathname === "/leave" && req.method === "POST") {   // Settings > Account: the streamer removes the bot from their chat
+      const me = await streamerSession(req, env);
+      if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
+      if (me.slug === env.BOT_CHANNEL) return json({ ok: false, error: "JDBBot can't leave its home channel." }, 400);
+      await postAsBot(env, me.uid, "👋 JDBBot is leaving this channel. Add it back any time from " + env.SITE_URL).catch(() => {});
+      await removeChannel(env, me.slug);
+      await env.STORE.delete("ss:" + bearer(req));
+      return json({ ok: true });
     }
     if (url.pathname === "/cmds" && req.method === "POST") {   // the streamer adds, edits or deletes their commands on their bot page
       const me = await streamerSession(req, env);
