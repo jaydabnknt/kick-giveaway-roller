@@ -478,11 +478,7 @@ export default {
     if (url.pathname === "/allow" || url.pathname === "/admin/login" || url.pathname === "/login") {
       const admin = url.pathname !== "/allow", streamer = url.pathname === "/login";
       const ch = normSlug(url.searchParams.get("ch")), key = clean(url.searchParams.get("key"), 40).toUpperCase();
-      if (!admin) {
-        const back = err => Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(ch) + "&err=" + err, 302);
-        if (!ch) return Response.redirect(env.SITE_URL + "?add", 302);
-        if (!(await isEnabled(env, ch)) && !(await findKey(env, key, ch))) return back(key ? "badkey" : "nokey");
-      }
+      // Anyone can add the bot now (no keys or approval); Kick tells us whose channel it is at the callback.
       const state = (streamer ? "s" : admin ? "d" : "a") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
       const back = /^\?(tools|admin|add|c=[a-z0-9_-]{0,40})?$/.test(url.searchParams.get("back") || "") ? url.searchParams.get("back") : "?tools";
@@ -504,13 +500,17 @@ export default {
       const name = (me.data && me.data[0] && me.data[0].name) || "";
       const uid = me.data && me.data[0] && me.data[0].user_id;
       if (!uid) return page("Couldn't check your account", "Kick didn't say who you are. Try again.");
-      if (state.startsWith("s")) {   // streamer sign-in for the tools page (separate from the dashboard's sessions)
+      const pic = String((me.data[0] && me.data[0].profile_picture) || "");
+      const signIn = async (slug, back) => {   // a streamer session for the site (separate from the dashboard's)
+        const sess = randomString(32);
+        await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug, name: name || slug, pic: /^https:\/\//.test(pic) ? pic : "" }), { expirationTtl: 30 * 86400 });
+        return Response.redirect(env.SITE_URL + back + "#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
+      };
+      if (state.startsWith("s")) {   // sign in: only works once the bot is in your chat
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
-        const sess = randomString(32);
-        const pic = String((me.data[0] && me.data[0].profile_picture) || "");
-        await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug, name: name || slug, pic: /^https:\/\//.test(pic) ? pic : "" }), { expirationTtl: 30 * 86400 });
-        return Response.redirect(env.SITE_URL + (st.back === undefined ? "?tools" : st.back) + "#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
+        if (!(await isEnabled(env, slug))) return Response.redirect(env.SITE_URL + "?err=notadded", 302);
+        return signIn(slug, st.back === undefined ? "?tools" : st.back);
       }
       if (state.startsWith("d")) {   // dashboard sign-in: only the home channel's owner gets in
         if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of JDBBot.");
@@ -521,19 +521,14 @@ export default {
       {
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
-        if (!(await isEnabled(env, slug))) {   // new channel: use up the key now that Kick says whose channel it is
-          const k = await findKey(env, st.key, slug);
-          if (!k) return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&err=" + (st.key ? "badkey" : "nokey"), 302);
-          const rec = (await getKeys(env))[k] || {}; rec.usedBy = slug; rec.usedAt = Date.now();
-          await putKey(env, k, rec);
-          await putReq(env, slug, null);
-        }
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
         const list = await channelList(env);
-        if (!list.some(c => c.slug === slug)) { await subscribeChat(env, slug).catch(() => {}); list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list)); }
-        ctx.waitUntil(postAsBot(env, uid, "👋 JDBBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
-        return Response.redirect(env.SITE_URL + "?c=" + encodeURIComponent(slug) + "&allowed=1", 302);
+        if (!list.some(c => c.slug === slug)) {
+          await subscribeChat(env, slug).catch(() => {}); list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list));
+          ctx.waitUntil(postAsBot(env, uid, "👋 JDBBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
+        }
+        return signIn(slug, "?tools");   // adding the bot also signs you in
       }
       return page("Link expired", "Open your bot page and tap Allow again.");
     }
