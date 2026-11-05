@@ -1585,7 +1585,7 @@ function finish() {
   els.winnerActions.hidden = false;
   els.winnerActions.dataset.name = name;
   ovSendGiveaway();
-  botSay("winner", { name, n: N });
+  botSay("winner", { name, n: N, claim: !!currentRoom, secs: 30 });   // with chat connected, the 30-second claim starts below
   state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
@@ -1613,10 +1613,12 @@ function claimAnswered() {
   const secs = Math.max(1, Math.round((Date.now() - (c.until - CLAIM_SECS * 1000)) / 1000));
   const box = $("claimBox"); box.hidden = false; box.className = "claim ok"; box.textContent = `${c.name} answered in ${secs}s`;
   openProfile(c.name);
+  botSay("claimed", { name: c.name });
 }
 function claimMissed() {
   const c = claim; clearInterval(c.timer); claim = null;
   removeEntry(c.key); save(); changed();
+  botSay("asleep", { name: c.name });
   const box = $("claimBox"); box.hidden = false; box.className = "claim miss"; box.textContent = `${c.name} didn't type in time and was taken out of the entries.`;
 }
 // Winner profile pop-up: picture, name, join date, follow date, sub status and their last 10 messages.
@@ -2786,7 +2788,7 @@ if (!OVERLAY) {
 }
 
 const BOT_EVENTS = [
-  ["winner", "Giveaway winner", true], ["gtbOpen", "GTB opened", true], ["gtbClose", "GTB closed", true], ["gtbWin", "GTB winner", true],
+  ["winner", "Giveaway winner", true], ["claimed", "Winner claimed", true], ["asleep", "Winner didn't claim", true], ["gtbOpen", "GTB opened", true], ["gtbClose", "GTB closed", true], ["gtbWin", "GTB winner", true],
   ["callsOpen", "Calls opened", true], ["callsClose", "Calls closed", true], ["nowPlaying", "Now playing a call", true],
   ["bonus", "Call hit a bonus", true], ["raid", "Thank raiders", true], ["callAck", "Reply to every !call", false]
 ];
