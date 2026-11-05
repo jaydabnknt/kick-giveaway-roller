@@ -538,6 +538,18 @@ a.btn.primary { color: var(--on-accent); }
   </section>
 </div>
 
+<dialog id="stakeDlg" class="dlg">
+  <div class="dlg-head"><h3>Stake API</h3><button class="btn" type="button" id="stakeClose">Close</button></div>
+  <form id="stakeForm" style="display:grid;gap:12px">
+    <div class="field"><label for="stakeHost">Site</label><select id="stakeHost"><option>stake.com</option><option>stake.us</option><option>stake.ac</option><option>stake.bet</option></select></div>
+    <div class="field"><label for="stakeKey">API key</label><input type="password" id="stakeKey" autocomplete="off" spellcheck="false" placeholder="Paste your key"></div>
+    <div class="field"><label for="stakeMin">Count it as a bonus at</label><div class="inline"><input type="number" id="stakeMin" min="2" max="10000" step="1" value="20" inputmode="numeric"><span class="hint">× your bet or more</span></div></div>
+    <p class="hint">The key is saved only on this device. It goes through JDBBot to Stake on each check and is never stored there.</p>
+    <div class="row"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="stakeTest">Test</button><button class="btn ghost danger" type="button" id="stakeForget">Forget key</button></div>
+    <p class="hint" id="stakeMsg" style="overflow-wrap:anywhere"></p>
+  </form>
+</dialog>
+
 <dialog id="pfDlg" class="dlg pf">
   <button class="pf-x" type="button" id="pfClose" aria-label="Close">×</button>
   <div class="pf-head"><div class="win-av" id="pfAv" aria-hidden="true">?</div><b id="pfName"></b></div>
@@ -995,6 +1007,7 @@ a.btn.primary { color: var(--on-accent); }
           <h2>Bonus hunt</h2>
           <span class="meta" id="huntMeta">Empty</span>
         </div>
+        <p class="hint" id="stakeNow" hidden></p>
         <div class="guesses" id="huntList"></div>
         <div class="row"><button class="btn ghost danger" id="huntClear" type="button" hidden>Clear bonus hunt</button></div>
       </div>
@@ -2960,10 +2973,81 @@ $("pfDlg").addEventListener("click", e => { if (e.target === $("pfDlg")) $("pfDl
 // Jay's private test features. Add one to EXPERIMENTS as [id, label, description] and check it with exp("id").
 // They only switch on for the owner's signed-in account, and are saved on this device.
 const OWNER = "jaydab4ngnt", EXP_LS = "kick-experimental";
-const EXPERIMENTS = [];
+const EXPERIMENTS = [
+  ["stakeHunt", "Stake auto hunt", "Watches your Stake bets. Shows the slot you're playing and adds a slot to the bonus hunt when it looks like you got a bonus.", () => $("stakeDlg").showModal()]
+];
 let expOn = {}; try { expOn = JSON.parse(localStorage.getItem(EXP_LS) || "{}"); } catch (e) {}
 const isOwner = () => !!(streamer.tok && streamer.slug === OWNER);
 const exp = id => isOwner() && !!expOn[id];
+
+// ---------- Stake auto hunt (experimental, owner only) ----------
+// Polls Jay's own recent Stake bets through the bot (which checks it's the owner). A new game = "now playing";
+// a round paying at least N x the bet, or a bet far above the usual size (a bonus buy), counts as a bonus.
+const STAKE_LS = "kick-stake";
+let stakeCfg = { key: "", host: "stake.com", min: 20 }; try { Object.assign(stakeCfg, JSON.parse(localStorage.getItem(STAKE_LS) || "{}")); } catch (e) {}
+const STAKE_ME = "query { user { id name } }";
+const STAKE_BETS = `query StakeBets($limit: Int, $offset: Int) { user { id houseBetList(limit: $limit, offset: $offset) { id iid game { name slug } bet { __typename ... on CasinoBet { id amount payoutMultiplier } ... on ThirdPartyBet { id amount payoutMultiplier } ... on EvolutionBet { id amount payoutMultiplier } } } } }`;
+async function stakeCall(query, variables) {
+  const r = await fetchWithTimeout(BOT_URL + "/stake", 20000, { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + streamer.tok }, body: JSON.stringify({ key: stakeCfg.key, host: stakeCfg.host, query, variables }) });
+  return r.json();
+}
+const stakeErr = j => j.error || (j.errors && j.errors.map(e => e.message).join("; ")) || (j.blocked ? `Stake blocked the request (status ${j.status}): ${j.blocked}` : "status " + j.status);
+const stake = { seen: new Set(), game: "", amounts: [], timer: null, lastErr: "" };
+async function stakePoll() {
+  if (!exp("stakeHunt") || !stakeCfg.key || !ON_TOOLS) return;
+  let j; try { j = await stakeCall(STAKE_BETS, { limit: 10, offset: 0 }); } catch (e) { return; }
+  if (!j.ok) { const m = stakeErr(j); if (m !== stake.lastErr) { stake.lastErr = m; feedLine(null, "Stake auto hunt: " + m); } return; }
+  stake.lastErr = "";
+  const list = (((j.data || {}).user || {}).houseBetList || []).slice().reverse();   // oldest first
+  const first = !stake.seen.size;
+  for (const hb of list) {
+    const id = hb.id || hb.iid; if (!id || stake.seen.has(id)) continue;
+    stake.seen.add(id);
+    const game = (hb.game && hb.game.name) || "", bet = hb.bet || {}, amt = Number(bet.amount) || 0, x = Number(bet.payoutMultiplier) || 0;
+    if (game && game !== stake.game) { stake.game = game; $("stakeNow").hidden = false; $("stakeNow").textContent = "Stake: playing " + game; if (!first) feedLine(null, "Stake: now playing " + game); }
+    if (first) { if (amt) stake.amounts.push(amt); continue; }   // the first check only learns what was already there
+    const usual = stake.amounts.length ? stake.amounts.slice().sort((a, b) => a - b)[Math.floor(stake.amounts.length / 2)] : 0;
+    const bought = usual > 0 && amt >= usual * 50;
+    if (amt && !bought) { stake.amounts.push(amt); if (stake.amounts.length > 30) stake.amounts.shift(); }
+    if (game && (x >= stakeCfg.min || bought)) stakeBonus(game, bought ? "bought" : x.toFixed(1) + "x");
+  }
+  if (stake.seen.size > 500) stake.seen = new Set([...stake.seen].slice(-200));
+}
+function stakeBonus(game, why) {
+  const recent = calls.hunt.find(h => h.slot.toLowerCase() === game.toLowerCase() && Date.now() - h.at < 3 * 60000);
+  if (recent) return;
+  const call = calls.list.find(c => c.slot.toLowerCase() === game.toLowerCase());
+  calls.hunt.push({ callId: call ? call.id : "stake-" + Date.now(), name: call ? call.name : "Stake (auto)", slot: game, type: calls.bonusType || "normal", at: Date.now(), auto: true });
+  saveCalls(); renderCalls();
+  feedLine(null, `Stake: ${game} looks like a bonus (${why}), added to the hunt.`);
+}
+function stakeStart() { clearInterval(stake.timer); stake.timer = null; if (exp("stakeHunt") && stakeCfg.key && ON_TOOLS) { stake.timer = setInterval(stakePoll, 8000); stakePoll(); } }
+if (!OVERLAY) {
+  const msg = t => { $("stakeMsg").textContent = t; };
+  const fill = () => { $("stakeHost").value = stakeCfg.host; $("stakeKey").value = stakeCfg.key; $("stakeMin").value = stakeCfg.min; msg(stakeCfg.key ? "A key is saved." : "No key saved yet."); };
+  $("stakeDlg").addEventListener("toggle", () => { if ($("stakeDlg").open) fill(); });
+  $("stakeClose").addEventListener("click", () => $("stakeDlg").close());
+  $("stakeForm").addEventListener("submit", e => {
+    e.preventDefault();
+    stakeCfg = { key: $("stakeKey").value.trim(), host: $("stakeHost").value, min: Math.max(2, Number($("stakeMin").value) || 20) };
+    try { localStorage.setItem(STAKE_LS, JSON.stringify(stakeCfg)); } catch (er) {}
+    msg("Saved."); stakeStart();
+  });
+  $("stakeForget").addEventListener("click", () => { stakeCfg.key = ""; try { localStorage.setItem(STAKE_LS, JSON.stringify(stakeCfg)); } catch (er) {} fill(); stakeStart(); });
+  $("stakeTest").addEventListener("click", async () => {
+    const saved = stakeCfg; stakeCfg = { ...stakeCfg, key: $("stakeKey").value.trim(), host: $("stakeHost").value };
+    msg("Checking…");
+    try {
+      const a = await stakeCall(STAKE_ME, {});
+      if (!a.ok) { msg("Couldn't sign in to Stake: " + stakeErr(a)); return; }
+      const b = await stakeCall(STAKE_BETS, { limit: 5, offset: 0 });
+      const n = b.ok ? (((b.data || {}).user || {}).houseBetList || []).length : -1;
+      msg(`Connected as ${a.data.user.name}. ` + (b.ok ? `Read ${n} recent bets.` : "But reading bets failed: " + stakeErr(b)));
+    } catch (er) { msg("Couldn't reach JDBBot."); }
+    finally { stakeCfg = saved; }
+  });
+  setTimeout(stakeStart, 1500);   // after the sign-in check
+}
 
 // ---------- settings (?settings) ----------
 // Account (your profile, and removing the bot), OBS overlay links for every tool, and presets (later).
@@ -2981,13 +3065,15 @@ if (params.has("settings")) {
     $("setOvG").value = `${ovBase}?overlay=giveaway&ch=${streamer.slug}`; $("setOvC").value = `${ovBase}?overlay=calls&ch=${streamer.slug}`;
     $("setLeave").hidden = streamer.slug === "jaydab4ngnt";   // the home channel keeps the bot
     $("setExpTab").hidden = !isOwner();
-    $("setExpList").replaceChildren(...(EXPERIMENTS.length ? EXPERIMENTS.map(([id, label, about]) => {
+    $("setExpList").replaceChildren(...(EXPERIMENTS.length ? EXPERIMENTS.map(([id, label, about, setup]) => {
       const row = document.createElement("label"); row.className = "dash-item sw";
       const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!expOn[id];
-      c.addEventListener("change", () => { expOn[id] = c.checked; try { localStorage.setItem(EXP_LS, JSON.stringify(expOn)); } catch (e) {} });
+      c.addEventListener("change", () => { expOn[id] = c.checked; try { localStorage.setItem(EXP_LS, JSON.stringify(expOn)); } catch (e) {} if (typeof stakeStart === "function") stakeStart(); });
       const main = document.createElement("div"); main.className = "main";
       main.append(Object.assign(document.createElement("b"), { textContent: label }), Object.assign(document.createElement("span"), { textContent: about || "" }));
-      row.append(c, main); return row;
+      row.append(c, main);
+      if (setup) { const api = document.createElement("button"); api.type = "button"; api.className = "btn"; api.textContent = "API"; api.addEventListener("click", e => { e.preventDefault(); setup(); }); row.append(api); }
+      return row;
     }) : [Object.assign(document.createElement("p"), { className: "hint", textContent: "No experiments yet. Ask for one \"for Jay\" and it shows up here." })]));
   };
   document.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", () => {
