@@ -410,7 +410,7 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 .acct-menu .soon { margin-left: 6px; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .acct-menu a.out { color: #ff6b6b; }
 body.guest #toolsPage .tabs { display: none !important; }
-#botPanel, #entriesPanel, #ovPanelG, #ovPanelC, .stage > .toggles[hidden] { display: none !important; }
+#botPanel, #ovPanelG, #ovPanelC, .stage > .toggles[hidden] { display: none !important; }
 body:not(.guest) #chatPanel:not(:has(.notice:not([hidden]))) { display: none !important; }   /* signed in: it connects by itself; shows only if the connection needs help */
 body.settings > .wrap:not(#settingsPage) { display: none !important; }
 #settingsPage { max-width: 760px; }
@@ -783,7 +783,6 @@ a.btn.primary { color: var(--on-accent); }
               <label for="keyword">Keyword</label>
               <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false" autocapitalize="off">
             </div>
-            <button class="btn primary" id="kwStart" type="button">Start</button>
             <div class="field">
               <label for="matchMode">Counts when the message</label>
               <select id="matchMode">
@@ -792,6 +791,10 @@ a.btn.primary { color: var(--on-accent); }
                 <option value="starts">starts with the keyword</option>
               </select>
             </div>
+          </div>
+          <div class="row" id="kwBtns">
+            <button class="btn primary" id="kwStart" type="button">Start</button>
+            <button class="btn" id="kwPause" type="button">Pause entries</button>
           </div>
           <div class="toggles">
             <label class="sw" hidden><input type="checkbox" id="optOpen" checked> Entries open</label>
@@ -810,17 +813,18 @@ a.btn.primary { color: var(--on-accent); }
         <div class="panel-body">
           <div class="example-banner" id="exampleBanner" hidden>These are example names so you can try the reel. They disappear when the first real entry arrives.</div>
           <div class="entries" id="entries"></div>
-          <div class="inline">
+          <div class="row"><button class="btn" id="copyEntries" type="button">Copy entries</button></div>
+          <div class="inline" hidden>
             <div class="field">
               <label for="manualAdd">Add names by hand</label>
               <textarea id="manualAdd" placeholder="One per line, or separated by spaces or commas" autocapitalize="off"></textarea>
             </div>
           </div>
-          <div class="row">
+          <div class="row" hidden>
             <button class="btn" id="addBtn" type="button">Add names</button>
             <button class="btn ghost danger" id="clearBtn" type="button" style="margin-left:auto">Clear all</button>
           </div>
-          <details class="sub">
+          <details class="sub" hidden>
             <summary>Never enter these accounts</summary>
             <div class="field">
               <label for="blocked">Blocked names (bots, the streamer, mods)</label>
@@ -1265,7 +1269,7 @@ const els = {
 };
 const S = state.settings;
 S.sound = false; S.autoRemove = false;   // tick sound and auto-remove were taken out (2026-11-05)
-S.open = true; S.subs = false;            // entries are always open; Start applies the keyword and clears entries
+S.subs = false;                           // Start applies the keyword and clears entries; Pause/Resume opens and closes them
 els.channel.value = S.channel; els.keyword.value = S.keyword; els.matchMode.value = S.matchMode;
 els.open.checked = S.open; els.subs.checked = S.subs; els.sound.checked = S.sound; els.autoRemove.checked = S.autoRemove;
 els.blocked.value = S.blocked;
@@ -1277,6 +1281,7 @@ $("optExpire").checked = S.expire; $("expireMins").value = S.expireMins; $("optL
 const modeBtns = document.querySelectorAll(".seg [data-mode]");
 function syncModeUI() {
   $("keywordRow").hidden = S.entryMode === "active";
+  $("kwStart").hidden = S.entryMode === "active";
   modeBtns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === S.entryMode)));
 }
 modeBtns.forEach(b => b.addEventListener("click", () => { S.entryMode = b.dataset.mode; syncModeUI(); save(); }));
@@ -1363,11 +1368,22 @@ els.keyword.addEventListener("input", kwSync);
 els.keyword.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("kwStart").click(); } });
 $("kwStart").addEventListener("click", () => {
   const kw = els.keyword.value.trim(); if (!kw) { els.keyword.focus(); return; }
-  S.keyword = kw; S.open = true; kwStarted = true;
+  S.keyword = kw; S.open = true; kwStarted = true; pauseSync();
   state.entries.clear(); state.example = false; cancelClaim(); changed(); save(); kwSync();
   feedLine(null, `Entries reset. Chat types ${kw} to enter.`);
 });
 kwSync();
+const pauseSync = () => { $("kwPause").textContent = S.open ? "Pause entries" : "Resume entries"; $("kwPause").className = "btn" + (S.open ? "" : " primary"); };
+$("kwPause").addEventListener("click", () => { S.open = !S.open; els.open.checked = S.open; save(); pauseSync(); ovSendGiveaway(); feedLine(null, S.open ? "Entries resumed." : "Entries paused. New messages won't enter anyone."); });
+pauseSync();
+$("copyEntries").addEventListener("click", () => {
+  const b = $("copyEntries"), names = [...state.entries.values()].filter(e => e.src !== "example").map(e => e.name);
+  if (!names.length) { b.textContent = "No entries yet"; setTimeout(() => (b.textContent = "Copy entries"), 1500); return; }
+  const done = () => { b.textContent = `Copied ${names.length}`; setTimeout(() => (b.textContent = "Copy entries"), 1500); };
+  const text = names.join(", ");
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(done).catch(() => {
+    const t = document.createElement("textarea"); t.value = text; document.body.append(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); });
+});
 
 // ---------- reel drawing ----------
 const ctx = els.canvas.getContext("2d");
