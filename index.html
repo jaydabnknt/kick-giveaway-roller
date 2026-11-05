@@ -1362,13 +1362,13 @@ els.clear.addEventListener("click", () => {
 });
 
 // Start / Update: use the typed keyword from now on and start a fresh list of entries.
-let kwStarted = false;
+let kwStarted = !!S.started;   // a started giveaway stays started across refreshes (entries are saved too)
 const kwSync = () => { $("kwStart").textContent = kwStarted ? "Update" : "Start"; $("kwStart").className = "btn " + (!kwStarted || els.keyword.value.trim() !== S.keyword.trim() ? "primary" : ""); };
 els.keyword.addEventListener("input", kwSync);
 els.keyword.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("kwStart").click(); } });
 $("kwStart").addEventListener("click", () => {
   const kw = els.keyword.value.trim(); if (!kw) { els.keyword.focus(); return; }
-  S.keyword = kw; S.open = true; kwStarted = true; pauseSync();
+  S.keyword = kw; S.open = true; kwStarted = true; S.started = true; pauseSync();
   state.entries.clear(); state.example = false; cancelClaim(); changed(); save(); kwSync();
   feedLine(null, `Entries reset. Chat types ${kw} to enter.`);
 });
@@ -1867,6 +1867,7 @@ function openSocket() {
       if (els.pill.textContent === "Connected") return;
       retry = 0; setPill("live", "Connected"); showError(""); setPusherCfg(pusherCfg);
       feedLine(null, `Connected to ${S.channel || "chatroom " + currentRoom}. Works whether or not you're live.`);
+      if (!S.live) { S.live = true; save(); }   // reconnect by itself after a refresh
     } else if (msg.event === "pusher:ping") {
       ws.send(JSON.stringify({ event: "pusher:pong", data: {} }));
     } else if (msg.event === "pusher:error") {
@@ -1902,7 +1903,7 @@ function disconnect(user) {
   if (user) connectSeq++;
   wantConnected = false; clearTimeout(retryTimer); retry = 0;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
-  if (user) { setPill("", "Offline"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); }
+  if (user) { setPill("", "Offline"); els.connect.hidden = false; els.disconnect.hidden = true; feedLine(null, "Disconnected."); S.live = false; save(); }
 }
 
 function messageText(content) { return String(content || "").replace(/\[emote:\d+:[^\]]*\]/g, " ").replace(/\s+/g, " ").trim(); }
@@ -2700,7 +2701,10 @@ function applyGate() {
   const on = signedIn();
   document.body.classList.toggle("guest", !on);
   $("chanRow").hidden = on; $("chanSigned").hidden = !on;
-  if (!on) return;
+  if (!on) {   // guests: if this page was connected before a refresh, connect again
+    if (S.live && S.channel && !autoConnected) { autoConnected = true; els.connect.click(); }
+    return;
+  }
   const ch = $("channel");
   if (!sameChan(chanSlug(ch.value), streamer.slug)) { ch.value = streamer.slug; S.channel = streamer.slug; save(); ch.dispatchEvent(new Event("input")); }
   $("chanSigned").replaceChildren("Using your chat: ", Object.assign(document.createElement("b"), { textContent: streamer.slug }));
