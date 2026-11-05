@@ -256,10 +256,7 @@ const BUILTINS = [
   ["!top", "Shows the top 5 by watchtime", "Everyone"],
   ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
-  ["!gtb start / stop", "Opens or closes GTB guesses (site open)", "Mods"],
-  ["!jdb add command text", "Adds a command", "Mods"],
-  ["!jdb edit command text", "Edits a command", "Mods"],
-  ["!jdb del command", "Deletes a command", "Mods"],
+  ["!jdb add/edit/delete", "Adds, edits or deletes a command", "Mods"],
   ["!jdb leave", "Removes the bot", "Streamer"]
 ];
 const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "gtb", "followage", "followers", "watchtime", "top"]);
@@ -376,7 +373,7 @@ async function onChat(env, ev) {
     const m = text.match(/^!jdb\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
     const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
     const cmds = (await env.STORE.get(key, "json")) || {};
-    const usage = "Usage: !jdb add command text · !jdb edit command text · !jdb del command";
+    const usage = "Usage: !jdb add command text · !jdb edit command text · !jdb delete command";
     if (sub === "leave") {
       if (!isStreamer) return;
       if (slug === env.BOT_CHANNEL) return postAsBot(env, bid, "JDBBot can't leave its home channel.");
@@ -551,6 +548,30 @@ export default {
       // approved = the channel has the bot (added with a key from Jay or an approved request)
       return me ? json({ ok: true, slug: me.slug, name: me.name || me.slug, pic: me.pic || "", approved: await isEnabled(env, me.slug) }) : json({ ok: false, error: "signin" }, 401);
     }
+    if (url.pathname === "/cmds" && req.method === "POST") {   // the streamer adds, edits or deletes their commands on their bot page
+      const me = await streamerSession(req, env);
+      if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
+      if (!(await isEnabled(env, me.slug))) return json({ ok: false, error: "JDBBot isn't added to your channel yet." }, 403);
+      const b = await req.json().catch(() => ({}));
+      const name = String(b.name || "").trim().toLowerCase().replace(/^!/, ""), old = String(b.old || "").trim().toLowerCase().replace(/^!/, "");
+      const key = "cmds:" + me.slug, cmds = (await env.STORE.get(key, "json")) || {};
+      if (b.action === "delete") {
+        if (!cmds[name]) return json({ ok: false, error: `There's no !${name}.` }, 404);
+        delete cmds[name];
+      } else {
+        const text = clean(b.text, 400);
+        if (!/^[a-z0-9_]{1,20}$/.test(name)) return json({ ok: false, error: "Names can use letters, numbers and _ (up to 20)." }, 400);
+        if (RESERVED.has(name)) return json({ ok: false, error: `!${name} is built in, so pick another name.` }, 400);
+        if (!text) return json({ ok: false, error: "Type what the bot should say." }, 400);
+        if (name !== old && cmds[name]) return json({ ok: false, error: `!${name} already exists.` }, 409);
+        if (!old && Object.keys(cmds).length >= 100) return json({ ok: false, error: "You already have 100 commands. Delete one first." }, 400);
+        const prev = cmds[old] || {};
+        if (old && old !== name) delete cmds[old];
+        cmds[name] = { text, by: me.name || me.slug, at: Date.now(), ...(prev.count ? { count: prev.count } : {}) };
+      }
+      await env.STORE.put(key, JSON.stringify(cmds));
+      return json({ ok: true, custom: Object.entries(cmds).sort(([a], [c]) => a.localeCompare(c)).map(([n, c]) => ({ name: "!" + n, text: c.text, by: c.by })) });
+    }
     if (url.pathname === "/say" && req.method === "POST") {
       const keyed = await checkKey(req, env);
       if (!keyed && !fromSite(req, env)) return json({ ok: false, error: "not allowed" }, 403);
@@ -587,7 +608,7 @@ export default {
       if (enabled) clips = ((await env.STORE.get("clips:" + await broadcasterId(env, slug).catch(() => 0), "json")) || []).slice(0, 50);
       const badge = enabled && !!(await env.STORE.get("stok:" + await broadcasterId(env, slug).catch(() => 0)));
       const requested = !enabled && !!(await getRequests(env))[slug], approved = !enabled && !!(await findKey(env, "", slug));
-      return json({ ok: true, slug, enabled, badge, requested, approved, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, does, who]) => ({ name, does, who })),
+      return json({ ok: true, slug, enabled, badge, requested, approved, home: slug === env.BOT_CHANNEL, bot: env.BOT_USERNAME, builtins: BUILTINS.map(([name, , who]) => ({ name, who })),
         custom: Object.entries(cmds).sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => ({ name: "!" + name, text: c.text, by: c.by })), clips });
     }
     if (url.pathname === "/request" && req.method === "POST") {   // a streamer asks Jay for access
