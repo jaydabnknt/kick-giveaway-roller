@@ -537,6 +537,21 @@ export default {
       // approved = the channel has the bot (added with a key from Jay or an approved request)
       return me ? json({ ok: true, slug: me.slug, name: me.name || me.slug, pic: me.pic || "", approved: await isEnabled(env, me.slug) }) : json({ ok: false, error: "signin" }, 401);
     }
+    if (url.pathname === "/stake" && req.method === "POST") {   // owner-only experiment: pass Jay's own Stake API call through (the key is never stored here)
+      const me = await streamerSession(req, env);
+      if (!me || me.uid !== Number(await broadcasterId(env, env.BOT_CHANNEL).catch(() => -1))) return json({ ok: false, error: "Owner only." }, 403);
+      const b = await req.json().catch(() => ({}));
+      const host = ["stake.com", "stake.us", "stake.ac", "stake.bet"].includes(b.host) ? b.host : "stake.com";
+      const key = String(b.key || "").trim();
+      if (!/^[A-Za-z0-9_-]{20,200}$/.test(key)) return json({ ok: false, error: "That doesn't look like a Stake API key." }, 400);
+      try {
+        const r = await fetch(`https://${host}/_api/graphql`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json", "x-access-token": key, origin: `https://${host}`, referer: `https://${host}/`, "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" },
+          body: JSON.stringify({ query: String(b.query || "").slice(0, 4000), variables: b.variables || {} }) });
+        const text = await r.text();
+        let data = null; try { data = JSON.parse(text); } catch (e) {}
+        return json({ ok: r.ok && !!data && !data.errors, status: r.status, data: data && data.data, errors: data && data.errors, blocked: !data ? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200) : undefined });
+      } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 502); }
+    }
     if (url.pathname === "/leave" && req.method === "POST") {   // Settings > Account: the streamer removes the bot from their chat
       const me = await streamerSession(req, env);
       if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
