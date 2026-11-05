@@ -64,7 +64,9 @@ const at = v => { const n = clean(v, 30).replace(/^@/, ""); return /^[A-Za-z0-9_
 const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 const TEMPLATES = {
   test: () => "👋 Bot is connected and working!",
-  winner: d => at(d.name) && `🎉 ${at(d.name)} won the giveaway! (${plural(+d.n || 0, "entry", "entries")})`,
+  winner: d => at(d.name) && (d.claim ? `🎲 A winner has been picked! ${at(d.name)}, type anything in chat within ${+d.secs || 30} seconds to claim it.` : `🎉 ${at(d.name)} won the giveaway! (${plural(+d.n || 0, "entry", "entries")})`),
+  claimed: d => at(d.name) && `🎉 ${at(d.name)} has been picked and claimed the giveaway! Congrats!`,
+  asleep: d => at(d.name) && `😴 ${at(d.name)} was sadly asleep and didn't claim in time, so they're out of this one.`,
   gtbOpen: d => `💰 Guess the Balance is open! Type ${clean(d.cmd, 15) || "!gtb"} <amount> to guess. One guess each${d.subs ? ", subs only" : ""}.`,
   gtbClose: d => `🔒 Guesses are closed! ${plural(+d.n || 0, "guess", "guesses")} in.`,
   gtbWin: d => at(d.name) ? `🏆 ${at(d.name)} wins Guess the Balance with ${clean(d.amount, 20)}! The balance was ${clean(d.final, 20)}.` : `The balance was ${clean(d.final, 20)}. Nobody won this round.`,
@@ -75,7 +77,7 @@ const TEMPLATES = {
   callAck: d => at(d.name) && `${at(d.name)} called ${clean(d.slot, 60)} (${+d.i || 1}/${+d.max || 1})`,
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
-const STREAMER_ONLY = new Set(["test", "winner", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+const STREAMER_ONLY = new Set(["test", "winner", "claimed", "asleep", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
 const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
 async function streamerSession(req, env) {
   const t = bearer(req);
