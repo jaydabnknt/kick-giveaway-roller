@@ -474,10 +474,9 @@ a.btn.primary { color: var(--on-accent); }
 <body>
 <nav class="menu" id="siteMenu" hidden>
   <a href="./">Home</a>
-  <a href="?tools">Giveaway tools</a>
-  <a id="menuMyBot" href="?c=">My bot page</a>
+  <a href="?tools">Tools</a>
   <a class="add" href="?add">Add JDBBot to your channel</a>
-  <a href="?admin">Dashboard</a>
+  <a href="?admin">Owner Dashboard</a>
 </nav>
 
 <nav class="menu acct-menu" id="acctMenu" hidden>
@@ -2637,7 +2636,6 @@ const menu = $("siteMenu");
 function setMenu(open) {
   menu.hidden = !open;
   document.querySelectorAll("[data-menu]").forEach(b => b.setAttribute("aria-expanded", String(open)));
-  if (open) { const c = params.has("c") ? chanSlug(params.get("c")) : chanSlug($("channel").value); $("menuMyBot").href = "?c=" + encodeURIComponent(c); }
 }
 document.querySelectorAll("[data-menu]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setMenu(menu.hidden); }));
 document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) setMenu(false); });
