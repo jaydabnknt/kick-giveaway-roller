@@ -473,6 +473,7 @@ body.admin .acct { display: none; }
 .pf-facts dd { margin: 0; font-weight: 700; text-align: right; }
 .pf-h { margin: 14px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
 .pf-chat { max-height: 220px; overflow-y: auto; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 14px; overflow-wrap: anywhere; }
+.pf-acts { margin-top: 14px; }
 .pf-chat time { color: var(--muted); font: 12px var(--mono); }
 
 /* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
@@ -546,6 +547,10 @@ a.btn.primary { color: var(--on-accent); }
   </dl>
   <h4 class="pf-h">Chat</h4>
   <div class="pf-chat" id="pfChat"></div>
+  <div class="row pf-acts" id="winnerActions">
+    <button class="btn" id="copyWinner" type="button">Copy name</button>
+    <button class="btn" id="removeWinner" type="button">Remove from entries</button>
+  </div>
 </dialog>
 
 <dialog id="dbBannedDlg" class="dlg">
@@ -710,10 +715,6 @@ a.btn.primary { color: var(--on-accent); }
         <div class="winner-name" id="winnerName">Nobody yet</div>
         <div class="claim" id="claimBox" hidden></div>
         <div class="receipt" id="receipt"><span>Press Roll to draw a winner.</span></div>
-        <div class="row" id="winnerActions" hidden>
-          <button class="btn" id="copyWinner" type="button">Copy name</button>
-          <button class="btn" id="removeWinner" type="button">Remove from entries</button>
-        </div>
       </div>
     </section>
 
