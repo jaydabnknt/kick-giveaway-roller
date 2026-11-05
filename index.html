@@ -409,7 +409,17 @@ body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in sr
 .acct-head { padding: 10px 12px 8px; font-weight: 800; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-wrap: anywhere; }
 .acct-menu .soon { margin-left: 6px; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .acct-menu a.out { color: #ff6b6b; }
-body.guest #toolsPage .tabs, body.guest #botPanel { display: none !important; }
+body.guest #toolsPage .tabs { display: none !important; }
+#botPanel, #entriesPanel, #ovPanelG, #ovPanelC, .stage > .toggles[hidden] { display: none !important; }
+body:not(.guest) #chatPanel:not(:has(.notice:not([hidden]))) { display: none !important; }   /* signed in: it connects by itself; shows only if the connection needs help */
+body.settings > .wrap:not(#settingsPage) { display: none !important; }
+#settingsPage { max-width: 760px; }
+.set-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.set-nav button { flex: 1 1 0; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 700 14px var(--sans, inherit); cursor: pointer; }
+.set-nav button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.set-prof { display: flex; align-items: center; gap: 14px; }
+.set-prof .acct-btn { width: 64px; height: 64px; font-size: 26px; cursor: default; }
+.set-prof b { font-size: 20px; display: block; }
 #chanRow[hidden], #chanSigned[hidden] { display: none !important; }
 .hero .cp-err { color: #ff6b6b; font-size: 14px; }
 @media (max-width: 440px) { .top:has(.acct) .pill { font-size: 0; gap: 0; padding: 8px; } }
@@ -486,7 +496,7 @@ a.btn.primary { color: var(--on-accent); }
 
 <nav class="menu acct-menu" id="acctMenu" hidden>
   <div class="acct-head" id="acctName"></div>
-  <a href="#" id="acctPresets">Presets <span class="soon">Soon</span></a>
+  <a href="?settings" id="acctSettings">Settings</a>
   <a href="?c=" id="acctCmds">My commands</a>
   <a href="#" id="acctOut" class="out">Sign out</a>
 </nav>
@@ -513,6 +523,43 @@ a.btn.primary { color: var(--on-accent); }
   <div class="dlg-head"><h3>Banned streamers</h3><button class="btn" type="button" id="dbBannedClose">Close</button></div>
   <div id="dbBanned" class="dash-list"></div>
 </dialog>
+
+<div class="wrap" id="settingsPage" hidden>
+  <header class="top">
+    <div class="brand">
+      <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
+      <a class="h1link" href="./" aria-label="Home"><h1>Set<span>tings</span></h1></a>
+    </div>
+  </header>
+  <section class="cp-box" id="setLogin" hidden>
+    <h3>Sign in first</h3>
+    <p class="hint">Settings are for streamers who added JDBBot. Log in with Kick to see yours.</p>
+    <div class="row"><a class="btn primary" id="setLoginBtn" href="#">Log in with Kick</a></div>
+  </section>
+  <div id="setBody" hidden style="display:grid;gap:18px">
+    <nav class="set-nav" role="tablist" aria-label="Settings">
+      <button type="button" role="tab" data-set="account" aria-selected="true">Account</button>
+      <button type="button" role="tab" data-set="obs" aria-selected="false">OBS</button>
+      <button type="button" role="tab" data-set="presets" aria-selected="false">Presets</button>
+    </nav>
+    <section class="cp-box" data-setview="account">
+      <div class="set-prof"><span class="acct-btn" id="setAv"></span><div><b id="setName"></b><span class="hint" id="setChan"></span></div></div>
+      <div class="row"><button class="btn danger" id="setLeave" type="button">Remove JDBBot from my channel</button></div>
+      <p class="hint" id="setLeaveMsg">The bot leaves your chat and your custom commands stop working. You can add it again any time from the home page.</p>
+    </section>
+    <section class="cp-box" data-setview="obs" hidden>
+      <h3>OBS overlays</h3>
+      <p class="hint">In OBS, add a <b>Browser</b> source and paste a link. Keep the tools page open while you stream, because the overlay shows what happens there.</p>
+      <div class="field"><label for="setOvG">Giveaway roller (600 × 640)</label><div class="inline"><input type="text" class="ov-link" id="setOvG" readonly><button class="btn" type="button" data-copy="setOvG">Copy</button></div></div>
+      <div class="field"><label for="setOvC">Slot calls (500 × 600)</label><div class="inline"><input type="text" class="ov-link" id="setOvC" readonly><button class="btn" type="button" data-copy="setOvC">Copy</button></div></div>
+      <p class="hint">Guess the Balance doesn't have an overlay yet.</p>
+    </section>
+    <section class="cp-box" data-setview="presets" hidden>
+      <h3>Presets</h3>
+      <p class="hint">Coming soon.</p>
+    </section>
+  </div>
+</div>
 
 <div class="wrap" id="adminPage" hidden>
   <header class="top">
@@ -624,8 +671,8 @@ a.btn.primary { color: var(--on-accent); }
         <div class="reel-empty" id="reelEmpty" hidden>Add at least two entries to roll.</div>
       </div>
       <button class="roll" id="rollBtn" type="button">Roll</button>
-      <div class="toggles">
-        <label class="sw"><input type="checkbox" id="optSound" checked> Tick sound</label>
+      <div class="toggles" hidden>
+        <label class="sw"><input type="checkbox" id="optSound"> Tick sound</label>
         <label class="sw"><input type="checkbox" id="optAutoRemove"> Take winner out after each roll</label>
       </div>
       <div class="result" id="result" aria-live="polite">
@@ -727,7 +774,7 @@ a.btn.primary { color: var(--on-accent); }
         </div>
       </details>
 
-      <details class="panel" open>
+      <details class="panel" id="entriesPanel" open>
         <summary>Entries <span class="meta" id="count">0 people</span></summary>
         <div class="panel-body">
           <div class="example-banner" id="exampleBanner" hidden>These are example names so you can try the reel. They disappear when the first real entry arrives.</div>
@@ -1186,6 +1233,7 @@ const els = {
   historyCard: $("historyCard"), history: $("history"), clearHistory: $("clearHistory")
 };
 const S = state.settings;
+S.sound = false; S.autoRemove = false;   // tick sound and auto-remove were taken out (2026-11-05)
 els.channel.value = S.channel; els.keyword.value = S.keyword; els.matchMode.value = S.matchMode;
 els.open.checked = S.open; els.subs.checked = S.subs; els.sound.checked = S.sound; els.autoRemove.checked = S.autoRemove;
 els.blocked.value = S.blocked;
@@ -2350,6 +2398,7 @@ $("slotsClear").addEventListener("click", e => {
 const OV_LS = "kick-giveaway-overlay";
 var ov = { on: true, key: "" };   // var: the render functions above may call the senders before this line runs
 try { Object.assign(ov, JSON.parse(localStorage.getItem(OV_LS) || "{}")); } catch (e) {}
+ov.on = true;   // the overlay switch moved to Settings as plain links, so it's always on
 if (!/^[a-z0-9]{16,40}$/.test(ov.key)) { ov.key = "kgt" + Array.from({ length: 22 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[randInt(36)]).join(""); }
 const saveOv = () => { if (OVERLAY) return; try { localStorage.setItem(OV_LS, JSON.stringify(ov)); } catch (e) {} };
 saveOv();
@@ -2434,7 +2483,7 @@ $("channel").addEventListener("change", () => { if (ov.on) { ovSendGiveaway(); o
 // Overlay side: listen to the topic and draw what arrives.
 if (OVERLAY) {
   const key = params.get("ch") ? chanKey(chanSlug(params.get("ch"))) : (params.get("k") || "").replace(/[^a-z0-9]/g, "");
-  S.sound = params.get("sound") !== "0"; state.entries.clear();
+  S.sound = false; state.entries.clear();
   els.empty.textContent = "Waiting for the giveaway…";
   order = []; idleOrder = []; winnerIdx = -1; draw();
   const showWinner = name => {
@@ -2498,7 +2547,7 @@ if (!OVERLAY) {
 }
 // The tools page is only for approved streamers (their channel has JDBBot, added with a key from Jay or an
 // approved request). Signed in, the channel box is locked to their own channel.
-const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && (params.has("tools") || !!location.hash);
+const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && (params.has("tools") || !!location.hash);
 let meChecked = false;
 const loginUrl = () => BOT_URL + "/login?back=" + encodeURIComponent(location.search);
 let autoConnected = false;
@@ -2550,7 +2599,6 @@ if (!OVERLAY) {
   document.addEventListener("click", e => { if (!acctMenu.hidden && !acctMenu.contains(e.target)) setAcctMenu(false); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") setAcctMenu(false); });
   addEventListener("resize", () => setAcctMenu(false));
-  $("acctPresets").addEventListener("click", e => { e.preventDefault(); setAcctMenu(false); });   // presets: coming later
   $("acctOut").addEventListener("click", e => { e.preventDefault();
     fetchWithTimeout(BOT_URL + "/me", 10000, { method: "POST", headers: { authorization: "Bearer " + streamer.tok } }).catch(() => {}).finally(() => {
       streamer = { tok: "", slug: "" }; saveStreamer(); location.reload(); });
@@ -2560,7 +2608,7 @@ if (!OVERLAY) {
     if (r.status === 401) { streamer = { tok: "", slug: "" }; saveStreamer(); return; }
     const j = await r.json().catch(() => ({}));
     if (j.ok && !j.approved) { const was = !!streamer.tok; streamer = { tok: "", slug: "" }; saveStreamer(); if (was && ON_TOOLS) location.reload(); return; }   // the bot left their chat
-    if (j.ok) { Object.assign(streamer, { slug: j.slug, name: j.name, pic: j.pic, approved: true }); saveStreamer(); }
+    if (j.ok) { Object.assign(streamer, { slug: j.slug, name: j.name, pic: j.pic, approved: true }); saveStreamer(); dispatchEvent(new Event("streamer-updated")); }
   }).catch(() => {}).finally(() => { meChecked = true; renderAcct(); applyGate(); });
 }
 
@@ -2628,7 +2676,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
 // own commands added with !jdb add, its clip markers, and a way for the streamer to add the bot.
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
-const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !location.hash;
+const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !location.hash;
 if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "JDBBot"; }
 $("homeAdd").href = BOT_URL + "/allow"; $("menuAdd").href = BOT_URL + "/allow";
 if (HOME) {
@@ -2742,6 +2790,44 @@ if (CHANPAGE !== null) {
     finally { $("cpRequest").disabled = false; }
   });
   loadChanPage();
+}
+
+// ---------- settings (?settings) ----------
+// Account (your profile, and removing the bot), OBS overlay links for every tool, and presets (later).
+if (params.has("settings")) {
+  document.body.classList.add("settings"); $("settingsPage").hidden = false; document.title = "Settings · JDBBot";
+  const show = () => {
+    const on = !!streamer.tok;
+    $("setLogin").hidden = on; $("setBody").hidden = !on;
+    $("setLoginBtn").href = BOT_URL + "/login?back=" + encodeURIComponent("?settings");
+    if (!on) return;
+    const av = $("setAv"); av.replaceChildren();
+    if (streamer.pic) { const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = streamer.pic; img.onerror = () => av.replaceChildren((streamer.name || streamer.slug || "?").charAt(0).toUpperCase()); av.append(img); }
+    else av.textContent = (streamer.name || streamer.slug || "?").charAt(0).toUpperCase();
+    $("setName").textContent = streamer.name || streamer.slug; $("setChan").textContent = "kick.com/" + streamer.slug;
+    $("setOvG").value = `${ovBase}?overlay=giveaway&ch=${streamer.slug}`; $("setOvC").value = `${ovBase}?overlay=calls&ch=${streamer.slug}`;
+    $("setLeave").hidden = streamer.slug === "jaydab4ngnt";   // the home channel keeps the bot
+  };
+  document.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-set]").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+    document.querySelectorAll("[data-setview]").forEach(v => (v.hidden = v.dataset.setview !== b.dataset.set));
+  }));
+  document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+    const inp = $(b.dataset.copy); inp.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(() => { b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1500); }).catch(() => document.execCommand("copy"));
+  }));
+  $("setLeave").addEventListener("click", async () => {
+    const b = $("setLeave");
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to remove JDBBot"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove JDBBot from my channel"; }, 3000); return; }
+    b.disabled = true; $("setLeaveMsg").textContent = "Removing…";
+    try {
+      const r = await fetchWithTimeout(BOT_URL + "/leave", 20000, { method: "POST", headers: { authorization: "Bearer " + streamer.tok } });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { $("setLeaveMsg").textContent = j.error || "Couldn't remove the bot."; b.disabled = false; return; }
+      streamer = { tok: "", slug: "" }; saveStreamer(); location.href = "./";
+    } catch (e) { $("setLeaveMsg").textContent = "Couldn't reach JDBBot. Check your connection."; b.disabled = false; }
+  });
+  show(); addEventListener("streamer-updated", show);
 }
 
 // ---------- owner dashboard (?admin) ----------
