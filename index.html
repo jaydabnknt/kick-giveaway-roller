@@ -457,6 +457,23 @@ body.admin .acct { display: none; }
 .dlg::backdrop { background: rgb(0 0 0 / .6); }
 .dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .dlg-head h3 { margin: 0; }
+.claim { grid-column: 1 / -1; font-size: 14px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+.claim[hidden] { display: none; }
+.claim b { font: 800 16px var(--mono); color: #ffd166; margin-right: 6px; }
+.claim.ok { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.claim.miss { color: #ff6b6b; border-color: color-mix(in srgb, #ff6b6b 40%, var(--line)); }
+.pf { position: fixed; padding: 18px; }
+.pf-x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); font-size: 22px; line-height: 1; cursor: pointer; }
+.pf-head { display: flex; align-items: center; gap: 14px; padding-right: 40px; }
+.pf-head .win-av { width: 64px; height: 64px; font-size: 26px; box-shadow: 0 0 0 2px var(--accent); }
+.pf-head b { font-size: 22px; font-weight: 900; color: var(--accent); overflow-wrap: anywhere; }
+.pf-facts { display: grid; gap: 6px; margin: 14px 0 0; }
+.pf-facts div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.pf-facts dt { color: var(--muted); font-size: 14px; }
+.pf-facts dd { margin: 0; font-weight: 700; text-align: right; }
+.pf-h { margin: 14px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.pf-chat { max-height: 220px; overflow-y: auto; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 14px; overflow-wrap: anywhere; }
+.pf-chat time { color: var(--muted); font: 12px var(--mono); }
 
 /* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
 body.cp > .wrap:not(#chanPage) { display: none !important; }
@@ -518,6 +535,18 @@ a.btn.primary { color: var(--on-accent); }
     <p class="cp-err" id="homeErr" hidden></p>
   </section>
 </div>
+
+<dialog id="pfDlg" class="dlg pf">
+  <button class="pf-x" type="button" id="pfClose" aria-label="Close">×</button>
+  <div class="pf-head"><div class="win-av" id="pfAv" aria-hidden="true">?</div><b id="pfName"></b></div>
+  <dl class="pf-facts">
+    <div><dt>Joined Kick</dt><dd id="pfJoined"></dd></div>
+    <div><dt>Following since</dt><dd id="pfFollow"></dd></div>
+    <div><dt>Subscribed</dt><dd id="pfSub"></dd></div>
+  </dl>
+  <h4 class="pf-h">Chat</h4>
+  <div class="pf-chat" id="pfChat"></div>
+</dialog>
 
 <dialog id="dbBannedDlg" class="dlg">
   <div class="dlg-head"><h3>Banned streamers</h3><button class="btn" type="button" id="dbBannedClose">Close</button></div>
@@ -679,6 +708,7 @@ a.btn.primary { color: var(--on-accent); }
         <div class="win-av" id="winnerAv" aria-hidden="true">?</div>
         <div class="label" id="resultLabel">Winner</div>
         <div class="winner-name" id="winnerName">Nobody yet</div>
+        <div class="claim" id="claimBox" hidden></div>
         <div class="receipt" id="receipt"><span>Press Roll to draw a winner.</span></div>
         <div class="row" id="winnerActions" hidden>
           <button class="btn" id="copyWinner" type="button">Copy name</button>
@@ -753,6 +783,7 @@ a.btn.primary { color: var(--on-accent); }
               <label for="keyword">Keyword</label>
               <input type="text" id="keyword" value="!join" autocomplete="off" spellcheck="false" autocapitalize="off">
             </div>
+            <button class="btn primary" id="kwStart" type="button">Start</button>
             <div class="field">
               <label for="matchMode">Counts when the message</label>
               <select id="matchMode">
@@ -763,8 +794,8 @@ a.btn.primary { color: var(--on-accent); }
             </div>
           </div>
           <div class="toggles">
-            <label class="sw"><input type="checkbox" id="optOpen" checked> Entries open</label>
-            <label class="sw"><input type="checkbox" id="optSubs"> Subscribers only</label>
+            <label class="sw" hidden><input type="checkbox" id="optOpen" checked> Entries open</label>
+            <label class="sw" hidden><input type="checkbox" id="optSubs"> Subscribers only</label>
             <label class="sw"><input type="checkbox" id="optLuck"> Subscriber luck (2 entries)</label>
           </div>
           <div class="row">
@@ -1234,11 +1265,12 @@ const els = {
 };
 const S = state.settings;
 S.sound = false; S.autoRemove = false;   // tick sound and auto-remove were taken out (2026-11-05)
+S.open = true; S.subs = false;            // entries are always open; Start applies the keyword and clears entries
 els.channel.value = S.channel; els.keyword.value = S.keyword; els.matchMode.value = S.matchMode;
 els.open.checked = S.open; els.subs.checked = S.subs; els.sound.checked = S.sound; els.autoRemove.checked = S.autoRemove;
 els.blocked.value = S.blocked;
 const bindSetting = (el, key, prop = "value") => el.addEventListener(prop === "checked" ? "change" : "input", () => { S[key] = el[prop]; save(); });
-bindSetting(els.channel, "channel"); bindSetting(els.keyword, "keyword"); bindSetting(els.matchMode, "matchMode");
+bindSetting(els.channel, "channel"); bindSetting(els.matchMode, "matchMode");
 bindSetting(els.open, "open", "checked"); bindSetting(els.subs, "subs", "checked"); bindSetting(els.sound, "sound", "checked");
 bindSetting(els.autoRemove, "autoRemove", "checked"); bindSetting(els.blocked, "blocked");
 $("optExpire").checked = S.expire; $("expireMins").value = S.expireMins; $("optLuck").checked = S.luck;
@@ -1323,6 +1355,19 @@ els.clear.addEventListener("click", () => {
   clearTimeout(clearArmed); clearArmed = null; els.clear.textContent = "Clear all";
   state.entries.clear(); state.example = false; changed();
 });
+
+// Start / Update: use the typed keyword from now on and start a fresh list of entries.
+let kwStarted = false;
+const kwSync = () => { $("kwStart").textContent = kwStarted ? "Update" : "Start"; $("kwStart").className = "btn " + (!kwStarted || els.keyword.value.trim() !== S.keyword.trim() ? "primary" : ""); };
+els.keyword.addEventListener("input", kwSync);
+els.keyword.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("kwStart").click(); } });
+$("kwStart").addEventListener("click", () => {
+  const kw = els.keyword.value.trim(); if (!kw) { els.keyword.focus(); return; }
+  S.keyword = kw; S.open = true; kwStarted = true;
+  state.entries.clear(); state.example = false; cancelClaim(); changed(); save(); kwSync();
+  feedLine(null, `Entries reset. Chat types ${kw} to enter.`);
+});
+kwSync();
 
 // ---------- reel drawing ----------
 const ctx = els.canvas.getContext("2d");
@@ -1448,6 +1493,7 @@ function buildReel(entries) {
 }
 function startRoll() {
   if (OVERLAY || rolling || state.entries.size < 2) return;
+  cancelClaim();
   const reel = buildReel([...state.entries.values()]);
   const startIdx = randInt(reel.length);
   const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
@@ -1502,6 +1548,73 @@ function finish() {
   state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
+  startClaim(name);
+}
+// ---------- winner check: they have 30 seconds to type in chat ----------
+const CLAIM_SECS = 30;
+let claim = null, profileFor = "";
+function cancelClaim() { if (claim) clearInterval(claim.timer); claim = null; $("claimBox").hidden = true; }
+function startClaim(name) {
+  cancelClaim();
+  const box = $("claimBox");
+  if (!currentRoom) { box.hidden = false; box.className = "claim"; box.textContent = "Connect to chat to check that the winner is here."; return; }
+  claim = { name, key: cleanName(name).toLowerCase(), until: Date.now() + CLAIM_SECS * 1000 };
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((claim.until - Date.now()) / 1000));
+    box.hidden = false; box.className = "claim wait";
+    box.replaceChildren(Object.assign(document.createElement("b"), { textContent: left + "s" }), ` for ${claim.name} to type in chat`);
+    if (left <= 0) claimMissed();
+  };
+  claim.timer = setInterval(tick, 250); tick();
+}
+function claimAnswered() {
+  const c = claim; clearInterval(c.timer); claim = null;
+  const secs = Math.max(1, Math.round((Date.now() - (c.until - CLAIM_SECS * 1000)) / 1000));
+  const box = $("claimBox"); box.hidden = false; box.className = "claim ok"; box.textContent = `${c.name} answered in ${secs}s`;
+  openProfile(c.name);
+}
+function claimMissed() {
+  const c = claim; clearInterval(c.timer); claim = null;
+  removeEntry(c.key); save(); changed();
+  const box = $("claimBox"); box.hidden = false; box.className = "claim miss"; box.textContent = `${c.name} didn't type in time and was taken out of the entries.`;
+}
+// Winner profile pop-up: picture, name, join date, follow date, sub status and their last 10 messages.
+const fmtDate = v => { const d = new Date(v); return isNaN(d) ? "" : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); };
+function renderProfileChat() {
+  const rec = chatLog.get(profileFor), box = $("pfChat");
+  const msgs = rec ? rec.msgs : [];
+  box.replaceChildren(...(msgs.length ? msgs.map(m => { const d = document.createElement("div"); const t = document.createElement("time"); t.textContent = new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); d.append(t, " " + m.text); return d; }) : [Object.assign(document.createElement("p"), { className: "hint", textContent: "No messages yet." })]));
+  box.scrollTop = box.scrollHeight;
+  if (rec) $("pfSub").textContent = rec.sub ? "Yes" : "No";
+}
+async function openProfile(name) {
+  const key = cleanName(name).toLowerCase(); profileFor = key;
+  $("pfName").textContent = name; setWinnerAv(name, $("pfAv"));
+  $("pfJoined").textContent = "…"; $("pfFollow").textContent = "…"; $("pfSub").textContent = "…";
+  renderProfileChat();
+  const dlg = $("pfDlg"); if (!dlg.open) dlg.showModal();
+  const slug = key.replace(/_/g, "-"), chan = chanSlug(S.channel).replace(/_/g, "-");
+  const page = await fetchKickChannel(slug).catch(() => undefined);
+  if (profileFor !== key) return;
+  if (typeof page === "string") {
+    const pic = page.match(/"profile_pic"\s*:\s*"([^"]+)"/); if (pic) { const u = pic[1].replace(/\\\//g, "/"); $("pfAv").style.backgroundImage = `url("${u.replace(/"/g, "")}")`; $("pfAv").textContent = ""; }
+    const j = page.match(/"chatroom"\s*:\s*\{[^{}]*?"created_at"\s*:\s*"([^"]+)"/) || page.match(/"created_at"\s*:\s*"([^"]+)"/);
+    $("pfJoined").textContent = (j && fmtDate(j[1])) || "Unknown";
+  } else $("pfJoined").textContent = "Unknown";
+  let follow = "Unknown";
+  if (chan) {
+    const target = `https://kick.com/api/v2/channels/${encodeURIComponent(chan)}/users/${encodeURIComponent(slug)}`;
+    for (const relay of RELAYS) {
+      try {
+        const r = await fetchWithTimeout(relay(target), 7000); if (!r.ok) continue;
+        const d = await r.json();
+        follow = d.following_since ? fmtDate(d.following_since) || "Yes" : "Not following";
+        if (!(chatLog.get(key) || {}).msgs && d.subscribed_for != null) $("pfSub").textContent = d.subscribed_for > 0 ? "Yes" : "No";
+        break;
+      } catch (e) {}
+    }
+  }
+  if (profileFor === key) $("pfFollow").textContent = follow;
 }
 function setWinnerAv(name, el = $("winnerAv")) {
   if (!name) { el.style.backgroundImage = ""; el.style.backgroundColor = ""; el.textContent = "?"; return; }
@@ -1800,6 +1913,7 @@ function onChat(d) {
   }
   const sender = d.sender || {}; const name = sender.username || sender.slug; if (!name) return;
   const text = messageText(d.content);
+  logChat(name, text, sender);
   let hit = false;
   const key = cleanName(name).toLowerCase(), existing = state.entries.get(key);
   if (existing && existing.src === "chat") {             // already in: any message keeps them active
@@ -1810,6 +1924,18 @@ function onChat(d) {
   }
   const g = gtbOnChat(name, text, sender) || callsOnChat(name, text, sender);
   feedLine(name, text, g ? g.tag : hit ? "entered" : "", g && !g.ok);
+}
+// Each chatter's last 10 messages, for the winner's profile.
+const chatLog = new Map();
+function logChat(name, text, sender) {
+  const key = cleanName(name).toLowerCase();
+  let rec = chatLog.get(key);
+  if (!rec) { rec = { name, msgs: [] }; if (chatLog.size > 1000) chatLog.delete(chatLog.keys().next().value); }
+  else chatLog.delete(key);
+  rec.sub = isSub(sender); rec.msgs.push({ text, at: Date.now() }); if (rec.msgs.length > 10) rec.msgs.shift();
+  chatLog.set(key, rec);
+  if (claim && claim.key === key) claimAnswered();
+  if (profileFor === key) renderProfileChat();
 }
 function feedLine(name, text, tag, miss) {
   const d = document.createElement("div"); if (tag) { d.className = miss ? "miss" : "hit"; d.dataset.tag = tag; }
@@ -2791,6 +2917,10 @@ if (CHANPAGE !== null) {
   });
   loadChanPage();
 }
+
+$("pfClose").addEventListener("click", () => { $("pfDlg").close(); });
+$("pfDlg").addEventListener("close", () => { profileFor = ""; });
+$("pfDlg").addEventListener("click", e => { if (e.target === $("pfDlg")) $("pfDlg").close(); });
 
 // ---------- settings (?settings) ----------
 // Account (your profile, and removing the bot), OBS overlay links for every tool, and presets (later).
