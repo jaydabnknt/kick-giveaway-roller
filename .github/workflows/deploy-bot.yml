@@ -20,18 +20,6 @@ jobs:
           [ -n "${{ secrets.KICK_CLIENT_ID }}" ] || missing="$missing KICK_CLIENT_ID"
           [ -n "${{ secrets.KICK_CLIENT_SECRET }}" ] || missing="$missing KICK_CLIENT_SECRET"
           if [ -n "$missing" ]; then echo "::notice::Not deploying yet, missing GitHub secrets:$missing"; echo "SKIP=1" >> $GITHUB_ENV; fi
-      - name: One-time rename to ToolBot (storage name and workers.dev address)
-        if: env.SKIP != '1'
-        run: |
-          API=https://api.cloudflare.com/client/v4; H="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
-          ACC=$(curl -s -H "$H" $API/accounts | grep -oE '"id":"[0-9a-f]{32}"' | head -1 | cut -d'"' -f4); echo "account $ACC"
-          NS=$(curl -s -H "$H" "$API/accounts/$ACC/storage/kv/namespaces?per_page=100" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s).result||[];const n=r.find(x=>x.title==="jd"+"bbot-store");console.log(n?n.id:"")})')
-          if [ -n "$NS" ]; then curl -s -X PUT -H "$H" -H "content-type: application/json" "$API/accounts/$ACC/storage/kv/namespaces/$NS" -d '{"title":"toolbot-store"}' | head -c 300; echo; fi
-          echo "subdomain before:"; curl -s -H "$H" $API/accounts/$ACC/workers/subdomain | head -c 300; echo
-          for SUB in toolbot toolbotkick toolbot-kick; do
-            R=$(curl -s -X PUT -H "$H" -H "content-type: application/json" $API/accounts/$ACC/workers/subdomain -d "{\"subdomain\":\"$SUB\"}"); echo "$SUB: $R" | head -c 400; echo
-            echo "$R" | grep -q '"success":true' && break
-          done
       - name: Make or find the bot's storage
         if: env.SKIP != '1'
         run: |
@@ -63,3 +51,9 @@ jobs:
         run: |
           printf '%s' "${{ secrets.KICK_CLIENT_ID }}" | wrangler secret put KICK_CLIENT_ID
           printf '%s' "${{ secrets.KICK_CLIENT_SECRET }}" | wrangler secret put KICK_CLIENT_SECRET
+      - name: One-time cleanup of the old bot (approved by Jay 2026-11-08)
+        if: env.SKIP != '1'
+        run: |
+          OLD="jd""bbot"
+          wrangler delete --name "$OLD" --force 2>&1 | tail -3 || true
+          wrangler d1 delete "$OLD-chat" -y 2>&1 | tail -3 || true
