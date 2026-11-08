@@ -78,6 +78,7 @@ const TEMPLATES = {
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
 const STREAMER_ONLY = new Set(["test", "winner", "claimed", "asleep", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+const modName = v => { const n = String(v || "").trim().replace(/^@/, "").toLowerCase(); return /^[a-z0-9_-]{2,40}$/.test(n) ? n : ""; };
 const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
 async function streamerSession(req, env) {
   const t = bearer(req);
@@ -518,11 +519,12 @@ export default {
     // dashboard (or an approved request); channels already using the bot can re-allow without one.
     // /admin/login: Jay signs in to the dashboard with Kick.
     // /login: a streamer proves who they are, so only they can run GTB and slot calls for their channel.
-    if (url.pathname === "/allow" || url.pathname === "/admin/login" || url.pathname === "/login") {
-      const admin = url.pathname !== "/allow", streamer = url.pathname === "/login";
+    // /modlogin: someone on Jay's mod tools access list signs in to mod tools (anyone else just lands back home).
+    if (url.pathname === "/allow" || url.pathname === "/admin/login" || url.pathname === "/login" || url.pathname === "/modlogin") {
+      const admin = url.pathname !== "/allow", streamer = url.pathname === "/login", mod = url.pathname === "/modlogin";
       const ch = normSlug(url.searchParams.get("ch")), key = clean(url.searchParams.get("key"), 40).toUpperCase();
       // Anyone can add the bot now (no keys or approval); Kick tells us whose channel it is at the callback.
-      const state = (streamer ? "s" : admin ? "d" : "a") + randomString(24), verifier = randomString(32);
+      const state = (mod ? "m" : streamer ? "s" : admin ? "d" : "a") + randomString(24), verifier = randomString(32);
       const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
       const back = /^\?(tools|admin|add|c=[a-z0-9_-]{0,40})?$/.test(url.searchParams.get("back") || "") ? url.searchParams.get("back") : "?tools";
       await env.STORE.put("oauth:" + state, JSON.stringify({ v: verifier, key, ch, back }), { expirationTtl: 600 });
@@ -549,6 +551,13 @@ export default {
         await env.STORE.put("ss:" + sess, JSON.stringify({ uid: Number(uid), slug, name: name || slug, pic: /^https:\/\//.test(pic) ? pic : "" }), { expirationTtl: 30 * 86400 });
         return Response.redirect(env.SITE_URL + back + "#ss=" + sess + "&ch=" + encodeURIComponent(slug), 302);
       };
+      if (state.startsWith("m")) {   // mod tools: only Kick usernames on the access list get a session
+        const uname = modName(name), list = (await env.STORE.get("modaccess", "json")) || [];
+        if (!uname || !list.some(x => x.name === uname)) return Response.redirect(env.SITE_URL, 302);
+        const sess = randomString(32);
+        await env.STORE.put("ms:" + sess, JSON.stringify({ uid: Number(uid), name: name || uname, pic: /^https:\/\//.test(pic) ? pic : "" }), { expirationTtl: 30 * 86400 });
+        return Response.redirect(env.SITE_URL + "?mod#ms=" + sess, 302);
+      }
       if (state.startsWith("s")) {   // sign in: only works once the bot is in your chat
         const ch = await fetch("https://api.kick.com/public/v1/channels?broadcaster_user_id=" + uid, { headers: { accept: "application/json", authorization: "Bearer " + tok.access } }).then(r => r.json()).catch(() => ({}));
         const slug = normSlug((ch.data && ch.data[0] && ch.data[0].slug) || name);
@@ -582,6 +591,13 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/modme") {   // is this mod tools session still good (and the name still on the list)?
+      const tk = bearer(req), m = /^[A-Za-z0-9_-]{20,80}$/.test(tk) ? await env.STORE.get("ms:" + tk, "json") : null;
+      if (m && req.method === "POST") { await env.STORE.delete("ms:" + tk); return json({ ok: true }); }
+      const list = m ? (await env.STORE.get("modaccess", "json")) || [] : [];
+      if (!m || !list.some(x => x.name === modName(m.name))) { if (m) await env.STORE.delete("ms:" + tk); return json({ ok: false, error: "signin" }, 401); }
+      return json({ ok: true, name: m.name, pic: m.pic || "" });
+    }
     if (url.pathname === "/me") {   // which channel the tools page is signed in as
       const me = await streamerSession(req, env);
       if (me && req.method === "POST") { await env.STORE.delete("ss:" + bearer(req)); return json({ ok: true }); }
@@ -710,10 +726,18 @@ export default {
       // The dashboard lists every channel with the bot, and keeps a banned list: banned streamers can't add it.
       const op = url.pathname.slice(7), banned = (await env.STORE.get("banned", "json")) || [];
       if (op === "logout") { await env.STORE.delete("sess:" + (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "")); return json({ ok: true }); }
-      if (!["state", "ban", "unban"].includes(op)) return json({ ok: false, error: "not found" }, 404);
+      const mods = (await env.STORE.get("modaccess", "json")) || [];
+      if (!["state", "ban", "unban", "modadd", "moddel"].includes(op)) return json({ ok: false, error: "not found" }, 404);
       try {
         const slug = normSlug(b.ch);
-        if (op === "ban") {
+        if (op === "modadd" || op === "moddel") {   // mod tools access list (Kick usernames)
+          const n = modName(b.name);
+          if (!n) return json({ ok: false, error: "Type a Kick username." }, 400);
+          const i = mods.findIndex(x => x.name === n);
+          if (op === "modadd" && i < 0) { if (mods.length >= 200) return json({ ok: false, error: "The list is full." }, 400); mods.push({ name: n, at: Date.now() }); }
+          if (op === "moddel" && i >= 0) mods.splice(i, 1);
+          await env.STORE.put("modaccess", JSON.stringify(mods));
+        } else if (op === "ban") {
           if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type a Kick channel name." }, 400);
           if (slug === env.BOT_CHANNEL) return json({ ok: false, error: "You can't ban your own channel." }, 400);
           if (!banned.some(x => x.slug === slug)) { banned.push({ slug, at: Date.now() }); await env.STORE.put("banned", JSON.stringify(banned)); }
@@ -723,7 +747,7 @@ export default {
           if (i >= 0) { banned.splice(i, 1); await env.STORE.put("banned", JSON.stringify(banned)); }
         }
       } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 500); }
-      return json({ ok: true, home: env.BOT_CHANNEL, channels: op === "state" ? await syncChannels(env) : await channelList(env), banned: banned.slice().sort((x, y) => y.at - x.at) });
+      return json({ ok: true, home: env.BOT_CHANNEL, channels: op === "state" ? await syncChannels(env) : await channelList(env), banned: banned.slice().sort((x, y) => y.at - x.at), mods: mods.slice().sort((x, y) => y.at - x.at) });
     }
     if (url.pathname === "/room") {   // a channel's chatroom number, so OBS overlays can watch chat for raids
       if (req.method === "POST") {
