@@ -14,3 +14,9 @@ SITE_URL = "https://jdbbot.pages.dev/"
 [[kv_namespaces]]
 binding = "STORE"
 id = "KV_ID_FILLED_BY_DEPLOY"
+
+# Chat logs for mod tools (free D1 database). The deploy fills in the id, or drops this block if it can't make one.
+[[d1_databases]]
+binding = "DB"
+database_name = "jdbbot-chat"
+database_id = "D1_ID_FILLED_BY_DEPLOY"

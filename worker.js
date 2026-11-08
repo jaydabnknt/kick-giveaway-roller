@@ -78,6 +78,11 @@ const TEMPLATES = {
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
 const STREAMER_ONLY = new Set(["test", "winner", "claimed", "asleep", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+async function modSession(req, env) {   // a signed-in mod whose name is still on the access list, else null
+  const tk = bearer(req), m = /^[A-Za-z0-9_-]{20,80}$/.test(tk) ? await env.STORE.get("ms:" + tk, "json") : null;
+  const access = m ? (await env.STORE.get("modaccess", "json")) || [] : [];
+  return m && access.some(x => x.name === modName(m.name)) ? m : null;
+}
 const DB_FIELDS = ["kick", "telegram", "discord", "stake"];
 const modName = v => { const n = String(v || "").trim().replace(/^@/, "").toLowerCase(); return /^[a-z0-9_-]{2,40}$/.test(n) ? n : ""; };
 const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
@@ -168,6 +173,30 @@ function flag(k, secs) {
   if (flags.size > 5000) for (const [x, t] of flags) if (t < now) flags.delete(x);
   if ((flags.get(k) || 0) > now) return false;
   flags.set(k, now + secs * 1000); return true;
+}
+
+// ---------- chat logs (mod tools) ----------
+// Every chat message in channels with the bot goes into the free D1 database (binding DB). D1's free plan allows
+// about 100k row writes a day, so a user's row (name, picture, last seen) is refreshed at most every 10 minutes.
+let dbReady = null;
+function chatDb(env) {
+  if (!env.DB) return null;
+  if (!dbReady) dbReady = env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS users (uid INTEGER PRIMARY KEY, name TEXT, pic TEXT, first INTEGER, last INTEGER)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, ch TEXT, text TEXT, at INTEGER)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS msgs_uid ON msgs (uid, id)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS users_last ON users (last)"),
+  ]).catch(e => { dbReady = null; throw e; });
+  return dbReady.then(() => env.DB);
+}
+async function logChat(env, slug, ev) {
+  const s = ev.sender || {}, uid = Number(s.user_id), text = String(ev.content || "").slice(0, 500);
+  if (!uid || !text) return;
+  const db = await chatDb(env); if (!db) return;
+  const at = Date.parse(ev.created_at) || Date.now(), pic = /^https:\/\//.test(s.profile_picture || "") ? String(s.profile_picture) : "";
+  const q = [db.prepare("INSERT INTO msgs (uid, ch, text, at) VALUES (?, ?, ?, ?)").bind(uid, slug, text, at)];
+  if (flag("lu:" + uid, 600)) q.push(db.prepare("INSERT INTO users (uid, name, pic, first, last) VALUES (?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET name = excluded.name, pic = CASE WHEN excluded.pic = '' THEN users.pic ELSE excluded.pic END, last = excluded.last").bind(uid, String(s.username || "").slice(0, 40), pic, at, at));
+  await db.batch(q);
 }
 
 // ---------- channels that use JDBBot ----------
@@ -315,6 +344,7 @@ async function onChat(env, ev) {
   const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
   const isStreamer = normSlug(who) === slug || badges.includes("broadcaster");
   const isMod = isStreamer || badges.some(b => /moderator|^mod$/.test(b));
+  await logChat(env, slug, ev).catch(e => env.STORE.put("lastdberror", String(e.message || e).slice(0, 300)).catch(() => {}));
   await noteChat(env, slug, bid, who).catch(() => {});
   if (!text.startsWith("!")) return;
   const [cmd, arg] = [text.split(/\s+/)[0].toLowerCase(), text.split(/\s+/)[1] || ""];
@@ -592,10 +622,24 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/modlog") {   // mod tools chat logs: who typed (newest first) or one user's messages
+      const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
+      const db = await chatDb(env).catch(() => null);
+      if (!db) return json({ ok: false, error: "The chat log database isn't set up yet." }, 503);
+      const uid = Number(url.searchParams.get("uid")) || 0, before = Number(url.searchParams.get("before")) || 0;
+      if (uid) {
+        const user = await db.prepare("SELECT uid, name, pic, first, last FROM users WHERE uid = ?").bind(uid).first();
+        const msgs = (await db.prepare("SELECT id, ch, text, at FROM msgs WHERE uid = ? AND id < ? ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15).all()).results;
+        const count = before ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM msgs WHERE uid = ?").bind(uid).first()).n;
+        return json({ ok: true, user, msgs, count, more: msgs.length === 100 });
+      }
+      const q = String(url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase().replace(/[%_\\]/g, "\\$&").slice(0, 40);
+      const users = (await db.prepare("SELECT uid, name, pic, first, last FROM users WHERE (? = '' OR lower(name) LIKE ? ESCAPE '\\') AND last < ? ORDER BY last DESC LIMIT 50").bind(q, "%" + q + "%", before || 9e15).all()).results;
+      const total = before || q ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM users").first()).n;
+      return json({ ok: true, users, total, more: users.length === 50 });
+    }
     if (url.pathname === "/moddb") {   // mod tools user database: one shared list of people's Kick/Telegram/Discord/Stake names
-      const tk = bearer(req), m = /^[A-Za-z0-9_-]{20,80}$/.test(tk) ? await env.STORE.get("ms:" + tk, "json") : null;
-      const access = m ? (await env.STORE.get("modaccess", "json")) || [] : [];
-      if (!m || !access.some(x => x.name === modName(m.name))) return json({ ok: false, error: "signin" }, 401);
+      const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
       const db = (await env.STORE.get("moddb", "json")) || [];
       if (req.method === "POST") {
         const b = await req.json().catch(() => ({}));

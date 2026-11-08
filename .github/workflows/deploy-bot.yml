@@ -31,6 +31,16 @@ jobs:
           fi
           [ -n "$ID" ] || { echo "::error::Could not create KV storage"; exit 1; }
           sed -i "s/KV_ID_FILLED_BY_DEPLOY/$ID/" wrangler.toml
+      - name: Make or find the chat log database
+        if: env.SKIP != '1'
+        run: |
+          D1=$(wrangler d1 list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s.slice(s.indexOf("[")));const n=a.find(x=>x.name==="jdbbot-chat");console.log(n?n.uuid:"")}catch(e){console.log("")}})')
+          if [ -z "$D1" ]; then
+            wrangler d1 create jdbbot-chat > d1.txt 2>&1 || cat d1.txt
+            D1=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' d1.txt | head -1)
+          fi
+          if [ -n "$D1" ]; then sed -i "s/D1_ID_FILLED_BY_DEPLOY/$D1/" wrangler.toml
+          else echo "::warning::Could not make the D1 chat log database (the Cloudflare API token may need D1 Edit permission). Deploying without chat logs."; sed -i '/^# Chat logs for mod tools/,$d' wrangler.toml; fi
       - name: Deploy
         if: env.SKIP != '1'
         run: |
