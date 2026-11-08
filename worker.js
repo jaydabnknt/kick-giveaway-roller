@@ -617,8 +617,9 @@ export default {
         await env.STORE.put("stok:" + uid, JSON.stringify(tok));
         await env.STORE.put("ch:" + slug, String(uid));
         const list = await channelList(env);
+        await subscribeChat(env, slug).catch(() => {});   // also when re-adding (e.g. after a new Kick app)
         if (!list.some(c => c.slug === slug)) {
-          await subscribeChat(env, slug).catch(() => {}); list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list));
+          list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list));
           ctx.waitUntil(postAsBot(env, uid, "👋 ToolBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
         }
         return signIn(slug, "?tools");   // adding the bot also signs you in
