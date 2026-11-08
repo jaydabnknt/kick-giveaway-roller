@@ -492,7 +492,11 @@ body.mod .acct { display: none; }
 .kchat .kline { padding: 3px 12px; overflow-wrap: anywhere; }
 .kchat .kline:hover { background: rgb(255 255 255 / .04); }
 .kchat .kt { color: #8a9099; font-size: 12px; margin-right: 6px; }
-.kchat .kch { color: #8a9099; font-size: 12px; margin-right: 6px; }
+.kchat .kch, .kchat .kmention { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.kchat .kch { color: #8a9099; font-size: 12px; font-weight: 600; margin-right: 6px; }
+.kchat .kmention { color: #fff; font-weight: 700; }
+.kchat .kch:hover, .kchat .kmention:hover, .kchat a.kn:hover { text-decoration: underline; }
+.kchat a.kn { text-decoration: none; }
 .kchat .kn { font-weight: 700; }
 .kchat .kb { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 3px; margin-right: 3px; vertical-align: -2px; font: 800 9px/1 Inter, system-ui, sans-serif; color: #0b0e0f; }
 .kchat .ke { height: 28px; vertical-align: middle; margin: -4px 1px; }
@@ -3578,7 +3582,7 @@ if (params.has("mod") && !OVERLAY) {
       const rows = j.users.map(u => {
         const b = document.createElement("button"); b.type = "button"; b.className = "log-user";
         const n = document.createElement("b"); n.textContent = u.name; if (u.color) n.style.color = u.color; const t = document.createElement("span"); t.textContent = seen(u.last);
-        b.append(avatar(u), n, t); b.addEventListener("click", () => logOpen(u.uid)); return b;
+        b.append(avatar(u), n, t); b.addEventListener("click", () => { logStack = []; logUid = 0; logOpen(u.uid); }); return b;
       });
       if (more) $("logUsers").append(...rows);
       else $("logUsers").replaceChildren(...(rows.length ? rows : [empty(q ? "Nobody by that name yet." : "No messages logged yet.")]));
@@ -3590,13 +3594,22 @@ if (params.has("mod") && !OVERLAY) {
   const kickText = (el, text) => {   // chat text with Kick emotes ([emote:id:name]) as images
     const re = /\[emote:(\d+):([^\]]*)\]/g; let i = 0, m;
     while ((m = re.exec(text))) {
-      if (m.index > i) el.append(text.slice(i, m.index));
+      if (m.index > i) withMentions(el, text.slice(i, m.index));
       const name = m[2], img = document.createElement("img"); img.className = "ke"; img.alt = img.title = name; img.loading = "lazy"; img.src = "https://files.kick.com/emotes/" + m[1] + "/fullsize";
       img.addEventListener("error", () => img.replaceWith(name));
       el.append(img); i = re.lastIndex;
     }
-    if (i < text.length) el.append(text.slice(i));
+    if (i < text.length) withMentions(el, text.slice(i));
   };
+  const mentionLink = (name, cls) => {   // a tappable @name: opens their chat logs (or their Kick page if they never typed)
+    const a = document.createElement("button"); a.type = "button"; a.className = cls || "kmention"; a.textContent = "@" + name;
+    a.addEventListener("click", () => logOpenName(name)); return a;
+  };
+  function withMentions(el, text) {
+    const re = /@([A-Za-z0-9_-]{2,40})/g; let i = 0, m;
+    while ((m = re.exec(text))) { if (m.index > i) el.append(text.slice(i, m.index)); el.append(mentionLink(m[1])); i = re.lastIndex; }
+    if (i < text.length) el.append(text.slice(i));
+  }
   const dayOf = t => new Date(t).toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
   const hhmm = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   let logUser = null, logMsgs = [];
@@ -3606,18 +3619,29 @@ if (params.has("mod") && !OVERLAY) {
       const d = dayOf(x.at); if (d !== day) { day = d; const dv = document.createElement("div"); dv.className = "kday"; dv.textContent = d; out.push(dv); }
       const line = document.createElement("div"); line.className = "kline";
       const t = document.createElement("span"); t.className = "kt"; t.textContent = hhmm(x.at); t.title = stamp(x.at);
-      const ch = document.createElement("span"); ch.className = "kch"; ch.textContent = "#" + x.ch;
+      const ch = mentionLink(x.ch, "kch");
       line.append(t, ch);
       for (const b of String(x.badges || "").split(",").filter(k => BADGES[k])) { const e = document.createElement("span"); e.className = "kb"; e.style.background = BADGES[b][0]; e.textContent = BADGES[b][1]; e.title = b.replace("_", " "); line.append(e); }
-      const n = document.createElement("span"); n.className = "kn"; n.style.color = color; n.textContent = (logUser ? logUser.name : "?");
+      const n = document.createElement("a"); n.className = "kn"; n.style.color = color; n.textContent = (logUser ? logUser.name : "?").replace(/^@/, "");
+      n.href = "https://kick.com/" + encodeURIComponent(n.textContent.toLowerCase().replace(/_/g, "-")); n.target = "_blank"; n.rel = "noopener"; n.title = "Open on Kick";
       const body = document.createElement("span"); kickText(body, x.text);
       line.append(n, ": ", body); out.push(line);
     }
     $("logLines").replaceChildren(...(out.length ? out : [empty("No messages.")]));
   }
-  async function logOpen(uid, more) {
+  let logStack = [];
+  async function logOpenName(name) {   // from a tapped @name
+    try {
+      const j = await logApi("?name=" + encodeURIComponent(name));
+      if (!j.user) { window.open("https://kick.com/" + encodeURIComponent(name.toLowerCase().replace(/_/g, "-")), "_blank", "noopener"); return; }
+      if (j.user.uid === logUid) return;
+      logOpen(j.user.uid);
+    } catch (e) { if (e.message !== "signin") alert("Couldn't load: " + e.message); }
+  }
+  async function logOpen(uid, more, back) {
     const box = $("logMsgs");
-    if (!more) { logUid = uid; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
+    if (!more && !back && logUid && logUid !== uid) logStack.push(logUid);
+    if (!more) { logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
     try {
       const j = await logApi("?uid=" + logUid + (more ? "&before=" + msgCursor : ""));
       if (uid !== logUid) return;
@@ -3638,7 +3662,7 @@ if (params.has("mod") && !OVERLAY) {
   $("logQ").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => logList(false), 350); });
   $("logMore").addEventListener("click", () => logList(true));
   $("logMsgMore").addEventListener("click", () => logOpen(logUid, true));
-  $("logBack").addEventListener("click", () => { logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; logList(false); });
+  $("logBack").addEventListener("click", () => { if (logStack.length) { logOpen(logStack.pop(), false, true); return; } logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; logList(false); });
   const mtabs = [...document.querySelectorAll("[data-mtab]")];
   mtabs.forEach(b => b.addEventListener("click", () => {
     mtabs.forEach(x => x.setAttribute("aria-selected", String(x === b)));
