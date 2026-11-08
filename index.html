@@ -303,6 +303,14 @@ body.ov .about { display: none !important; }
 .btype.super { color: #5ab0ff; border-color: color-mix(in srgb, #5ab0ff 45%, transparent); }
 .btype.epic { color: #c58bff; border-color: color-mix(in srgb, #c58bff 45%, transparent); }
 .best-line b { color: #ffd166; }
+.hunt-cost { display: flex; align-items: center; gap: 10px; }
+.hunt-cost label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.hunt-cost .money { flex: 0 1 160px; }
+.hunt-stats { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.hunt-stats b { color: var(--fg); } .hunt-stats b.up { color: var(--accent); } .hunt-stats b.down { color: #ff6b6b; }
+.hunt-io { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.hunt-io .x { width: 76px; min-height: 30px; font-size: 13px; }
+.hunt-io .hx { font: 700 13px var(--mono); color: #ffd166; }
 
 /* OBS overlay mode (?overlay=giveaway or ?overlay=calls): transparent page, only the show parts */
 .ov-info, .ov-calls { display: none; }
@@ -317,7 +325,25 @@ body.ov .reel-box { height: calc(100vh - 170px); min-height: 240px; }
 body.ovm-giveaway .ov-info { display: block; text-align: center; font-weight: 800; font-size: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
 .ov-info b { color: var(--accent); }
 .ov-info:empty { display: none !important; }
-body.ovm-calls .grid { display: none !important; }
+body.ovm-calls .grid, body.ovm-hunt .grid, body.ovm-alerts .grid { display: none !important; }
+.ov-hunt, .ov-alert { display: none; }
+body.ovm-hunt .ov-hunt:not([hidden]) { display: grid; gap: 10px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.ovh-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.ovh-stats div { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.ovh-stats span { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.ovh-stats b { font: 800 18px var(--mono); } .ovh-stats b.up { color: var(--accent); } .ovh-stats b.down { color: #ff6b6b; }
+.ovh-list { display: grid; gap: 4px; }
+.ovh-list div { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 5px 8px; border-radius: 6px; font-size: 15px; }
+.ovh-list div:nth-child(odd) { background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+.ovh-list .i { font: 600 12px var(--mono); color: var(--muted); }
+.ovh-list .s { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ovh-list .w { font: 700 14px var(--mono); color: #ffd166; } .ovh-list .w.none { color: var(--muted); }
+body.ovm-alerts { display: grid; place-items: center; min-height: 100vh; }
+body.ovm-alerts .ov-alert:not([hidden]) { display: grid; gap: 4px; text-align: center; padding: 22px 34px; border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 2px solid var(--accent); box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 35%, transparent); animation: ovaIn .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes ovaIn { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.ova-kind { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .16em; color: var(--accent); }
+.ova-name { font-size: 40px; font-weight: 900; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.ova-sub { font-size: 16px; color: var(--muted); }
 body.ovm-calls .ov-calls { display: grid; gap: 10px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
 .ovc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .ovc-title { font-weight: 900; font-size: 22px; letter-spacing: -0.02em; text-transform: uppercase; color: var(--accent); }
@@ -586,6 +612,7 @@ a.btn.primary { color: var(--on-accent); }
   <div id="setBody" hidden style="display:grid;gap:18px">
     <nav class="set-nav" role="tablist" aria-label="Settings">
       <button type="button" role="tab" data-set="account" aria-selected="true">Account</button>
+      <button type="button" role="tab" data-set="bot" aria-selected="false">Bot</button>
       <button type="button" role="tab" data-set="obs" aria-selected="false">OBS</button>
       <button type="button" role="tab" data-set="presets" aria-selected="false">Presets</button>
       <button type="button" role="tab" data-set="experimental" aria-selected="false" id="setExpTab" hidden>Experimental</button>
@@ -595,11 +622,25 @@ a.btn.primary { color: var(--on-accent); }
       <div class="row"><button class="btn danger" id="setLeave" type="button">Remove JDBBot from my channel</button></div>
       <p class="hint" id="setLeaveMsg">The bot leaves your chat and your custom commands stop working. You can add it again any time from the home page.</p>
     </section>
+    <section class="cp-box" data-setview="bot" hidden>
+      <h3>Thank-yous in chat</h3>
+      <label class="sw"><input type="checkbox" id="bcFollow"> Thank new followers</label>
+      <label class="sw"><input type="checkbox" id="bcSub"> Thank new subs and resubs</label>
+      <label class="sw"><input type="checkbox" id="bcGift"> Thank gifted subs</label>
+      <h3 style="margin-top:6px">Timed messages</h3>
+      <p class="hint">Posted while you're live. Up to 5.</p>
+      <div id="bcTimers" class="dash-list"></div>
+      <div class="row"><button class="btn" type="button" id="bcAdd">Add message</button><button class="btn primary" type="button" id="bcSave">Save</button></div>
+      <p class="hint" id="bcMsg"></p>
+    </section>
     <section class="cp-box" data-setview="obs" hidden>
       <h3>OBS overlays</h3>
       <p class="hint">In OBS, add a <b>Browser</b> source and paste a link. Keep the tools page open while you stream, because the overlay shows what happens there.</p>
       <div class="field"><label for="setOvG">Giveaway roller (600 × 640)</label><div class="inline"><input type="text" class="ov-link" id="setOvG" readonly><button class="btn" type="button" data-copy="setOvG">Copy</button></div></div>
       <div class="field"><label for="setOvC">Slot calls (500 × 600)</label><div class="inline"><input type="text" class="ov-link" id="setOvC" readonly><button class="btn" type="button" data-copy="setOvC">Copy</button></div></div>
+      <div class="field"><label for="setOvH">Bonus hunt (500 × 700)</label><div class="inline"><input type="text" class="ov-link" id="setOvH" readonly><button class="btn" type="button" data-copy="setOvH">Copy</button></div></div>
+      <div class="field"><label for="setOvA">Follow and sub alerts (800 × 300)</label><div class="inline"><input type="text" class="ov-link" id="setOvA" readonly><button class="btn" type="button" data-copy="setOvA">Copy</button></div></div>
+      <p class="hint">Alerts come straight from the bot, so they work even when the tools page is closed.</p>
       <p class="hint">Guess the Balance doesn't have an overlay yet.</p>
     </section>
     <section class="cp-box" data-setview="experimental" hidden>
@@ -1008,6 +1049,8 @@ a.btn.primary { color: var(--on-accent); }
           <span class="meta" id="huntMeta">Empty</span>
         </div>
         <p class="hint" id="stakeNow" hidden></p>
+        <div class="hunt-cost"><label for="huntCost">Hunt cost</label><div class="money"><input type="text" id="huntCost" inputmode="decimal" placeholder="0.00" autocomplete="off"></div></div>
+        <div class="hunt-stats" id="huntStats" hidden></div>
         <div class="guesses" id="huntList"></div>
         <div class="row"><button class="btn ghost danger" id="huntClear" type="button" hidden>Clear bonus hunt</button></div>
       </div>
@@ -1176,6 +1219,13 @@ a.btn.primary { color: var(--on-accent); }
     </section>
   </div>
 
+  <div class="ov-hunt" id="ovHunt" hidden>
+    <div class="ovc-head"><span class="ovc-title">Bonus hunt</span><span class="ovc-state open" id="ovhCount"></span></div>
+    <div class="ovh-stats" id="ovhStats"></div>
+    <div class="ovh-list" id="ovhList"></div>
+  </div>
+  <div class="ov-alert" id="ovAlert" hidden><div class="ova-kind" id="ovaKind"></div><div class="ova-name" id="ovaName"></div><div class="ova-sub" id="ovaSub"></div></div>
+
   <div class="ov-calls" id="ovCalls" hidden>
     <div class="ovc-head"><span class="ovc-title">Slot calls</span><span class="ovc-state" id="ovcState"></span></div>
     <div class="ovc-how" id="ovcHow"></div>
@@ -1205,7 +1255,7 @@ a.btn.primary { color: var(--on-accent); }
 (() => {
 "use strict";
 const params = new URLSearchParams(location.search);
-const OVERLAY = ["giveaway", "calls"].includes(params.get("overlay")) ? params.get("overlay") : null;
+const OVERLAY = ["giveaway", "calls", "hunt", "alerts"].includes(params.get("overlay")) ? params.get("overlay") : null;
 if (OVERLAY) document.body.classList.add("ov", "ovm-" + OVERLAY);
 
 // ---------- crypto randomness ----------
@@ -2162,7 +2212,7 @@ gEl.reset.addEventListener("click", () => {
 // Chat types "!call Gates of Olympus". Each person gets a set number of calls; the streamer plays them
 // in order (or picks one at random), types the result, and the best result is starred.
 const CALLS_KEY = "kick-giveaway-calls-v1";
-const calls = { cmd: "!call", max: 1, open: false, subs: false, noDupes: true, list: [], seq: 0, hunt: [], bonusType: "normal" };
+const calls = { cmd: "!call", max: 1, open: false, subs: false, noDupes: true, list: [], seq: 0, hunt: [], bonusType: "normal", huntCost: "" };
 try { Object.assign(calls, JSON.parse(localStorage.getItem(CALLS_KEY) || "{}")); } catch (e) {}
 const saveCalls = () => { if (OVERLAY) return; try { localStorage.setItem(CALLS_KEY, JSON.stringify(calls)); } catch (e) {} };
 const cEl = {
@@ -2283,6 +2333,29 @@ function renderCalls() {
   if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = `No calls yet. Press Start calls, then chat types ${calls.cmd.trim() || "!call"} followed by a slot name.`; cEl.list.append(p); }
   if (typeof ovSendCalls === "function") ovSendCalls();
 }
+// Opening the hunt: type each bonus's bet and win. Shows money in, profit, average and best multiplier, and
+// the average multiplier the unopened bonuses still need to break even.
+function huntStats() {
+  const cost = parseAmount(calls.huntCost || "") || 0;
+  let won = 0, opened = 0, xs = [], leftBets = 0, left = 0;
+  for (const h of calls.hunt) {
+    const bet = parseAmount(h.bet || "") || 0, win = parseAmount(h.win || "");
+    if (win !== null && String(h.win || "").trim() !== "") { won += win; opened++; if (bet > 0) xs.push({ x: win / bet, h }); }
+    else { left++; leftBets += bet; }
+  }
+  if (!cost && !opened) return { html: "" };
+  xs.sort((a, b) => b.x - a.x);
+  const avg = xs.length ? xs.reduce((t, a) => t + a.x, 0) / xs.length : 0;
+  const need = cost - won, be = left && leftBets > 0 && need > 0 ? need / leftBets : null;
+  const parts = [];
+  if (cost) parts.push(`Cost <b>${money(cost)}</b>`);
+  parts.push(`Won <b>${money(Math.round(won * 100) / 100)}</b>`);
+  if (cost) { const pr = Math.round((won - cost) * 100) / 100; parts.push(`Profit <b class="${pr >= 0 ? "up" : "down"}">${pr >= 0 ? "+" : "−"}${money(Math.abs(pr))}</b>`); }
+  if (xs.length) parts.push(`Avg <b>${avg.toFixed(1)}x</b>`);
+  if (xs.length) parts.push(`Best <b>${xs[0].x.toFixed(1)}x</b> ${escapeHtml(xs[0].h.slot)}`);
+  if (left) parts.push(be !== null ? `Break-even <b>${be.toFixed(1)}x</b> on ${left} left` : `${left} left to open`);
+  return { html: parts.join(" · "), cost, won, avg, best: xs[0] ? [xs[0].h.slot, xs[0].x] : null, be, left, opened };
+}
 function renderHunt() {
   const n = calls.hunt.length;
   const cnt = t => calls.hunt.filter(h => h.type === t).length;
@@ -2295,7 +2368,15 @@ function renderHunt() {
     const what = document.createElement("div"); what.className = "what";
     const sl = document.createElement("span"); sl.className = "s"; sl.textContent = h.slot;
     const nm = document.createElement("span"); nm.className = "n"; nm.textContent = "Called by " + h.name;
-    what.append(sl, nm);
+    const io = document.createElement("div"); io.className = "hunt-io";
+    for (const [k, ph] of [["bet", "bet"], ["win", "win"]]) {
+      const inp = document.createElement("input"); inp.type = "text"; inp.className = "x"; inp.inputMode = "decimal"; inp.placeholder = ph;
+      inp.value = h[k] == null ? "" : h[k]; inp.setAttribute("aria-label", `${ph === "bet" ? "Bet size" : "Win"} for ${h.slot}`);
+      inp.addEventListener("change", () => { h[k] = inp.value.trim(); saveCalls(); setTimeout(renderCalls); });
+      io.append(inp);
+    }
+    if (parseAmount(h.bet || "") > 0 && parseAmount(h.win || "") !== null) { const m = document.createElement("span"); m.className = "hx"; m.textContent = (parseAmount(h.win) / parseAmount(h.bet)).toFixed(1) + "x"; io.append(m); }
+    what.append(sl, nm, io);
     const acts = document.createElement("div"); acts.className = "acts";
     const tg = document.createElement("span"); tg.className = "btype " + h.type; tg.textContent = BONUS_TYPES[h.type];
     const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", `Remove ${h.slot} from the bonus hunt`);
@@ -2303,6 +2384,9 @@ function renderHunt() {
     acts.append(tg, del); row.append(rank, what, acts); frag.append(row);
   });
   cEl.huntList.replaceChildren(frag);
+  const st = huntStats(); $("huntStats").hidden = !st.html; $("huntStats").innerHTML = st.html;
+  if ($("huntCost") !== document.activeElement) $("huntCost").value = calls.huntCost || "";
+  ovSendHunt();
   if (!n) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "When a call gets into a bonus, pick Normal, Super or Epic under Playing now and tap Got the bonus."; cEl.huntList.append(p); }
 }
 cEl.bonusPick.querySelectorAll("[data-type]").forEach(b => b.addEventListener("click", () => {
@@ -2319,10 +2403,11 @@ cEl.bonusGot.addEventListener("click", () => {
   saveCalls(); renderCalls();
 });
 let huntClearArmed = null;
+$("huntCost").addEventListener("change", () => { calls.huntCost = $("huntCost").value.trim(); saveCalls(); renderCalls(); });
 cEl.huntClear.addEventListener("click", () => {
   if (!huntClearArmed) { cEl.huntClear.textContent = "Tap again to clear the bonus hunt"; huntClearArmed = setTimeout(() => { cEl.huntClear.textContent = "Clear bonus hunt"; huntClearArmed = null; }, 2500); return; }
   clearTimeout(huntClearArmed); huntClearArmed = null; cEl.huntClear.textContent = "Clear bonus hunt";
-  calls.hunt = []; saveCalls(); renderCalls();
+  calls.hunt = []; calls.huntCost = ""; saveCalls(); renderCalls();
 });
 const moneyFmtX = v => (Number.isInteger(v) ? moneyWhole : moneyCents).format(v);
 cEl.start.addEventListener("click", () => { if (!streamerGate()) return; calls.open = true; saveCalls(); renderCalls();
@@ -2603,7 +2688,13 @@ function makePublisher(suffix, gapMs) {
     if (!timer) timer = setTimeout(flush, Math.max(0, gapMs - (Date.now() - lastAt)));
   } };
 }
-const pubG = makePublisher("-g", 3000), pubC = makePublisher("-c", 3000);
+const pubG = makePublisher("-g", 3000), pubC = makePublisher("-c", 3000), pubH = makePublisher("-h", 3000);
+function ovSendHunt() {
+  if (!ov || !ov.on || OVERLAY) return;
+  const st = huntStats();
+  pubH.push({ t: "h", items: calls.hunt.slice(0, 40).map(h => [h.slot.slice(0, 40), h.name, h.type, h.bet || "", h.win || ""]),
+    cost: st.cost || 0, won: st.won || 0, avg: st.avg || 0, best: st.best || null, be: st.be, left: st.left || 0, at: Date.now() });
+}
 function ovSendGiveaway() {
   if (!ov || !ov.on || OVERLAY || rolling) return;
   const names = idleOrder.slice(0, 80);
@@ -2687,8 +2778,45 @@ if (OVERLAY) {
     $("ovcBest").hidden = !d.best;
     if (d.best) $("ovcBest").innerHTML = `Best call: <b>${escapeHtml(String(d.best[2]))}x</b> on ${escapeHtml(d.best[0])} by ${escapeHtml(d.best[1])}`;
   };
+  const onHunt = d => {
+    if (d.t !== "h") return;
+    $("ovHunt").hidden = false;
+    const opened = d.items.filter(i => String(i[4]).trim() !== "").length;
+    $("ovhCount").textContent = `${opened}/${d.items.length} opened`;
+    const pr = Math.round((d.won - d.cost) * 100) / 100;
+    const cell = (label, val, cls) => { const c = document.createElement("div"), a = document.createElement("span"), b = document.createElement("b"); a.textContent = label; b.textContent = val; if (cls) b.className = cls; c.append(a, b); return c; };
+    const cells = [];
+    if (d.cost) cells.push(cell("Cost", money(d.cost)));
+    cells.push(cell("Won", money(Math.round(d.won * 100) / 100)));
+    if (d.cost) cells.push(cell("Profit", (pr >= 0 ? "+" : "−") + money(Math.abs(pr)), pr >= 0 ? "up" : "down"));
+    if (d.avg) cells.push(cell("Avg", d.avg.toFixed(1) + "x"));
+    if (d.be != null) cells.push(cell("Break-even", d.be.toFixed(1) + "x"));
+    $("ovhStats").replaceChildren(...cells);
+    $("ovhList").replaceChildren(...d.items.map(([slot, name, type, bet, win], i) => {
+      const r = document.createElement("div"), a = document.createElement("span"), b = document.createElement("span"), t = document.createElement("span"), w = document.createElement("span");
+      a.className = "i"; a.textContent = i + 1; b.className = "s"; b.textContent = slot; t.className = "btype " + type; t.textContent = BONUS_TYPES[type] || type;
+      const bv = parseAmount(String(bet)), wv = parseAmount(String(win));
+      w.className = "w" + (String(win).trim() === "" ? " none" : ""); w.textContent = String(win).trim() === "" ? "—" : (bv > 0 && wv !== null ? (wv / bv).toFixed(1) + "x" : money(wv || 0));
+      r.append(a, b, t, w); return r;
+    }));
+  };
+  // Alerts: the bot forwards Kick's follow / sub / gift events here; each shows for a few seconds, one at a time.
+  const alertQ = []; let alertBusy = false;
+  const showAlert = () => {
+    if (alertBusy || !alertQ.length) return; alertBusy = true;
+    const a = alertQ.shift();
+    $("ovaKind").textContent = a.kind; $("ovaName").textContent = a.name; $("ovaSub").textContent = a.sub || "";
+    const box = $("ovAlert"); box.hidden = true; void box.offsetWidth; box.hidden = false;
+    setTimeout(() => { box.hidden = true; alertBusy = false; setTimeout(showAlert, 600); }, 6000);
+  };
+  const onAlert = d => {
+    if (d.t !== "a" || Date.now() - (d.at || 0) > 60000) return;   // don't replay old alerts when OBS reloads
+    const k = { follow: ["New follower", ""], sub: ["New subscriber", ""], resub: ["Resubscribed", d.months ? `${d.months} months` : ""], gift: ["Gifted subs", d.count ? `gifted ${d.count} ${d.count === 1 ? "sub" : "subs"}` : ""] }[d.kind];
+    if (!k) return; alertQ.push({ kind: k[0], name: d.name || "Someone", sub: k[1] }); showAlert();
+  };
   if (key) {
-    const topic = key + (OVERLAY === "calls" ? "-c" : "-g"), handle = OVERLAY === "calls" ? onCalls : onGiveaway;
+    const suffix = { calls: "-c", hunt: "-h", alerts: "-a", giveaway: "-g" }[OVERLAY], handle = { calls: onCalls, hunt: onHunt, alerts: onAlert, giveaway: onGiveaway }[OVERLAY];
+    const topic = key + suffix;
     const es = new EventSource(`${NTFY}${topic}/sse?since=10m`);
     es.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.event === "message" && m.message) handle(JSON.parse(m.message)); } catch (e) {} };
   } else els.empty.textContent = "This overlay link is missing your channel. Copy it again from the OBS overlay panel.";
@@ -3065,6 +3193,7 @@ if (params.has("settings")) {
     else av.textContent = (streamer.name || streamer.slug || "?").charAt(0).toUpperCase();
     $("setName").textContent = streamer.name || streamer.slug; $("setChan").textContent = "kick.com/" + streamer.slug;
     $("setOvG").value = `${ovBase}?overlay=giveaway&ch=${streamer.slug}`; $("setOvC").value = `${ovBase}?overlay=calls&ch=${streamer.slug}`;
+    $("setOvH").value = `${ovBase}?overlay=hunt&ch=${streamer.slug}`; $("setOvA").value = `${ovBase}?overlay=alerts&ch=${streamer.slug}`;
     $("setLeave").hidden = streamer.slug === "jaydab4ngnt";   // the home channel keeps the bot
     $("setExpTab").hidden = !isOwner();
     $("setExpList").replaceChildren(...(EXPERIMENTS.length ? EXPERIMENTS.map(([id, label, about, setup]) => {
@@ -3098,6 +3227,35 @@ if (params.has("settings")) {
     } catch (e) { $("setLeaveMsg").textContent = "Couldn't reach JDBBot. Check your connection."; b.disabled = false; }
   });
   show(); addEventListener("streamer-updated", show);
+  // Bot tab: thank-you switches and timed messages, saved on the bot.
+  let timers = [];
+  const bcMsg = (t, bad) => { $("bcMsg").textContent = t || ""; $("bcMsg").style.color = bad ? "#ff6b6b" : ""; };
+  const renderTimers = () => {
+    $("bcTimers").replaceChildren(...(timers.length ? timers.map((t, i) => {
+      const row = document.createElement("div"); row.className = "dash-item";
+      const txt = document.createElement("input"); txt.type = "text"; txt.maxLength = 400; txt.placeholder = "Follow me on X: …"; txt.value = t.text; txt.style.flex = "1 1 220px";
+      txt.addEventListener("input", () => { t.text = txt.value; });
+      const ev = document.createElement("select"); for (const m of [5, 10, 15, 20, 30, 45, 60, 90, 120]) ev.append(new Option(`every ${m} min`, m)); ev.value = String(t.every || 15);
+      ev.addEventListener("change", () => { t.every = +ev.value; });
+      const del = document.createElement("button"); del.type = "button"; del.className = "btn danger"; del.textContent = "Remove";
+      del.addEventListener("click", () => { timers.splice(i, 1); renderTimers(); });
+      row.append(txt, ev, del); return row;
+    }) : [Object.assign(document.createElement("p"), { className: "hint", textContent: "No timed messages yet." })]));
+    $("bcAdd").disabled = timers.length >= 5;
+  };
+  const botApi = async body => {
+    const r = await fetchWithTimeout(BOT_URL + "/botcfg", 20000, body ? { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + streamer.tok }, body: JSON.stringify(body) } : { headers: { authorization: "Bearer " + streamer.tok } });
+    return r.json();
+  };
+  const fillBot = c => { $("bcFollow").checked = !!c.follow; $("bcSub").checked = !!c.sub; $("bcGift").checked = !!c.gift; timers = (c.timers || []).map(t => ({ ...t })); renderTimers(); };
+  $("bcAdd").addEventListener("click", () => { if (timers.length < 5) { timers.push({ text: "", every: 15 }); renderTimers(); } });
+  $("bcSave").addEventListener("click", async () => {
+    $("bcSave").disabled = true; bcMsg("Saving…");
+    try { const j = await botApi({ follow: $("bcFollow").checked, sub: $("bcSub").checked, gift: $("bcGift").checked, timers }); if (!j.ok) bcMsg(j.error || "Couldn't save.", true); else { fillBot(j.cfg); bcMsg("Saved."); } }
+    catch (e) { bcMsg("Couldn't reach JDBBot.", true); }
+    finally { $("bcSave").disabled = false; }
+  });
+  if (streamer.tok) botApi().then(j => { if (j.ok) fillBot(j.cfg); }).catch(() => bcMsg("Couldn't reach JDBBot.", true));
 }
 
 // ---------- owner dashboard (?admin) ----------
