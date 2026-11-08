@@ -592,7 +592,87 @@ a.btn.primary { color: var(--on-accent); }
 .cmd-acts .btn { min-height: 32px; padding: 4px 10px; font-size: 13px; margin-left: 4px; }
 #cpCustomHint code { white-space: nowrap; }
 @media (max-width: 600px) { .cp-table.owner th:nth-child(3), .cp-table.owner td:nth-child(3) { display: none; } }
+
+/* ===== Kick look (v2): flat graphite surfaces, no glow, 4px corners, a full-width top bar, underline tabs ===== */
+:root { --bg: #0b0e0f; --panel: #191b1f; --panel-2: #24272c; --line: #24272c; --muted: #adb1b8; --r: 4px; }
+body { background-image: none; padding-top: 0; }
+.top { position: sticky; top: 0; z-index: 40; min-height: 60px; margin-inline: calc(50% - 50vw); padding: 8px max(16px, calc(50vw - 50%)); background: var(--bg); border-bottom: 1px solid var(--line); }
+body.ov .top { position: static; margin-inline: 0; padding: 0; min-height: 0; border: 0; background: none; }
+.mark { width: 36px; height: 36px; border-radius: var(--r); background: transparent; box-shadow: none; }
+.mark:hover { background: var(--panel-2); }
+.mark svg path[stroke] { stroke: #fff; }
+.mark svg path[fill] { fill: #fff; }
+h1 { font-weight: 800; letter-spacing: -0.02em; }
+h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
+.menu { top: 64px; border-radius: 8px; padding: 6px; border-color: var(--line); }
+.menu a { border-radius: var(--r); font-size: 14px; }
+.btn { border: 0; border-radius: var(--r); background: var(--panel-2); color: var(--fg); min-height: 36px; padding: 6px 14px; font-weight: 600; font-size: 14px; }
+.btn:hover { background: #32363d; }
+.btn.primary { font-weight: 700; }
+.btn.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.btn.ghost:hover { background: var(--panel-2); }
+.panel, .card, .cp-box, .result, .hero, .dlg { border-radius: 8px; border-color: transparent; }
+.panel, .card, .cp-box, .result { background: var(--panel); }
+.hero { background: var(--panel); padding: 28px 22px; }
+.hero h2 { font-weight: 800; }
+.hero.mod-box { background: var(--panel); }
+input[type=text], input[type=search], input[type=number], input[type=password], select, textarea { background: var(--panel-2); border: 1px solid transparent; border-radius: var(--r); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); background: var(--bg); }
+.pill { border-radius: var(--r); border: 0; background: var(--panel-2); letter-spacing: .03em; }
+.seg { background: var(--panel-2); border: 0; border-radius: var(--r); }
+.seg button { border-radius: 3px; }
+.seg button[aria-pressed="true"] { background: var(--panel); box-shadow: none; }
+/* Kick-style tabs: plain text, the active one white with a green underline */
+.tabs, .set-nav { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0; gap: 4px; width: auto; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar, .set-nav::-webkit-scrollbar { display: none; }
+.tabs button, .set-nav button, #modTools .set-nav button { flex: none; background: transparent; border: 0; border-radius: 0; color: var(--muted); padding: 10px 12px; min-height: 42px; font: 700 14px var(--font); box-shadow: inset 0 -2px 0 transparent; white-space: nowrap; }
+.tabs button:hover, .set-nav button:hover { color: var(--fg); background: transparent; }
+.tabs button[aria-selected="true"], .set-nav button[aria-selected="true"] { background: transparent; color: var(--fg); border-color: transparent; box-shadow: inset 0 -2px 0 var(--accent); }
+.dash-item, .udb-card { border: 0; border-radius: var(--r); background: var(--panel-2); }
+.log-list, .kchat { border-color: var(--line); border-radius: 8px; }
+.entry { border: 0; border-radius: var(--r); background: var(--panel-2); }
+.acct-menu { border-radius: 8px; }
+.reel-box { border-radius: 8px; border: 0; background: var(--panel); }
+.roll { border-radius: var(--r); box-shadow: none; font-weight: 800; }
+.marker { box-shadow: none; }
+@media (min-width: 861px) { .stage { top: 76px; } }
+#modTools .set-nav button[aria-selected="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+/* Motion, Kick-style: quick colour fades on buttons, a small press, pop-ups that fade and zoom in, menus that drop in */
+.btn, .roll, .tabs button, .set-nav button, .seg button, .menu a, .acct-menu a, .log-user, .dash-item .btn, .mark { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .1s ease, opacity .15s ease; }
+.btn:active:not(:disabled), .roll:active:not(:disabled), .mark:active { transform: scale(.97); }
+.btn.primary:active:not(:disabled) { background: var(--accent-deep); }
+@keyframes kPopIn { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes kFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kDropIn { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+dialog[open] { animation: kPopIn .2s cubic-bezier(.16, 1, .3, 1); }
+dialog[open]::backdrop { animation: kFadeIn .2s ease-out; background: rgb(0 0 0 / .7); }
+dialog.closing { animation: kFadeOut .12s ease-in forwards; }
+dialog.closing::backdrop { animation: kFadeOut .12s ease-in forwards; }
+@keyframes kFadeOut { to { opacity: 0; transform: scale(.98); } }
+.menu:not([hidden]), .acct-menu:not([hidden]) { animation: kDropIn .16s cubic-bezier(.16, 1, .3, 1); transform-origin: top left; }
+.acct-menu:not([hidden]) { transform-origin: top right; }
+[data-mpanel]:not([hidden]), [data-panel]:not([hidden]), .tab-panel:not([hidden]) { animation: kFadeIn .15s ease-out; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after, dialog::backdrop { animation: none !important; transition: none !important; } }
 </style>
+<script>
+// Pop-ups fade out for a moment when closed, like Kick's.
+(function () {
+  var close = HTMLDialogElement.prototype.close;
+  HTMLDialogElement.prototype.close = function (v) {
+    var d = this;
+    if (!d.open || d.classList.contains("closing") || matchMedia("(prefers-reduced-motion: reduce)").matches) return close.call(d, v);
+    d.classList.add("closing");
+    d._closeT = setTimeout(function () { d.classList.remove("closing"); close.call(d, v); }, 120);
+  };
+  ["showModal", "show"].forEach(function (k) {   // reopening mid-fade: finish closing first
+    var open = HTMLDialogElement.prototype[k];
+    HTMLDialogElement.prototype[k] = function () {
+      if (this.classList.contains("closing")) { clearTimeout(this._closeT); this.classList.remove("closing"); close.call(this); }
+      return open.apply(this, arguments);
+    };
+  });
+})();
+</script>
 </head>
 <body>
 <nav class="menu" id="siteMenu" hidden>
