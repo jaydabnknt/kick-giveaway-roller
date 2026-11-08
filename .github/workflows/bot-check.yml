@@ -5,10 +5,8 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - run: |
-          B=https://toolbot.toolbott.workers.dev
-          echo "health:"; curl -s $B/health | head -c 600; echo
-          echo "setup:"; curl -s $B/setup | head -c 1500; echo
-          echo "site:"; curl -s https://toolbott.pages.dev/ | grep -o '<h1>[^/]*</span></h1>' | head -1
-          echo "old site:"; curl -s https://jdbbot.pages.dev/ | grep -o 'var to = "[^"]*"'
+          npx -y wrangler@4 d1 execute toolbot-chat --remote --json --command "SELECT uid, name, last FROM users ORDER BY last DESC LIMIT 20" 2>&1 | tail -60
