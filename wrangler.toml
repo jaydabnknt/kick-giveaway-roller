@@ -9,7 +9,7 @@ crons = ["17 */6 * * *", "*/5 * * * *"]
 [vars]
 BOT_USERNAME = "ToolBot"
 BOT_CHANNEL = "jaydab4ngnt"
-SITE_URL = "https://toolbot.pages.dev/"
+SITE_URL = "https://toolbott.pages.dev/"
 
 [[kv_namespaces]]
 binding = "STORE"
