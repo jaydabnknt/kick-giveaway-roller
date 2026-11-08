@@ -1,0 +1,14 @@
+name: bot-check
+on:
+  push:
+    branches: [bot-check]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          B=https://toolbot.toolbott.workers.dev
+          echo "health:"; curl -s $B/health | head -c 600; echo
+          echo "setup:"; curl -s $B/setup | head -c 1500; echo
+          echo "site:"; curl -s https://toolbott.pages.dev/ | grep -o '<h1>[^/]*</span></h1>' | head -1
+          echo "old site:"; curl -s https://jdbbot.pages.dev/ | grep -o 'var to = "[^"]*"'
