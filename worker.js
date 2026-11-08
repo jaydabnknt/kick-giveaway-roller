@@ -114,9 +114,9 @@ async function checkKey(req, env) {
 // timestamped marker instead; the list is at /clips.
 async function appToken(env) {
   const c = await env.STORE.get("apptoken", "json");
-  if (c && Date.now() < c.exp - 120000) return c.access;
+  if (c && c.cid === env.KICK_CLIENT_ID && Date.now() < c.exp - 120000) return c.access;   // a new Kick app gets a new token
   const t = await tokenRequest(env, { grant_type: "client_credentials" });
-  await env.STORE.put("apptoken", JSON.stringify(t));
+  await env.STORE.put("apptoken", JSON.stringify({ ...t, cid: env.KICK_CLIENT_ID }));
   return t.access;
 }
 async function kickApp(env, path, init = {}) {
