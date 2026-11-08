@@ -8,6 +8,7 @@ crons = ["17 */6 * * *", "*/5 * * * *"]
 
 [vars]
 BOT_USERNAME = "ToolBot"
+BOT_USER_ID = "136842319"   # the Kick app bot's user id (so it never answers itself)
 BOT_CHANNEL = "jaydab4ngnt"
 SITE_URL = "https://toolbott.pages.dev/"
 

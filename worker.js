@@ -344,7 +344,9 @@ async function kickV2(path) {
 async function onChat(env, ev) {
   const text = String(ev.content || "").trim(), who = (ev.sender && ev.sender.username) || "";
   const chan = ev.broadcaster || {}, bid = chan.user_id, slug = normSlug(chan.channel_slug || chan.username);
-  if (!bid || who.toLowerCase() === String(env.BOT_USERNAME).toLowerCase()) return;
+  // Ignore the bot's own messages: by its Kick user id (its chat name comes from the Kick app and can differ), or by name.
+  const self = Number(ev.sender && ev.sender.user_id) === Number(env.BOT_USER_ID) || who.replace(/^@/, "").toLowerCase() === String(env.BOT_USERNAME).toLowerCase();
+  if (!bid || self) return;
   if (ev.message_id && !flag("msg:" + ev.message_id, 600)) return;   // the same chat message can arrive twice
   if (!(await isEnabled(env, slug))) return;
   const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
