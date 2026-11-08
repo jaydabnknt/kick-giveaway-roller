@@ -503,6 +503,20 @@ body.mod .acct { display: none; }
 .kchat .kday { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: #8a9099; font-size: 12px; font-weight: 600; }
 .kchat .kday::before, .kchat .kday::after { content: ""; flex: 1; height: 1px; background: rgb(255 255 255 / .08); }
 .kchat .kmore { display: block; margin: 4px auto 8px; }
+body.sharepage > .wrap:not(#sharePage) { display: none !important; }
+#sharePage { max-width: 760px; }
+#sharePage .kchat { max-height: none; }
+.log-head .btn { margin-left: auto; min-height: 34px; padding: 6px 14px; font-size: 13px; }
+.kchat.picking .kline { cursor: pointer; padding-left: 34px; position: relative; }
+.kchat.picking .kline::before { content: ""; position: absolute; left: 10px; top: 7px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #5c636b; }
+.kchat.picking .kline.sel { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.kchat.picking .kline.sel::before { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px #0b0e0f; }
+#logShareBar { position: sticky; bottom: 12px; z-index: 5; }
+#logShareBar .btn { flex: 1 1 auto; min-height: 46px; box-shadow: 0 10px 30px -8px rgb(0 0 0 / .8); }
+body.sharepage .acct { display: none; }
+.kchat a.kch, .kchat a.kmention { text-decoration: none; }
+.share-out { align-items: center; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; }
+.share-url { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; color: var(--accent); font: 600 13px var(--mono); }
 .mod-who img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--bg); }
 .feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; color: inherit; text-decoration: none; }
@@ -616,6 +630,18 @@ a.btn.primary { color: var(--on-accent); }
   </section>
 </div>
 
+<div class="wrap" id="sharePage" hidden>
+  <header class="top">
+    <div class="brand">
+      <a class="h1link" href="./" aria-label="Home"><h1>Tool<span>Bot</span></h1></a>
+    </div>
+  </header>
+  <section class="cp-box">
+    <div class="log-head" id="shareHead"></div>
+    <div class="kchat"><div id="shareLines"><p class="hint" style="padding:12px">Loading…</p></div></div>
+  </section>
+</div>
+
 <div class="wrap" id="modPage" hidden>
   <header class="top">
     <div class="brand">
@@ -633,6 +659,7 @@ a.btn.primary { color: var(--on-accent); }
       <button type="button" role="tab" data-mtab="db" aria-selected="false">Database <span class="badge" id="udbCount"></span></button>
       <button type="button" role="tab" data-mtab="find" aria-selected="false">Search</button>
       <button type="button" role="tab" data-mtab="logs" aria-selected="false">Chat logs</button>
+      <button type="button" role="tab" data-mtab="links" aria-selected="false">Shared links</button>
     </nav>
     <section class="cp-box" data-mpanel="add">
       <h3>Add a user</h3>
@@ -658,6 +685,11 @@ a.btn.primary { color: var(--on-accent); }
       <input type="search" id="udbQ" placeholder="Any Kick, Telegram, Discord or Stake name" autocomplete="off" autocapitalize="off" spellcheck="false">
       <div id="udbFound" class="dash-list"></div>
     </section>
+    <section class="cp-box" data-mpanel="links" hidden>
+      <h3>Active public log links <span class="badge" id="shareCount"></span></h3>
+      <p class="hint">Anyone with one of these links can see the messages in it. Remove a link to turn it off.</p>
+      <div id="shareList" class="dash-list"></div>
+    </section>
     <section class="cp-box" data-mpanel="logs" hidden>
       <div id="logUsersView" style="display:grid;gap:12px">
         <h3>Chat logs <span class="badge" id="logTotal"></span></h3>
@@ -670,6 +702,8 @@ a.btn.primary { color: var(--on-accent); }
         <div class="row"><button class="btn" type="button" id="logBack">← All users</button></div>
         <div class="log-head" id="logHead"></div>
         <div id="logMsgs" class="kchat"><button class="btn kmore" type="button" id="logMsgMore" hidden>Load older messages</button><div id="logLines"></div></div>
+        <div class="row" id="logShareBar" hidden><button class="btn primary" type="button" id="logShareBtn" disabled>Tap messages to pick them</button></div>
+        <div class="row share-out" id="logShareOut" hidden></div>
       </div>
     </section>
   </div>
@@ -2966,7 +3000,7 @@ if (!OVERLAY) {
 }
 // The tools page is only for approved streamers (their channel has ToolBot, added with a key from Jay or an
 // approved request). Signed in, the channel box is locked to their own channel.
-const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && (params.has("tools") || !!location.hash);
+const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && (params.has("tools") || !!location.hash);
 let meChecked = false;
 const loginUrl = () => BOT_URL + "/login?back=" + encodeURIComponent(location.search);
 let autoConnected = false;
@@ -3100,7 +3134,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // One page per channel that uses ToolBot: its commands and who can use them (what !commands links to), its
 // own commands added with !tb add, its clip markers, and a way for the streamer to add the bot.
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
-const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !location.hash;
+const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && !location.hash;
 if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "ToolBot"; }
 $("homeAdd").href = BOT_URL + "/allow"; $("menuAdd").href = BOT_URL + "/allow";
 if (HOME) {
@@ -3446,6 +3480,64 @@ if (params.has("admin")) {
   else api("state").then(render).catch(e => { if (e.message !== "signin") showLogin("Couldn't reach ToolBot right now."); });
 }
 
+// ---------- Kick-style chat lines (mod tools chat logs and public shared logs) ----------
+const KBADGES = { broadcaster: ["#e9113c", "▶"], moderator: ["#00c7ff", "M"], vip: ["#ffc800", "V"], subscriber: ["#53fc18", "★"], og: ["#ff9d00", "OG"], founder: ["#ffb800", "F"], verified: ["#1475e1", "✓"], sub_gifter: ["#a46bff", "G"], staff: ["#53fc18", "K"] };
+const kickUrl = name => "https://kick.com/" + encodeURIComponent(String(name).replace(/^@/, "").toLowerCase().replace(/_/g, "-"));
+const kDay = t => new Date(t).toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+const kTime = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const kStamp = t => new Date(t).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+function kMention(name, cls, onMention) {   // @name: in mod tools it opens their logs; on a public link it opens their Kick page
+  let a;
+  if (onMention) { a = document.createElement("button"); a.type = "button"; a.addEventListener("click", () => onMention(name)); }
+  else { a = document.createElement("a"); a.href = kickUrl(name); a.target = "_blank"; a.rel = "noopener"; }
+  a.className = cls || "kmention"; a.textContent = "@" + name; return a;
+}
+function kText(el, text, onMention) {   // chat text with Kick emotes ([emote:id:name]) as images and @mentions as links
+  const plain = t => { const re = /@([A-Za-z0-9_-]{2,40})/g; let i = 0, m; while ((m = re.exec(t))) { if (m.index > i) el.append(t.slice(i, m.index)); el.append(kMention(m[1], "", onMention)); i = re.lastIndex; } if (i < t.length) el.append(t.slice(i)); };
+  const re = /\[emote:(\d+):([^\]]*)\]/g; let i = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > i) plain(text.slice(i, m.index));
+    const name = m[2], img = document.createElement("img"); img.className = "ke"; img.alt = img.title = name; img.loading = "lazy"; img.src = "https://files.kick.com/emotes/" + m[1] + "/fullsize";
+    img.addEventListener("error", () => img.replaceWith(name));
+    el.append(img); i = re.lastIndex;
+  }
+  if (i < text.length) plain(text.slice(i));
+}
+function kickLines(msgs, user, onMention) {   // msgs oldest first; a divider for each day, like Kick chat
+  const out = [], color = user && user.color || "#53fc18", uname = (user ? user.name : "?").replace(/^@/, ""); let day = "";
+  for (const x of msgs) {
+    const d = kDay(x.at); if (d !== day) { day = d; const dv = document.createElement("div"); dv.className = "kday"; dv.textContent = d; out.push(dv); }
+    const line = document.createElement("div"); line.className = "kline"; if (x.id) line.dataset.id = x.id;
+    const t = document.createElement("span"); t.className = "kt"; t.textContent = kTime(x.at); t.title = kStamp(x.at);
+    line.append(t, kMention(x.ch, "kch", onMention));
+    for (const b of String(x.badges || "").split(",").filter(k => KBADGES[k])) { const e = document.createElement("span"); e.className = "kb"; e.style.background = KBADGES[b][0]; e.textContent = KBADGES[b][1]; e.title = b.replace("_", " "); line.append(e); }
+    const n = document.createElement("a"); n.className = "kn"; n.style.color = color; n.textContent = uname; n.href = kickUrl(uname); n.target = "_blank"; n.rel = "noopener"; n.title = "Open on Kick";
+    const body = document.createElement("span"); kText(body, x.text, onMention);
+    line.append(n, ": ", body); out.push(line);
+  }
+  return out;
+}
+
+// ---------- shared chat logs (?log=<id>): a public chatbox with only the messages a mod picked ----------
+if (params.has("log") && !OVERLAY) {
+  document.body.classList.add("sharepage"); $("sharePage").hidden = false; document.title = "Chat log · ToolBot";
+  const id = String(params.get("log") || "").replace(/[^A-Za-z0-9_-]/g, "");
+  const fail = t => { const p = document.createElement("p"); p.className = "hint"; p.style.padding = "12px"; p.textContent = t; $("shareLines").replaceChildren(p); };
+  fetchWithTimeout(BOT_URL + "/share?id=" + encodeURIComponent(id), 15000).then(async r => {
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) return fail(j.error || "This link doesn't work.");
+    const user = { name: j.name, color: j.color, pic: j.pic };
+    const nm = document.createElement("b"); nm.textContent = j.name.replace(/^@/, ""); if (j.color) nm.style.color = j.color;
+    const meta = document.createElement("div"); meta.className = "meta"; meta.textContent = j.msgs.length + (j.msgs.length === 1 ? " message" : " messages");
+    const info = document.createElement("div"); info.append(nm, meta);
+    let av;
+    if (/^https:\/\//.test(j.pic || "")) { av = document.createElement("img"); av.className = "log-av big"; av.alt = ""; av.referrerPolicy = "no-referrer"; av.src = j.pic; }
+    else { av = document.createElement("span"); av.className = "log-av big"; av.textContent = (nm.textContent[0] || "?").toUpperCase(); }
+    $("shareHead").replaceChildren(av, info);
+    $("shareLines").replaceChildren(...kickLines(j.msgs, user, null));
+  }).catch(() => fail("Couldn't reach ToolBot right now. Try again in a minute."));
+}
+
 // ---------- mod tools (?mod) ----------
 // Only Kick usernames on the access list (Admin page) can sign in; the bot checks it. Anyone else lands back home.
 // Nothing in it yet: the tools come later.
@@ -3590,45 +3682,45 @@ if (params.has("mod") && !OVERLAY) {
       $("logMore").hidden = !j.more;
     } catch (e) { if (e.message !== "signin" && seq === logSeq) logErr("Couldn't load the logs: " + e.message); }
   }
-  const BADGES = { broadcaster: ["#e9113c", "▶"], moderator: ["#00c7ff", "M"], vip: ["#ffc800", "V"], subscriber: ["#53fc18", "★"], og: ["#ff9d00", "OG"], founder: ["#ffb800", "F"], verified: ["#1475e1", "✓"], sub_gifter: ["#a46bff", "G"], staff: ["#53fc18", "K"] };
-  const kickText = (el, text) => {   // chat text with Kick emotes ([emote:id:name]) as images
-    const re = /\[emote:(\d+):([^\]]*)\]/g; let i = 0, m;
-    while ((m = re.exec(text))) {
-      if (m.index > i) withMentions(el, text.slice(i, m.index));
-      const name = m[2], img = document.createElement("img"); img.className = "ke"; img.alt = img.title = name; img.loading = "lazy"; img.src = "https://files.kick.com/emotes/" + m[1] + "/fullsize";
-      img.addEventListener("error", () => img.replaceWith(name));
-      el.append(img); i = re.lastIndex;
-    }
-    if (i < text.length) withMentions(el, text.slice(i));
-  };
-  const mentionLink = (name, cls) => {   // a tappable @name: opens their chat logs (or their Kick page if they never typed)
-    const a = document.createElement("button"); a.type = "button"; a.className = cls || "kmention"; a.textContent = "@" + name;
-    a.addEventListener("click", () => logOpenName(name)); return a;
-  };
-  function withMentions(el, text) {
-    const re = /@([A-Za-z0-9_-]{2,40})/g; let i = 0, m;
-    while ((m = re.exec(text))) { if (m.index > i) el.append(text.slice(i, m.index)); el.append(mentionLink(m[1])); i = re.lastIndex; }
-    if (i < text.length) el.append(text.slice(i));
-  }
-  const dayOf = t => new Date(t).toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
-  const hhmm = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   let logUser = null, logMsgs = [];
-  function logDraw() {   // oldest at the top, newest at the bottom, a divider for each day, like Kick chat
-    const out = [], color = logUser && logUser.color || "#53fc18"; let day = "";
-    for (const x of logMsgs.slice().reverse()) {
-      const d = dayOf(x.at); if (d !== day) { day = d; const dv = document.createElement("div"); dv.className = "kday"; dv.textContent = d; out.push(dv); }
-      const line = document.createElement("div"); line.className = "kline";
-      const t = document.createElement("span"); t.className = "kt"; t.textContent = hhmm(x.at); t.title = stamp(x.at);
-      const ch = mentionLink(x.ch, "kch");
-      line.append(t, ch);
-      for (const b of String(x.badges || "").split(",").filter(k => BADGES[k])) { const e = document.createElement("span"); e.className = "kb"; e.style.background = BADGES[b][0]; e.textContent = BADGES[b][1]; e.title = b.replace("_", " "); line.append(e); }
-      const n = document.createElement("a"); n.className = "kn"; n.style.color = color; n.textContent = (logUser ? logUser.name : "?").replace(/^@/, "");
-      n.href = "https://kick.com/" + encodeURIComponent(n.textContent.toLowerCase().replace(/_/g, "-")); n.target = "_blank"; n.rel = "noopener"; n.title = "Open on Kick";
-      const body = document.createElement("span"); kickText(body, x.text);
-      line.append(n, ": ", body); out.push(line);
-    }
+  let picking = false; const picked = new Set();
+  function logDraw() {   // oldest at the top, newest at the bottom
+    const out = kickLines(logMsgs.slice().reverse(), logUser, logOpenName);
+    for (const l of out) if (l.dataset.id && picked.has(Number(l.dataset.id))) l.classList.add("sel");
     $("logLines").replaceChildren(...(out.length ? out : [empty("No messages.")]));
   }
+  // Select mode: tap messages to pick them, then the green button makes a public link with just those.
+  const pickUi = () => {
+    $("logMsgs").classList.toggle("picking", picking);
+    $("logPick").textContent = picking ? "Cancel" : "Select";
+    $("logShareBar").hidden = !picking;
+    $("logShareBtn").textContent = picked.size ? "Share " + picked.size + (picked.size === 1 ? " message" : " messages") : "Tap messages to pick them";
+    $("logShareBtn").disabled = !picked.size;
+  };
+  const pickReset = () => { picking = false; picked.clear(); $("logShareOut").hidden = true; $("logLines").querySelectorAll(".sel").forEach(l => l.classList.remove("sel")); pickUi(); };
+  $("logLines").addEventListener("click", e => {
+    if (!picking) return;
+    const line = e.target.closest(".kline"); if (!line || !line.dataset.id) return;
+    e.preventDefault(); e.stopPropagation();
+    const id = Number(line.dataset.id);
+    if (picked.has(id)) picked.delete(id); else picked.add(id);
+    line.classList.toggle("sel", picked.has(id)); pickUi();
+  }, true);
+  const shareUrl = id => location.origin + location.pathname + "?log=" + id;
+  const copyBtn = (text, label) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = label || "Copy link"; b.addEventListener("click", () => navigator.clipboard && navigator.clipboard.writeText(text).then(() => { const o = b.textContent; b.textContent = "Copied"; setTimeout(() => (b.textContent = o), 1200); }).catch(() => prompt("Copy this link:", text))); return b; };
+  $("logShareBtn").addEventListener("click", async () => {
+    $("logShareBtn").disabled = true;
+    try {
+      const r = await fetchWithTimeout(BOT_URL + "/modshare", 20000, { method: "POST", headers: { authorization: "Bearer " + tok, "content-type": "application/json" }, body: JSON.stringify({ uid: logUid, ids: [...picked] }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 401) return out();
+      if (!j.ok) throw new Error(j.error || "the bot answered " + r.status);
+      const url = shareUrl(j.id), a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = url; a.className = "share-url";
+      picking = false; picked.clear(); $("logLines").querySelectorAll(".sel").forEach(l => l.classList.remove("sel")); pickUi();
+      $("logShareOut").replaceChildren(a, copyBtn(url)); $("logShareOut").hidden = false;
+      if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+    } catch (e) { alert("Couldn't make the link: " + e.message); pickUi(); }
+  });
   let logStack = [];
   async function logOpenName(name) {   // from a tapped @name
     try {
@@ -3641,7 +3733,7 @@ if (params.has("mod") && !OVERLAY) {
   async function logOpen(uid, more, back) {
     const box = $("logMsgs");
     if (!more && !back && logUid && logUid !== uid) logStack.push(logUid);
-    if (!more) { logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
+    if (!more) { picking = false; picked.clear(); $("logShareBar").hidden = true; $("logShareOut").hidden = true; $("logMsgs").classList.remove("picking"); logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
     try {
       const j = await logApi("?uid=" + logUid + (more ? "&before=" + msgCursor : ""));
       if (uid !== logUid) return;
@@ -3649,7 +3741,8 @@ if (params.has("mod") && !OVERLAY) {
         logUser = j.user;
         const info = document.createElement("div"), n = document.createElement("b"), m = document.createElement("div");
         n.textContent = j.user.name; if (j.user.color) n.style.color = j.user.color; m.className = "meta"; m.textContent = (j.count || 0) + " messages · first seen " + stamp(j.user.first);
-        info.append(n, m); $("logHead").replaceChildren(avatar(j.user, true), info);
+        const pb = document.createElement("button"); pb.type = "button"; pb.className = "btn"; pb.id = "logPick"; pb.addEventListener("click", () => { if (picking) pickReset(); else { picking = true; $("logShareOut").hidden = true; pickUi(); } });
+        info.append(n, m); $("logHead").replaceChildren(avatar(j.user, true), info, pb); pickUi();
       }
       const keep = box.scrollHeight - box.scrollTop;   // loading older ones keeps your place
       logMsgs = logMsgs.concat(j.msgs); logDraw();
@@ -3663,12 +3756,38 @@ if (params.has("mod") && !OVERLAY) {
   $("logMore").addEventListener("click", () => logList(true));
   $("logMsgMore").addEventListener("click", () => logOpen(logUid, true));
   $("logBack").addEventListener("click", () => { if (logStack.length) { logOpen(logStack.pop(), false, true); return; } logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; logList(false); });
+  async function shareListLoad() {
+    try {
+      const r = await fetchWithTimeout(BOT_URL + "/modshare", 20000, { headers: { authorization: "Bearer " + tok } });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 401) return out();
+      if (!j.ok) throw new Error(j.error || "the bot answered " + r.status);
+      $("shareCount").textContent = j.shares.length || "";
+      $("shareList").replaceChildren(...(j.shares.length ? j.shares.map(x => {
+        const d = document.createElement("div"); d.className = "dash-item";
+        const main = document.createElement("div"); main.className = "main";
+        const b = document.createElement("b"); b.textContent = x.name.replace(/^@/, ""); if (x.color) b.style.color = x.color;
+        const sp = document.createElement("span"); sp.textContent = x.n + (x.n === 1 ? " message" : " messages") + " · by " + x.by + " · " + kStamp(x.at);
+        main.append(b, sp);
+        const open = document.createElement("a"); open.className = "btn"; open.href = shareUrl(x.id); open.target = "_blank"; open.rel = "noopener"; open.textContent = "Open";
+        const del = document.createElement("button"); del.type = "button"; del.className = "btn danger"; del.textContent = "Remove";
+        del.addEventListener("click", async () => {
+          if (!confirm("Remove this link? It stops working for everyone.")) return;
+          del.disabled = true;
+          try { await fetchWithTimeout(BOT_URL + "/modshare", 20000, { method: "POST", headers: { authorization: "Bearer " + tok, "content-type": "application/json" }, body: JSON.stringify({ op: "del", id: x.id }) }); } catch (e) {}
+          shareListLoad();
+        });
+        d.append(main, copyBtn(shareUrl(x.id)), open, del); return d;
+      }) : [empty("No public links right now.")]));
+    } catch (e) { if (e.message !== "signin") $("shareList").replaceChildren(empty("Couldn't load: " + e.message)); }
+  }
   const mtabs = [...document.querySelectorAll("[data-mtab]")];
   mtabs.forEach(b => b.addEventListener("click", () => {
     mtabs.forEach(x => x.setAttribute("aria-selected", String(x === b)));
     document.querySelectorAll("[data-mpanel]").forEach(p => (p.hidden = p.dataset.mpanel !== b.dataset.mtab));
     if (b.dataset.mtab === "find") $("udbQ").focus();
     if (b.dataset.mtab === "logs") { if ($("logUserView").hidden) logList(false); return; }
+    if (b.dataset.mtab === "links") { shareListLoad(); return; }
     udbLoad();   // pick up what other mods added
   }));
   $("modOut").addEventListener("click", () => { fetchWithTimeout(BOT_URL + "/modme", 10000, { method: "POST", headers: { authorization: "Bearer " + tok } }).catch(() => {}).finally(out); });
