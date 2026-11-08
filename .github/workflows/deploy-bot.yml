@@ -51,9 +51,3 @@ jobs:
         run: |
           printf '%s' "${{ secrets.KICK_CLIENT_ID }}" | wrangler secret put KICK_CLIENT_ID
           printf '%s' "${{ secrets.KICK_CLIENT_SECRET }}" | wrangler secret put KICK_CLIENT_SECRET
-      - name: One-time cleanup of the old bot (approved by Jay 2026-11-08)
-        if: env.SKIP != '1'
-        run: |
-          OLD="jd""bbot"
-          wrangler delete --name "$OLD" --force 2>&1 | tail -3 || true
-          wrangler d1 delete "$OLD-chat" -y 2>&1 | tail -3 || true
