@@ -5,7 +5,7 @@
 <title>Kick Giveaway Tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
-// The site moved to toolbot.pages.dev. Old github.io links forward there; the first time, this browser's saved
+// The site moved to toolbott.pages.dev. Old github.io links forward there; the first time, this browser's saved
 // giveaway, GTB, calls and settings data comes along in the address and is filled in on the new site.
 (function () {
   try {
@@ -17,7 +17,7 @@
         move = "#move=" + encodeURIComponent(JSON.stringify(o));
         localStorage.setItem("kick-moved", "1");
       }
-      location.replace("https://toolbot.pages.dev/" + location.search + (move || location.hash));
+      location.replace("https://toolbott.pages.dev/" + location.search + (move || location.hash));
       return;
     }
     if (location.hash.indexOf("#move=") === 0) {
