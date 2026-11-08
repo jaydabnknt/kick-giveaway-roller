@@ -486,6 +486,10 @@ body.mod .acct { display: none; }
 .log-user span { color: #8a9099; font-size: 12px; white-space: nowrap; }
 .log-av { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #24272c; display: grid; place-items: center; font: 700 13px var(--mono); color: var(--accent); }
 .log-av.big { width: 44px; height: 44px; font-size: 18px; }
+.chan-ic { display: inline-block; width: 18px; height: 18px; vertical-align: -4px; background: center / contain no-repeat; flex: none; }
+.chan-ic.bot { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='7' width='16' height='12' rx='4' fill='%2353fc18'/%3E%3Ccircle cx='9.5' cy='13' r='1.8' fill='%230b0e0f'/%3E%3Ccircle cx='14.5' cy='13' r='1.8' fill='%230b0e0f'/%3E%3Cpath d='M12 3v4' stroke='%2353fc18' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='3' r='1.5' fill='%2353fc18'/%3E%3C/svg%3E"); }
+.chan-ic.watch { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z' fill='none' stroke='%23ffb800' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='3' fill='%23ffb800'/%3E%3C/svg%3E"); }
+.log-user .btn { min-height: 32px; padding: 4px 10px; font-size: 12px; }
 .log-head { display: flex; align-items: center; gap: 12px; }
 .log-head .meta { color: var(--muted); font-size: 13px; }
 .kchat { background: #0b0e0f; border: 1px solid var(--line); border-radius: 10px; max-height: 70vh; overflow-y: auto; padding: 6px 0; font: 500 14px/1.6 Inter, system-ui, sans-serif; color: #fff; }
@@ -691,6 +695,20 @@ a.btn.primary { color: var(--on-accent); }
       <div id="shareList" class="dash-list"></div>
     </section>
     <section class="cp-box" data-mpanel="logs" hidden>
+      <div class="seg" role="group" aria-label="Chat logs" id="logSeg">
+        <button type="button" data-lview="users" aria-pressed="true">Users</button>
+        <button type="button" data-lview="chans" aria-pressed="false">Channels</button>
+      </div>
+      <div id="logChansView" style="display:grid;gap:12px" hidden>
+        <h3>Logged channels <span class="badge" id="logChanCount"></span></h3>
+        <form class="row" id="logChanForm">
+          <input type="text" id="logChanName" placeholder="Kick channel name" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1 1 180px">
+          <button class="btn primary" type="submit" id="logChanBtn">Add</button>
+        </form>
+        <p class="hint" id="logChanMsg" hidden></p>
+        <div id="logChans" class="log-list"></div>
+        <p class="hint"><span class="chan-ic bot" aria-hidden="true"></span> ToolBot is in the chat &nbsp; <span class="chan-ic watch" aria-hidden="true"></span> logging only, the bot isn't added</p>
+      </div>
       <div id="logUsersView" style="display:grid;gap:12px">
         <h3>Chat logs <span class="badge" id="logTotal"></span></h3>
         <input type="search" id="logQ" placeholder="Find a Kick username" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -3733,7 +3751,7 @@ if (params.has("mod") && !OVERLAY) {
   async function logOpen(uid, more, back) {
     const box = $("logMsgs");
     if (!more && !back && logUid && logUid !== uid) logStack.push(logUid);
-    if (!more) { picking = false; picked.clear(); $("logShareBar").hidden = true; $("logShareOut").hidden = true; $("logMsgs").classList.remove("picking"); logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
+    if (!more) { $("logSeg").hidden = true; picking = false; picked.clear(); $("logShareBar").hidden = true; $("logShareOut").hidden = true; $("logMsgs").classList.remove("picking"); logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
     try {
       const j = await logApi("?uid=" + logUid + (more ? "&before=" + msgCursor : ""));
       if (uid !== logUid) return;
@@ -3755,7 +3773,52 @@ if (params.has("mod") && !OVERLAY) {
   $("logQ").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => logList(false), 350); });
   $("logMore").addEventListener("click", () => logList(true));
   $("logMsgMore").addEventListener("click", () => logOpen(logUid, true));
-  $("logBack").addEventListener("click", () => { if (logStack.length) { logOpen(logStack.pop(), false, true); return; } logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; logList(false); });
+  $("logBack").addEventListener("click", () => { if (logStack.length) { logOpen(logStack.pop(), false, true); return; } logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; $("logSeg").hidden = false; logList(false); });
+  // ---- Channels subcategory: every chat that's logged; add log-only channels by name ----
+  const lview = v => {
+    document.querySelectorAll("[data-lview]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.lview === v)));
+    $("logChansView").hidden = v !== "chans"; $("logUsersView").hidden = v !== "users"; $("logUserView").hidden = true;
+    if (v === "chans") chanLoad(); else { logStack = []; logUid = 0; logList(false); }
+  };
+  document.querySelectorAll("[data-lview]").forEach(x => x.addEventListener("click", () => lview(x.dataset.lview)));
+  const chanMsg = (t, bad) => { $("logChanMsg").textContent = t || ""; $("logChanMsg").hidden = !t; $("logChanMsg").style.color = bad ? "#ff6b6b" : ""; };
+  const chanApi = async body => {
+    const r = await fetchWithTimeout(BOT_URL + "/modchans", 25000, { method: body ? "POST" : "GET", headers: { authorization: "Bearer " + tok, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { out(); throw new Error("signin"); }
+    if (!j.ok) throw new Error(j.error || "the bot answered " + r.status);
+    chanDraw(j.chans); return j;
+  };
+  function chanDraw(chans) {
+    $("logChanCount").textContent = chans.length || "";
+    const sorted = chans.slice().sort((a, b) => (b.bot - a.bot) || a.slug.localeCompare(b.slug));
+    $("logChans").replaceChildren(...(sorted.length ? sorted.map(c => {
+      const row = document.createElement("div"); row.className = "log-user"; row.style.cursor = "default";
+      const ic = document.createElement("span"); ic.className = "chan-ic " + (c.bot ? "bot" : "watch"); ic.title = c.bot ? "ToolBot is in this chat" : "Logging only, the bot isn't added";
+      const n = document.createElement("a"); n.href = kickUrl(c.slug); n.target = "_blank"; n.rel = "noopener"; n.style.cssText = "flex:1 1 auto;min-width:0;color:#fff;font-weight:700;text-decoration:none;overflow-wrap:anywhere"; n.textContent = c.slug;
+      row.append(ic, n);
+      if (!c.bot) {
+        const t = document.createElement("span"); t.textContent = c.by ? "by " + c.by : ""; row.append(t);
+        const del = document.createElement("button"); del.type = "button"; del.className = "btn danger"; del.textContent = "Remove";
+        del.addEventListener("click", async () => {
+          if (!confirm("Stop logging " + c.slug + "? Messages already logged stay.")) return;
+          del.disabled = true; try { await chanApi({ op: "del", name: c.slug }); chanMsg(""); } catch (e) { if (e.message !== "signin") chanMsg(e.message, true); del.disabled = false; }
+        });
+        row.append(del);
+      }
+      return row;
+    }) : [empty("No channels yet.")]));
+  }
+  const chanLoad = () => chanApi().catch(e => { if (e.message !== "signin") chanMsg("Couldn't load: " + e.message, true); });
+  $("logChanForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("logChanName").value.trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?kick\.com\//, "");
+    if (!/^[A-Za-z0-9_-]{2,40}$/.test(name)) { chanMsg("Type a Kick channel name.", true); return; }
+    $("logChanBtn").disabled = true; chanMsg("Adding…");
+    try { await chanApi({ op: "add", name }); $("logChanName").value = ""; chanMsg("Logging " + name.toLowerCase() + " from now on."); }
+    catch (er) { if (er.message !== "signin") chanMsg(er.message, true); }
+    finally { $("logChanBtn").disabled = false; }
+  });
   async function shareListLoad() {
     try {
       const r = await fetchWithTimeout(BOT_URL + "/modshare", 20000, { headers: { authorization: "Bearer " + tok } });
@@ -3786,7 +3849,7 @@ if (params.has("mod") && !OVERLAY) {
     mtabs.forEach(x => x.setAttribute("aria-selected", String(x === b)));
     document.querySelectorAll("[data-mpanel]").forEach(p => (p.hidden = p.dataset.mpanel !== b.dataset.mtab));
     if (b.dataset.mtab === "find") $("udbQ").focus();
-    if (b.dataset.mtab === "logs") { if ($("logUserView").hidden) logList(false); return; }
+    if (b.dataset.mtab === "logs") { if (!$("logChansView").hidden) chanLoad(); else if ($("logUserView").hidden) logList(false); return; }
     if (b.dataset.mtab === "links") { shareListLoad(); return; }
     udbLoad();   // pick up what other mods added
   }));
