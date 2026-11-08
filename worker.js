@@ -78,6 +78,7 @@ const TEMPLATES = {
   raid: d => at(d.name) && `🚨 Thank you ${at(d.name)} for the raid${+d.viewers > 0 ? " with " + plural(+d.viewers, "viewer", "viewers") : ""}! Everyone go check them out and drop a follow: https://kick.com/${at(d.name).slice(1).toLowerCase().replace(/_/g, "-")}`
 };
 const STREAMER_ONLY = new Set(["test", "winner", "claimed", "asleep", "gtbOpen", "gtbClose", "gtbWin", "callsOpen", "callsClose", "nowPlaying", "bonus", "callAck"]);
+const DB_FIELDS = ["kick", "telegram", "discord", "stake"];
 const modName = v => { const n = String(v || "").trim().replace(/^@/, "").toLowerCase(); return /^[a-z0-9_-]{2,40}$/.test(n) ? n : ""; };
 const bearer = req => (req.headers.get("authorization") || "").replace(/^Bearer\s+/, "");
 async function streamerSession(req, env) {
@@ -591,6 +592,31 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/moddb") {   // mod tools user database: one shared list of people's Kick/Telegram/Discord/Stake names
+      const tk = bearer(req), m = /^[A-Za-z0-9_-]{20,80}$/.test(tk) ? await env.STORE.get("ms:" + tk, "json") : null;
+      const access = m ? (await env.STORE.get("modaccess", "json")) || [] : [];
+      if (!m || !access.some(x => x.name === modName(m.name))) return json({ ok: false, error: "signin" }, 401);
+      const db = (await env.STORE.get("moddb", "json")) || [];
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        const acct = v => String(v == null ? "" : v).trim().replace(/^@/, "").replace(/[^\w.\-#]/g, "").slice(0, 40);
+        const f = {}; for (const k of DB_FIELDS) f[k] = acct(b[k]);
+        if (b.op === "add" || b.op === "edit") {
+          if (!DB_FIELDS.some(k => f[k])) return json({ ok: false, error: "Type at least one username." }, 400);
+          if (b.op === "add") {
+            if (db.length >= 5000) return json({ ok: false, error: "The database is full." }, 400);
+            db.push({ id: randomString(9), ...f, by: m.name, at: Date.now() });
+          } else {
+            const e = db.find(x => x.id === b.id); if (!e) return json({ ok: false, error: "That entry is gone." }, 404);
+            Object.assign(e, f, { eby: m.name, eat: Date.now() });
+          }
+        } else if (b.op === "del") {
+          const i = db.findIndex(x => x.id === b.id); if (i >= 0) db.splice(i, 1);
+        } else return json({ ok: false, error: "not found" }, 404);
+        await env.STORE.put("moddb", JSON.stringify(db));
+      }
+      return json({ ok: true, entries: db });
+    }
     if (url.pathname === "/modme") {   // is this mod tools session still good (and the name still on the list)?
       const tk = bearer(req), m = /^[A-Za-z0-9_-]{20,80}$/.test(tk) ? await env.STORE.get("ms:" + tk, "json") : null;
       if (m && req.method === "POST") { await env.STORE.delete("ms:" + tk); return json({ ok: true }); }
