@@ -127,10 +127,10 @@ async function kickApp(env, path, init = {}) {
   if (!r.ok) throw new Error(`Kick API ${path} -> ${r.status} ${JSON.stringify(data).slice(0, 300)}`);
   return data;
 }
-async function subscribeChat(env, slug = env.BOT_CHANNEL) {
+async function subscribeChat(env, slug = env.BOT_CHANNEL, only) {   // only: e.g. ["chat.message.sent"] for log-only channels
   const id = await broadcasterId(env, slug);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
-  const want = ["chat.message.sent", ...ALERT_EVENTS, ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
+  const want = only || ["chat.message.sent", ...ALERT_EVENTS, ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
   const got = new Set((have.data || []).map(x => x.event || x.name));
   const missing = want.filter(n => !got.has(n));
   if (!missing.length) return { ok: true, already: true, have: have.data };
@@ -214,6 +214,13 @@ async function channelList(env) {
   return list;
 }
 const isBanned = async (env, slug) => ((await env.STORE.get("banned", "json")) || []).some(x => x.slug === normSlug(slug));
+// Log-only channels (mod tools): the bot doesn't post there, it only keeps chat logs. KV "logchans" [{slug, at, by}].
+let logChansCache = null;
+async function logChans(env, fresh) {
+  if (!fresh && logChansCache && logChansCache.until > Date.now()) return logChansCache.list;
+  const list = (await env.STORE.get("logchans", "json")) || [];
+  logChansCache = { list, until: Date.now() + 60000 }; return list;
+}
 const isEnabled = async (env, slug) => (await channelList(env)).some(c => c.slug === normSlug(slug));
 async function unsubscribe(env, slug) {
   const id = await broadcasterId(env, slug);
@@ -349,7 +356,10 @@ async function onChat(env, ev) {
   const self = Number(ev.sender && ev.sender.user_id) === Number(env.BOT_USER_ID) || who.replace(/^@/, "").toLowerCase() === String(env.BOT_USERNAME).toLowerCase();
   if (!bid || self) return;
   if (ev.message_id && !flag("msg:" + ev.message_id, 600)) return;   // the same chat message can arrive twice
-  if (!(await isEnabled(env, slug))) return;
+  if (!(await isEnabled(env, slug))) {   // a log-only channel: just keep the chat log
+    if ((await logChans(env)).some(c => c.slug === slug)) await logChat(env, slug, ev).catch(e => env.STORE.put("lastdberror", String(e.message || e).slice(0, 300)).catch(() => {}));
+    return;
+  }
   const badges = ((ev.sender && ev.sender.identity && ev.sender.identity.badges) || []).map(b => String(b.type || b.text || "").toLowerCase());
   const isStreamer = normSlug(who) === slug || badges.includes("broadcaster");
   const isMod = isStreamer || badges.some(b => /moderator|^mod$/.test(b));
@@ -519,7 +529,11 @@ async function clipsPage(env, slug) {
 export default {
   async scheduled(event, env, ctx) {   // every 5 min: timed messages; every 6 h: keep every channel's event subscriptions alive
     if (event.cron === "*/5 * * * *") { ctx.waitUntil(runTimers(env, event.scheduledTime || Date.now()).catch(e => env.STORE.put("lasterror", String(e.message || e)))); return; }
-    ctx.waitUntil((async () => { for (const c of await channelList(env)) await subscribeChat(env, c.slug).catch(() => {}); })());
+    ctx.waitUntil((async () => {
+      const bot = await channelList(env);
+      for (const c of bot) await subscribeChat(env, c.slug).catch(() => {});
+      for (const c of await logChans(env, true)) if (!bot.some(b => b.slug === c.slug)) await subscribeChat(env, c.slug, ["chat.message.sent"]).catch(() => {});
+    })());
   },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -660,6 +674,30 @@ export default {
       }
       const shares = (await db.prepare("SELECT id, uid, name, color, pic, n, by, at FROM shares ORDER BY at DESC LIMIT 500").all()).results;
       return json({ ok: true, shares });
+    }
+    if (url.pathname === "/modchans") {   // mod tools: channels whose chat is logged (bot channels + log-only ones); add/remove log-only
+      const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
+      const bot = await channelList(env);
+      let extra = await logChans(env, true);
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({})), slug = normSlug(String(b.name || "").replace(/^@/, "").replace(/_/g, "-"));
+        if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "Type a Kick channel name." }, 400);
+        if (b.op === "del") {
+          if (bot.some(c => c.slug === slug)) return json({ ok: false, error: "The bot is in that channel, so its chat is always logged." }, 400);
+          await unsubscribe(env, slug).catch(() => {});
+          extra = extra.filter(c => c.slug !== slug);
+        } else {
+          if (bot.some(c => c.slug === slug) || extra.some(c => c.slug === slug)) return json({ ok: false, error: "That channel is already logged." }, 400);
+          if (extra.length >= 50) return json({ ok: false, error: "That's the most log-only channels (50)." }, 400);
+          try { await broadcasterId(env, slug); } catch (e) { return json({ ok: false, error: "There's no Kick channel called " + slug + "." }, 404); }
+          try { await subscribeChat(env, slug, ["chat.message.sent"]); }
+          catch (e) { return json({ ok: false, error: "Kick wouldn't let the bot listen to that chat: " + String(e.message || e).slice(0, 200) }, 502); }
+          extra.push({ slug, at: Date.now(), by: m.name });
+        }
+        await env.STORE.put("logchans", JSON.stringify(extra)); logChansCache = null;
+      }
+      const chans = [...bot.map(c => ({ slug: c.slug, bot: true, at: c.since || 0 })), ...extra.filter(c => !bot.some(x => x.slug === c.slug)).map(c => ({ slug: c.slug, bot: false, at: c.at, by: c.by }))];
+      return json({ ok: true, chans });
     }
     if (url.pathname === "/modlog") {   // mod tools chat logs: who typed (newest first) or one user's messages
       const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
