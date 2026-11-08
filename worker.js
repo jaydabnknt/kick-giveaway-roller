@@ -1,4 +1,4 @@
-// JDBBot: a tiny Kick chat bot for Giveaway Tools, running on Cloudflare Workers' free plan. It posts as the
+// ToolBot: a tiny Kick chat bot for Giveaway Tools, running on Cloudflare Workers' free plan. It posts as the
 // Kick app's own bot (bot badge) in channels whose streamer pressed Allow on their bot page; their Kick tokens
 // live in Workers KV and are refreshed here, never in the site.
 //
@@ -57,7 +57,7 @@ async function broadcasterId(env, slug) {
 }
 
 // Keyless mode: the site sends an event name and a few fields, and the bot builds the line itself, so
-// nobody can make JDBBot say arbitrary text. Only requests from the site's own page are accepted, and
+// nobody can make ToolBot say arbitrary text. Only requests from the site's own page are accepted, and
 // each channel is rate limited.
 const clean = (v, n = 40) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
 const at = v => { const n = clean(v, 30).replace(/^@/, ""); return /^[A-Za-z0-9_.-]{1,30}$/.test(n) ? "@" + n : ""; };
@@ -99,7 +99,7 @@ async function rateOk(env, channel) {
 }
 function fromSite(req, env) {
   const o = req.headers.get("origin") || "";
-  return o === new URL(env.SITE_URL).origin || o === "https://jaydabnknt.github.io" || /^https:\/\/([a-z0-9-]+\.)?jdbbot(-[a-z0-9]+)?\.pages\.dev$/.test(o);
+  return o === new URL(env.SITE_URL).origin || o === "https://jaydabnknt.github.io" || /^https:\/\/([a-z0-9-]+\.)?toolbot(-[a-z0-9]+)?\.pages\.dev$/.test(o);
 }
 
 async function checkKey(req, env) {
@@ -203,7 +203,7 @@ async function logChat(env, slug, ev) {
   await db.batch(q);
 }
 
-// ---------- channels that use JDBBot ----------
+// ---------- channels that use ToolBot ----------
 // Any streamer can add the bot from their page on the site (?c=name): they get a short code, put it in their
 // stream title or channel bio for a moment, and the bot checks it there. Nobody signs in to anything.
 const normSlug = v => String(v || "").trim().toLowerCase().replace(/^https?:\/\/(www\.)?kick\.com\//, "").replace(/[/?#].*$/, "").replace(/^@/, "").replace(/_/g, "-");
@@ -220,7 +220,7 @@ async function unsubscribe(env, slug) {
   for (const x of have.data || []) await kickApp(env, "/events/subscriptions?id=" + encodeURIComponent(x.id), { method: "DELETE" }).catch(() => {});
 }
 // ---------- access keys (Jay's dashboard) ----------
-// Each key is its own KV entry "key:JDB-XXXX-XXXX" with { note, at, ch?, usedBy?, usedAt? } as metadata, and each
+// Each key is its own KV entry "key:TB-XXXX-XXXX" with { note, at, ch?, usedBy?, usedAt? } as metadata, and each
 // request is "req:<slug>" with { note, at, approved? }, so two changes close together can't overwrite each
 // other. A key with ch only works for that channel (that's what approving a request makes).
 // KV listings can show an old copy for up to a minute, so a key revoked a moment ago would come back on the
@@ -250,7 +250,7 @@ async function findKey(env, key, slug) {   // a usable key for this channel: the
   if (key && keys[key] && !keys[key].usedBy && (!keys[key].ch || keys[key].ch === slug)) return key;
   return Object.keys(keys).find(k => keys[k].ch === slug && !keys[k].usedBy) || null;
 }
-const newKey = () => "JDB-" + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("").replace(/(.{4})(.{4})/, "$1-$2");
+const newKey = () => "TB-" + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("").replace(/(.{4})(.{4})/, "$1-$2");
 async function removeChannel(env, slug) {
   if (slug === env.BOT_CHANNEL) return;
   const id = await broadcasterId(env, slug).catch(() => 0);
@@ -285,6 +285,8 @@ async function adminOk(req, env) {
   return t.length > 20 && !!(await env.STORE.get("sess:" + t));
 }
 
+// Mods add, edit and delete a channel's own commands with !tb add|edit|delete.
+const MGMT = "tb";
 const BUILTINS = [
   ["!commands", "Shows this list", "Everyone"],
   ["!uptime", "Shows stream uptime", "Everyone"],
@@ -294,9 +296,9 @@ const BUILTINS = [
   ["!top", "Shows the top 5 by watchtime", "Everyone"],
   ["!clip [seconds]", "Clips the last 30s (max 120)", "Everyone"],
   ["!so name", "Shoutout a streamer", "Mods"],
-  ["!jdb add/edit/delete", "Adds, edits or deletes a command", "Mods"]
+  ["!" + MGMT + " add/edit/delete", "Adds, edits or deletes a command", "Mods"]
 ];
-const RESERVED = new Set(["commands", "clip", "uptime", "so", "jdb", "gtb", "followage", "followers", "watchtime", "top"]);
+const RESERVED = new Set(["commands", "clip", "uptime", "so", MGMT, "gtb", "followage", "followers", "watchtime", "top"]);
 
 // Chat activity for !watchtime / !top. Kick doesn't tell bots who is watching, so someone counts as watching
 // for up to 10 minutes after each message they send while the stream is live. Totals are saved to KV every
@@ -407,19 +409,19 @@ async function onChat(env, ev) {
     return postAsBot(env, bid, `Here are the available commands: ${env.SITE_URL}?c=${slug}`);
   }
   const key = "cmds:" + slug;
-  if (cmd === "!jdb") {
+  if (cmd === "!" + MGMT) {
     if (!isMod) return;
-    const m = text.match(/^!jdb\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$/i) || [];
+    const m = text.match(new RegExp("^!" + MGMT + String.raw`\s+(\S+)(?:\s+!?(\S+))?(?:\s+([\s\S]+))?$`, "i")) || [];
     const sub = (m[1] || "").toLowerCase(), name = (m[2] || "").toLowerCase(), reply = clean(m[3], 400);
     const cmds = (await env.STORE.get(key, "json")) || {};
-    const usage = "Usage: !jdb add command text · !jdb edit command text · !jdb delete command";
+    const usage = `Usage: !${MGMT} add command text · !${MGMT} edit command text · !${MGMT} delete command`;
     if (sub !== "add" && sub !== "edit" && !/^(del|delete|remove)$/.test(sub)) return postAsBot(env, bid, usage);
     if (!/^[a-z0-9_]{1,20}$/.test(name)) return postAsBot(env, bid, usage);
     if (RESERVED.has(name)) return postAsBot(env, bid, `!${name} is built in, so pick another name.`);
     if (sub === "add" || sub === "edit") {
       if (!reply) return postAsBot(env, bid, usage);
-      if (sub === "add" && cmds[name]) return postAsBot(env, bid, `!${name} already exists. Use !jdb edit ${name} text to change it.`);
-      if (sub === "edit" && !cmds[name]) return postAsBot(env, bid, `There's no !${name} yet. Use !jdb add ${name} text.`);
+      if (sub === "add" && cmds[name]) return postAsBot(env, bid, `!${name} already exists. Use !${MGMT} edit ${name} text to change it.`);
+      if (sub === "edit" && !cmds[name]) return postAsBot(env, bid, `There's no !${name} yet. Use !${MGMT} add ${name} text.`);
       if (sub === "add" && Object.keys(cmds).length >= 100) return postAsBot(env, bid, "This channel already has 100 commands. Delete one first.");
       cmds[name] = { text: reply, by: who, at: Date.now() };
       await env.STORE.put(key, JSON.stringify(cmds));
@@ -548,7 +550,7 @@ export default {
       } catch (e) { return json({ ok: false, error: String(e.message || e) }); }
     }
 
-    if (url.pathname === "/" ) return page("JDBBot", `This is the chat bot for Giveaway Tools. Add it to your channel from your bot page on <a style="color:#53fc18" href="${env.SITE_URL}?c=">the site</a>.`);
+    if (url.pathname === "/" ) return page("ToolBot", `This is the chat bot for Giveaway Tools. Add it to your channel from your bot page on <a style="color:#53fc18" href="${env.SITE_URL}?c=">the site</a>.`);
 
     // /allow: a streamer lets the badge bot post in their chat. New channels need an access key from Jay's
     // dashboard (or an approved request); channels already using the bot can re-allow without one.
@@ -601,7 +603,7 @@ export default {
         return signIn(slug, st.back === undefined ? "?tools" : st.back);
       }
       if (state.startsWith("d")) {   // dashboard sign-in: only the home channel's owner gets in
-        if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of JDBBot.");
+        if (Number(uid) !== Number(await broadcasterId(env, env.BOT_CHANNEL))) return page("Not allowed", "This dashboard is only for the owner of ToolBot.");
         const sess = randomString(32);
         await env.STORE.put("sess:" + sess, String(uid), { expirationTtl: 30 * 86400 });
         return Response.redirect(env.SITE_URL + "?admin#s=" + sess, 302);
@@ -615,7 +617,7 @@ export default {
         const list = await channelList(env);
         if (!list.some(c => c.slug === slug)) {
           await subscribeChat(env, slug).catch(() => {}); list.push({ slug, id: uid, since: Date.now() }); await env.STORE.put("channels", JSON.stringify(list));
-          ctx.waitUntil(postAsBot(env, uid, "👋 JDBBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
+          ctx.waitUntil(postAsBot(env, uid, "👋 ToolBot is here! Type !commands").catch(e => env.STORE.put("lasterror", String(e.message || e))));
         }
         return signIn(slug, "?tools");   // adding the bot also signs you in
       }
@@ -712,8 +714,8 @@ export default {
     if (url.pathname === "/leave" && req.method === "POST") {   // Settings > Account: the streamer removes the bot from their chat
       const me = await streamerSession(req, env);
       if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
-      if (me.slug === env.BOT_CHANNEL) return json({ ok: false, error: "JDBBot can't leave its home channel." }, 400);
-      await postAsBot(env, me.uid, "👋 JDBBot is leaving this channel. Add it back any time from " + env.SITE_URL).catch(() => {});
+      if (me.slug === env.BOT_CHANNEL) return json({ ok: false, error: "ToolBot can't leave its home channel." }, 400);
+      await postAsBot(env, me.uid, "👋 ToolBot is leaving this channel. Add it back any time from " + env.SITE_URL).catch(() => {});
       await removeChannel(env, me.slug);
       await env.STORE.delete("ss:" + bearer(req));
       return json({ ok: true });
@@ -721,7 +723,7 @@ export default {
     if (url.pathname === "/cmds" && req.method === "POST") {   // the streamer adds, edits or deletes their commands on their bot page
       const me = await streamerSession(req, env);
       if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
-      if (!(await isEnabled(env, me.slug))) return json({ ok: false, error: "JDBBot isn't added to your channel yet." }, 403);
+      if (!(await isEnabled(env, me.slug))) return json({ ok: false, error: "ToolBot isn't added to your channel yet." }, 403);
       const b = await req.json().catch(() => ({}));
       const name = String(b.name || "").trim().toLowerCase().replace(/^!/, ""), old = String(b.old || "").trim().toLowerCase().replace(/^!/, "");
       const key = "cmds:" + me.slug, cmds = (await env.STORE.get(key, "json")) || {};
@@ -753,7 +755,7 @@ export default {
       }
       const tpl = TEMPLATES[body.event];
       const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
-      if (!keyed && !(await isEnabled(env, body.channel))) return json({ ok: false, error: "JDBBot isn't added to this channel yet" }, 403);
+      if (!keyed && !(await isEnabled(env, body.channel))) return json({ ok: false, error: "ToolBot isn't added to this channel yet" }, 403);
       if (!keyed && !(await rateOk(env, clean(body.channel).toLowerCase()))) return json({ ok: false, error: "slow down" }, 429);
       if (!text) return json({ ok: false, error: "empty" }, 400);
       if (body.event === "raid") {           // the site and every OBS overlay may all see the same raid; thank it once

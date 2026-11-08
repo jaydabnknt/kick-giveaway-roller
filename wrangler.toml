@@ -1,4 +1,4 @@
-name = "jdbbot"
+name = "toolbot"
 main = "worker.js"
 compatibility_date = "2025-09-01"
 workers_dev = true
@@ -7,9 +7,9 @@ workers_dev = true
 crons = ["17 */6 * * *", "*/5 * * * *"]
 
 [vars]
-BOT_USERNAME = "JDBBot"
+BOT_USERNAME = "ToolBot"
 BOT_CHANNEL = "jaydab4ngnt"
-SITE_URL = "https://jdbbot.pages.dev/"
+SITE_URL = "https://toolbot.pages.dev/"
 
 [[kv_namespaces]]
 binding = "STORE"
@@ -18,5 +18,5 @@ id = "KV_ID_FILLED_BY_DEPLOY"
 # Chat logs for mod tools (free D1 database). The deploy fills in the id, or drops this block if it can't make one.
 [[d1_databases]]
 binding = "DB"
-database_name = "jdbbot-chat"
+database_name = "toolbot-chat"
 database_id = "D1_ID_FILLED_BY_DEPLOY"
