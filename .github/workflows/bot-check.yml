@@ -9,4 +9,4 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - run: |
-          npx -y wrangler@4 d1 execute toolbot-chat --remote --json --command "SELECT uid, name, last FROM users ORDER BY last DESC LIMIT 20" 2>&1 | tail -60
+          npx -y wrangler@4 d1 execute toolbot-chat --remote --json --command "DELETE FROM msgs WHERE uid = 136842319; DELETE FROM users WHERE uid = 136842319; SELECT name FROM users" 2>&1 | tail -60
