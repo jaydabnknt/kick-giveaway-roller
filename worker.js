@@ -186,7 +186,9 @@ function chatDb(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, ch TEXT, text TEXT, at INTEGER)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS msgs_uid ON msgs (uid, id)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS users_last ON users (last)"),
-  ]).catch(e => { dbReady = null; throw e; });
+  ]).then(async () => {   // columns added later (name colour, badges); "duplicate column" just means they're there
+    for (const sql of ["ALTER TABLE users ADD COLUMN color TEXT", "ALTER TABLE msgs ADD COLUMN badges TEXT"]) await env.DB.prepare(sql).run().catch(() => {});
+  }).catch(e => { dbReady = null; throw e; });
   return dbReady.then(() => env.DB);
 }
 async function logChat(env, slug, ev) {
@@ -194,8 +196,10 @@ async function logChat(env, slug, ev) {
   if (!uid || !text) return;
   const db = await chatDb(env); if (!db) return;
   const at = Date.parse(ev.created_at) || Date.now(), pic = /^https:\/\//.test(s.profile_picture || "") ? String(s.profile_picture) : "";
-  const q = [db.prepare("INSERT INTO msgs (uid, ch, text, at) VALUES (?, ?, ?, ?)").bind(uid, slug, text, at)];
-  if (flag("lu:" + uid, 600)) q.push(db.prepare("INSERT INTO users (uid, name, pic, first, last) VALUES (?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET name = excluded.name, pic = CASE WHEN excluded.pic = '' THEN users.pic ELSE excluded.pic END, last = excluded.last").bind(uid, String(s.username || "").slice(0, 40), pic, at, at));
+  const id = s.identity || {}, color = /^#[0-9a-f]{3,8}$/i.test(id.username_color || "") ? id.username_color : "";
+  const badges = (id.badges || []).map(b => String(b.type || b.text || "").toLowerCase().replace(/[^a-z_]/g, "")).filter(Boolean).slice(0, 6).join(",");
+  const q = [db.prepare("INSERT INTO msgs (uid, ch, text, at, badges) VALUES (?, ?, ?, ?, ?)").bind(uid, slug, text, at, badges)];
+  if (flag("lu:" + uid, 600)) q.push(db.prepare("INSERT INTO users (uid, name, pic, first, last, color) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET name = excluded.name, pic = CASE WHEN excluded.pic = '' THEN users.pic ELSE excluded.pic END, last = excluded.last, color = CASE WHEN excluded.color = '' THEN users.color ELSE excluded.color END").bind(uid, String(s.username || "").slice(0, 40), pic, at, at, color));
   await db.batch(q);
 }
 
@@ -628,13 +632,13 @@ export default {
       if (!db) return json({ ok: false, error: "The chat log database isn't set up yet." }, 503);
       const uid = Number(url.searchParams.get("uid")) || 0, before = Number(url.searchParams.get("before")) || 0;
       if (uid) {
-        const user = await db.prepare("SELECT uid, name, pic, first, last FROM users WHERE uid = ?").bind(uid).first();
-        const msgs = (await db.prepare("SELECT id, ch, text, at FROM msgs WHERE uid = ? AND id < ? ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15).all()).results;
+        const user = await db.prepare("SELECT uid, name, pic, first, last, color FROM users WHERE uid = ?").bind(uid).first();
+        const msgs = (await db.prepare("SELECT id, ch, text, at, badges FROM msgs WHERE uid = ? AND id < ? ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15).all()).results;
         const count = before ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM msgs WHERE uid = ?").bind(uid).first()).n;
         return json({ ok: true, user, msgs, count, more: msgs.length === 100 });
       }
       const q = String(url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase().replace(/[%_\\]/g, "\\$&").slice(0, 40);
-      const users = (await db.prepare("SELECT uid, name, pic, first, last FROM users WHERE (? = '' OR lower(name) LIKE ? ESCAPE '\\') AND last < ? ORDER BY last DESC LIMIT 50").bind(q, "%" + q + "%", before || 9e15).all()).results;
+      const users = (await db.prepare("SELECT uid, name, pic, first, last, color FROM users WHERE (? = '' OR lower(name) LIKE ? ESCAPE '\\') AND last < ? ORDER BY last DESC LIMIT 50").bind(q, "%" + q + "%", before || 9e15).all()).results;
       const total = before || q ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM users").first()).n;
       return json({ ok: true, users, total, more: users.length === 50 });
     }
