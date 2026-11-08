@@ -16,8 +16,8 @@ jobs:
       - name: Deploy to Cloudflare Pages
         run: |
           mkdir dist && cp index.html dist/
-          npx -y wrangler@4 pages project create toolbot --production-branch main 2>&1 | tail -3 || true
-          npx -y wrangler@4 pages deploy dist --project-name toolbot --branch main --commit-dirty=true 2>&1 | tee out.txt
+          npx -y wrangler@4 pages project create toolbott --production-branch main 2>&1 | tail -3 || true
+          npx -y wrangler@4 pages deploy dist --project-name toolbott --branch main --commit-dirty=true 2>&1 | tee out.txt
           echo "SITE URL: $(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' out.txt | head -1)"
       - name: One-time forwarder on the old address (OBS links and sign-ins move over)
         run: |
@@ -26,7 +26,7 @@ jobs:
           <!doctype html><meta charset="utf-8"><title>ToolBot</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0b0e0f;color:#fff;font:16px system-ui;padding:24px}a{color:#53fc18}</style>
           <script>
           (function () {
-            var to = "https://toolbot.pages.dev/", p = new URLSearchParams(location.search), move = "";
+            var to = SITE, p = new URLSearchParams(location.search), move = "";
             try {
               if (!p.has("overlay") && !localStorage.getItem("kick-moved-tb")) {
                 var o = {};
@@ -41,4 +41,6 @@ jobs:
           <p>ToolBot moved to <a href="https://toolbot.pages.dev/">toolbot.pages.dev</a>.</p>
           HTML
           sed -i 's/^          //' old/index.html
+          SITE=$(grep -oE 'https://[a-z0-9-]+\.pages\.dev' out.txt | grep -v '//[0-9a-f]\{8\}\.' | head -1); [ -n "$SITE" ] || SITE=$(grep -oE 'https://[0-9a-f]{8}\.[a-z0-9-]+\.pages\.dev' out.txt | head -1 | sed -E 's#//[0-9a-f]{8}\.#//#')
+          echo "forwarding to $SITE"; sed -i "s#var to = SITE#var to = \"$SITE/\"#; s#https://toolbot.pages.dev/#$SITE/#g; s#toolbot.pages.dev#${SITE#https://}#g" old/index.html
           npx -y wrangler@4 pages deploy old --project-name "$OLD" --branch main --commit-dirty=true 2>&1 | tail -3
