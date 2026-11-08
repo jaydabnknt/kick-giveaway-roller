@@ -186,6 +186,7 @@ function chatDb(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, ch TEXT, text TEXT, at INTEGER)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS msgs_uid ON msgs (uid, id)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS users_last ON users (last)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS shares (id TEXT PRIMARY KEY, uid INTEGER, name TEXT, color TEXT, pic TEXT, msgs TEXT, n INTEGER, by TEXT, at INTEGER)"),
   ]).then(async () => {   // columns added later (name colour, badges); "duplicate column" just means they're there
     for (const sql of ["ALTER TABLE users ADD COLUMN color TEXT", "ALTER TABLE msgs ADD COLUMN badges TEXT"]) await env.DB.prepare(sql).run().catch(() => {});
   }).catch(e => { dbReady = null; throw e; });
@@ -631,6 +632,35 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/share") {   // public: a shared pick of someone's chat messages (anyone with the link)
+      const id = String(url.searchParams.get("id") || "");
+      const db = /^[A-Za-z0-9_-]{8,20}$/.test(id) ? await chatDb(env).catch(() => null) : null;
+      const sh = db ? await db.prepare("SELECT name, color, pic, msgs, at FROM shares WHERE id = ?").bind(id).first() : null;
+      if (!sh) return json({ ok: false, error: "This link was removed or never existed." }, 404);
+      return json({ ok: true, name: sh.name, color: sh.color || "", pic: sh.pic || "", at: sh.at, msgs: JSON.parse(sh.msgs || "[]") });
+    }
+    if (url.pathname === "/modshare") {   // mods: make a public link for picked messages, list the links, remove one
+      const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
+      const db = await chatDb(env).catch(() => null);
+      if (!db) return json({ ok: false, error: "The chat log database isn't set up yet." }, 503);
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        if (b.op === "del") { await db.prepare("DELETE FROM shares WHERE id = ?").bind(String(b.id || "")).run(); }
+        else {
+          const uid = Number(b.uid), ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter(n => n > 0))].slice(0, 300);
+          if (!uid || !ids.length) return json({ ok: false, error: "Pick at least one message." }, 400);
+          const user = await db.prepare("SELECT name, color, pic FROM users WHERE uid = ?").bind(uid).first();
+          const want = new Set(ids);   // (D1 caps bound values per query, so read the id range and keep the picked ones)
+          const msgs = (await db.prepare("SELECT id, ch, text, at, badges FROM msgs WHERE uid = ? AND id BETWEEN ? AND ? ORDER BY id").bind(uid, Math.min(...ids), Math.max(...ids)).all()).results.filter(x => want.has(x.id));
+          if (!user || !msgs.length) return json({ ok: false, error: "Those messages are gone." }, 404);
+          const id = randomString(9);
+          await db.prepare("INSERT INTO shares (id, uid, name, color, pic, msgs, n, by, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, uid, user.name, user.color || "", user.pic || "", JSON.stringify(msgs.map(x => ({ ch: x.ch, text: x.text, at: x.at, badges: x.badges || "" }))), msgs.length, m.name, Date.now()).run();
+          return json({ ok: true, id });
+        }
+      }
+      const shares = (await db.prepare("SELECT id, uid, name, color, pic, n, by, at FROM shares ORDER BY at DESC LIMIT 500").all()).results;
+      return json({ ok: true, shares });
+    }
     if (url.pathname === "/modlog") {   // mod tools chat logs: who typed (newest first) or one user's messages
       const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
       const db = await chatDb(env).catch(() => null);
