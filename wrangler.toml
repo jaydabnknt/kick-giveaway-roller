@@ -4,7 +4,7 @@ compatibility_date = "2025-09-01"
 workers_dev = true
 
 [triggers]
-crons = ["17 */6 * * *"]
+crons = ["17 */6 * * *", "*/5 * * * *"]
 
 [vars]
 BOT_USERNAME = "JDBBot"

@@ -123,7 +123,7 @@ async function kickApp(env, path, init = {}) {
 async function subscribeChat(env, slug = env.BOT_CHANNEL) {
   const id = await broadcasterId(env, slug);
   const have = await kickApp(env, "/events/subscriptions?broadcaster_user_id=" + id).catch(e => ({ error: String(e.message) }));
-  const want = ["chat.message.sent", ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
+  const want = ["chat.message.sent", ...ALERT_EVENTS, ...String(env.EXTRA_EVENTS || "").split(",").map(x => x.trim()).filter(Boolean)];
   const got = new Set((have.data || []).map(x => x.event || x.name));
   const missing = want.filter(n => !got.has(n));
   if (!missing.length) return { ok: true, already: true, have: have.data };
@@ -339,7 +339,8 @@ async function onChat(env, ev) {
   }
   if (cmd === "!top") {
     cooldown(15);
-    const top = Object.entries(await loyalty(env, slug)).sort((a, b) => b[1].m - a[1].m).slice(0, 5);
+    const top = Object.entries(await loyalty(env, slug)).filter(([n]) => normSlug(n) !== slug && n.toLowerCase() !== String(env.BOT_USERNAME).toLowerCase())   // not the streamer (it's their channel) or the bot
+      .sort((a, b) => b[1].m - a[1].m).slice(0, 5);
     return postAsBot(env, bid, top.length ? "🏆 " + top.map(([n, t], i) => `${i + 1}. ${n} (${dur(t.m)})`).join(" · ") : "No watchtime yet.");
   }
   if (cmd === "!clip") {
@@ -411,6 +412,52 @@ async function shoutout(env, name) {
   const what = ch && ch.category && ch.category.name ? ` · last streaming ${ch.category.name}` : "";
   return ch ? `📣 Go show some love to ${name}! Check them out at https://kick.com/${slug}${what}` : `Couldn't find a Kick channel called ${name}.`;
 }
+// ---------- follow / sub / gift thank-yous, timed messages, and the streamer's bot settings ----------
+const ALERT_EVENTS = ["channel.followed", "channel.subscription.new", "channel.subscription.renewal", "channel.subscription.gifts"];
+const BOTCFG_DEFAULT = { follow: true, sub: true, gift: true, timers: [] };
+async function botCfg(env, slug) { return { ...BOTCFG_DEFAULT, ...((await env.STORE.get("botcfg:" + slug, "json")) || {}) }; }
+const uname = u => (u && (u.username || u.name)) || "";
+function chanKey(slug) {   // the same overlay topic name the site uses (three FNV-1a hashes of the channel)
+  let out = "kgc";
+  for (const seed of [2166136261, 3335557771, 1234567891]) {
+    let h = seed; for (const ch of "kick-giveaway-tools:" + slug) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    out += h.toString(36).padStart(7, "0");
+  }
+  return out;
+}
+async function onAlert(env, type, ev) {
+  const b = ev.broadcaster || {}, slug = normSlug(b.channel_slug || b.username), bid = b.user_id;
+  if (!bid || !(await isEnabled(env, slug))) return;
+  const cfg = await botCfg(env, slug);
+  let line = "", alert = null;
+  if (type === "channel.followed") {
+    const n = uname(ev.follower); if (!n || !flag("fol:" + slug + ":" + n.toLowerCase(), 86400)) return;   // unfollow/refollow spam
+    alert = { kind: "follow", name: n }; if (cfg.follow) line = `💚 Thanks for the follow, @${n}!`;
+  } else if (type === "channel.subscription.new" || type === "channel.subscription.renewal") {
+    const n = uname(ev.subscriber), m = +ev.duration || 0; if (!n) return;
+    const re = type.endsWith("renewal") && m > 1;
+    alert = { kind: re ? "resub" : "sub", name: n, months: m };
+    if (cfg.sub) line = re ? `🔁 @${n} just resubscribed for ${m} months! Thank you!` : `🎉 @${n} just subscribed! Welcome to the squad!`;
+  } else if (type === "channel.subscription.gifts") {
+    const g = ev.gifter || {}, n = g.is_anonymous ? "Someone" : uname(g) || "Someone", k = (ev.giftees || []).length || 1;
+    alert = { kind: "gift", name: n, count: k };
+    if (cfg.gift) line = `🎁 ${n === "Someone" ? "Someone" : "@" + n} just gifted ${k} ${k === 1 ? "sub" : "subs"}! Thank you!`;
+  }
+  if (alert) await fetch("https://ntfy.sh/" + chanKey(slug) + "-a", { method: "POST", body: JSON.stringify({ t: "a", ...alert, at: Date.now() }) }).catch(() => {});
+  if (line) await postAsBot(env, bid, line);
+}
+// Timed messages: the cron runs every 5 minutes. A timer posts when (5-minute slot) lines up with its interval,
+// so nothing needs saving between runs, and only while the channel is live.
+async function runTimers(env, when) {
+  const slot = Math.floor(when / 300000);
+  for (const slug of (await env.STORE.get("timerchans", "json")) || []) {
+    const cfg = await botCfg(env, slug), due = (cfg.timers || []).filter((t, i) => { const every = Math.max(1, Math.round((+t.every || 15) / 5)); return (slot + i) % every === 0; });
+    if (!due.length || !(await isEnabled(env, slug))) continue;
+    const ch = await channelInfo(env, slug).catch(() => null);
+    if (!ch || !ch.stream || !ch.stream.is_live) continue;
+    for (const t of due.slice(0, 2)) await postAsBot(env, ch.broadcaster_user_id || await broadcasterId(env, slug), t.text).catch(() => {});
+  }
+}
 async function onRaid(env, ev) {
   const raider = ev.raider || ev.host || ev.from_broadcaster || ev.broadcaster_from || {};
   const name = raider.username || raider.channel_slug || raider.slug || "";
@@ -429,7 +476,8 @@ async function clipsPage(env, slug) {
 }
 
 export default {
-  async scheduled(event, env, ctx) {   // keep every channel's chat subscription alive
+  async scheduled(event, env, ctx) {   // every 5 min: timed messages; every 6 h: keep every channel's event subscriptions alive
+    if (event.cron === "*/5 * * * *") { ctx.waitUntil(runTimers(env, event.scheduledTime || Date.now()).catch(e => env.STORE.put("lasterror", String(e.message || e)))); return; }
     ctx.waitUntil((async () => { for (const c of await channelList(env)) await subscribeChat(env, c.slug).catch(() => {}); })());
   },
   async fetch(req, env, ctx) {
@@ -444,6 +492,7 @@ export default {
       const type = req.headers.get("kick-event-type") || "";
       const fail = e => env.STORE.put("lasterror", String(e.message || e));
       if (type === "chat.message.sent") ctx.waitUntil(onChat(env, JSON.parse(body)).catch(fail));
+      else if (ALERT_EVENTS.includes(type)) ctx.waitUntil(onAlert(env, type, JSON.parse(body)).catch(fail));
       else if (/raid|host/i.test(type)) ctx.waitUntil(onRaid(env, JSON.parse(body)).catch(fail));
       else ctx.waitUntil(env.STORE.put("lastevent:" + type, body.slice(0, 2000), { expirationTtl: 86400 * 7 }));
       return new Response("ok");
@@ -553,6 +602,22 @@ export default {
         let data = null; try { data = JSON.parse(text); } catch (e) {}
         return json({ ok: r.ok && !!data && !data.errors, status: r.status, data: data && data.data, errors: data && data.errors, blocked: !data ? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200) : undefined });
       } catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 200) }, 502); }
+    }
+    if (url.pathname === "/botcfg") {   // Settings > Bot: thank-yous on/off and timed messages
+      const me = await streamerSession(req, env);
+      if (!me) return json({ ok: false, error: "Sign in with Kick first." }, 401);
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        const timers = (Array.isArray(b.timers) ? b.timers : []).slice(0, 5).map(t => ({ text: clean(t.text, 400), every: Math.min(120, Math.max(5, Math.round((+t.every || 15) / 5) * 5)) })).filter(t => t.text);
+        const cfg = { follow: !!b.follow, sub: !!b.sub, gift: !!b.gift, timers };
+        await env.STORE.put("botcfg:" + me.slug, JSON.stringify(cfg));
+        const list = new Set((await env.STORE.get("timerchans", "json")) || []);
+        const had = list.has(me.slug); timers.length ? list.add(me.slug) : list.delete(me.slug);
+        if (had !== list.has(me.slug)) await env.STORE.put("timerchans", JSON.stringify([...list]));
+        ctx.waitUntil(subscribeChat(env, me.slug).catch(() => {}));   // make sure follow/sub events are subscribed
+        return json({ ok: true, cfg });
+      }
+      return json({ ok: true, cfg: await botCfg(env, me.slug) });
     }
     if (url.pathname === "/leave" && req.method === "POST") {   // Settings > Account: the streamer removes the bot from their chat
       const me = await streamerSession(req, env);
