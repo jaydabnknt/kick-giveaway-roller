@@ -16,6 +16,29 @@ jobs:
       - name: Deploy to Cloudflare Pages
         run: |
           mkdir dist && cp index.html dist/
-          npx -y wrangler@4 pages project create jdbbot --production-branch main 2>&1 | tail -3 || true
-          npx -y wrangler@4 pages deploy dist --project-name jdbbot --branch main --commit-dirty=true 2>&1 | tee out.txt
+          npx -y wrangler@4 pages project create toolbot --production-branch main 2>&1 | tail -3 || true
+          npx -y wrangler@4 pages deploy dist --project-name toolbot --branch main --commit-dirty=true 2>&1 | tee out.txt
           echo "SITE URL: $(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' out.txt | head -1)"
+      - name: One-time forwarder on the old address (OBS links and sign-ins move over)
+        run: |
+          OLD="jd""bbot"; mkdir old
+          cat > old/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>ToolBot</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0b0e0f;color:#fff;font:16px system-ui;padding:24px}a{color:#53fc18}</style>
+          <script>
+          (function () {
+            var to = "https://toolbot.pages.dev/", p = new URLSearchParams(location.search), move = "";
+            try {
+              if (!p.has("overlay") && !localStorage.getItem("kick-moved-tb")) {
+                var o = {};
+                for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^kick-/.test(k) && !/avatars|slots-cache|moved/.test(k)) o[k] = localStorage.getItem(k); }
+                move = "#move=" + encodeURIComponent(JSON.stringify(o));
+                localStorage.setItem("kick-moved-tb", "1");
+              }
+            } catch (e) {}
+            location.replace(to + location.search + (move || location.hash));
+          })();
+          </script>
+          <p>ToolBot moved to <a href="https://toolbot.pages.dev/">toolbot.pages.dev</a>.</p>
+          HTML
+          sed -i 's/^          //' old/index.html
+          npx -y wrangler@4 pages deploy old --project-name "$OLD" --branch main --commit-dirty=true 2>&1 | tail -3

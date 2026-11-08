@@ -5,7 +5,7 @@
 <title>Kick Giveaway Tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
-// The site moved to jdbbot.pages.dev. Old github.io links forward there; the first time, this browser's saved
+// The site moved to toolbot.pages.dev. Old github.io links forward there; the first time, this browser's saved
 // giveaway, GTB, calls and settings data comes along in the address and is filled in on the new site.
 (function () {
   try {
@@ -17,7 +17,7 @@
         move = "#move=" + encodeURIComponent(JSON.stringify(o));
         localStorage.setItem("kick-moved", "1");
       }
-      location.replace("https://jdbbot.pages.dev/" + location.search + (move || location.hash));
+      location.replace("https://toolbot.pages.dev/" + location.search + (move || location.hash));
       return;
     }
     if (location.hash.indexOf("#move=") === 0) {
@@ -544,7 +544,7 @@ body.admin .acct { display: none; }
 .pf-acts { margin-top: 14px; }
 .pf-chat time { color: var(--muted); font: 12px var(--mono); }
 
-/* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding JDBBot */
+/* Channel bot pages (?c=channel): commands, who can use them, clip markers, and adding ToolBot */
 body.cp > .wrap:not(#chanPage) { display: none !important; }
 #chanPage { max-width: 760px; }
 .top a.brand { color: inherit; text-decoration: none; }
@@ -576,7 +576,7 @@ a.btn.primary { color: var(--on-accent); }
 <nav class="menu" id="siteMenu" hidden>
   <a href="./">Home</a>
   <a href="?tools">Tools</a>
-  <a class="add" id="menuAdd" href="?add">Add JDBBot to your channel</a>
+  <a class="add" id="menuAdd" href="?add">Add ToolBot to your channel</a>
   <a href="?admin" id="menuAdmin" hidden>Admin</a>
 </nav>
 
@@ -591,7 +591,7 @@ a.btn.primary { color: var(--on-accent); }
   <header class="top">
     <div class="brand">
       <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
-      <a class="h1link" href="./" aria-label="Home"><h1>JDB<span>Bot</span></h1></a>
+      <a class="h1link" href="./" aria-label="Home"><h1>Tool<span>Bot</span></h1></a>
     </div>
   </header>
   <section class="hero">
@@ -677,7 +677,7 @@ a.btn.primary { color: var(--on-accent); }
     <div class="field"><label for="stakeHost">Site</label><select id="stakeHost"><option>stake.com</option><option>stake.us</option><option>stake.ac</option><option>stake.bet</option></select></div>
     <div class="field"><label for="stakeKey">API key</label><input type="password" id="stakeKey" autocomplete="off" spellcheck="false" placeholder="Paste your key"></div>
     <div class="field"><label for="stakeMin">Count it as a bonus at</label><div class="inline"><input type="number" id="stakeMin" min="2" max="10000" step="1" value="20" inputmode="numeric"><span class="hint">× your bet or more</span></div></div>
-    <p class="hint">The key is saved only on this device. It goes through JDBBot to Stake on each check and is never stored there.</p>
+    <p class="hint">The key is saved only on this device. It goes through ToolBot to Stake on each check and is never stored there.</p>
     <div class="row"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="stakeTest">Test</button><button class="btn ghost danger" type="button" id="stakeForget">Forget key</button></div>
     <p class="hint" id="stakeMsg" style="overflow-wrap:anywhere"></p>
   </form>
@@ -713,7 +713,7 @@ a.btn.primary { color: var(--on-accent); }
   </header>
   <section class="cp-box" id="setLogin" hidden>
     <h3>Sign in first</h3>
-    <p class="hint">Settings are for streamers who added JDBBot. Log in with Kick to see yours.</p>
+    <p class="hint">Settings are for streamers who added ToolBot. Log in with Kick to see yours.</p>
     <div class="row"><a class="btn primary" id="setLoginBtn" href="#">Log in with Kick</a></div>
   </section>
   <div id="setBody" hidden style="display:grid;gap:18px">
@@ -726,7 +726,7 @@ a.btn.primary { color: var(--on-accent); }
     </nav>
     <section class="cp-box" data-setview="account">
       <div class="set-prof"><span class="acct-btn" id="setAv"></span><div><b id="setName"></b><span class="hint" id="setChan"></span></div></div>
-      <div class="row"><button class="btn danger" id="setLeave" type="button">Remove JDBBot from my channel</button></div>
+      <div class="row"><button class="btn danger" id="setLeave" type="button">Remove ToolBot from my channel</button></div>
       <p class="hint" id="setLeaveMsg">The bot leaves your chat and your custom commands stop working. You can add it again any time from the home page.</p>
     </section>
     <section class="cp-box" data-setview="bot" hidden>
@@ -772,7 +772,7 @@ a.btn.primary { color: var(--on-accent); }
   </header>
   <section class="cp-box" id="dbLogin" hidden>
     <h3>Owner only</h3>
-    <p class="hint">Log in with the Kick account that owns JDBBot.</p>
+    <p class="hint">Log in with the Kick account that owns ToolBot.</p>
     <div class="row"><a class="btn primary" id="dbLoginBtn" href="#">Log in with Kick</a></div>
     <p class="cp-err" id="dbErr" hidden></p>
   </section>
@@ -808,13 +808,13 @@ a.btn.primary { color: var(--on-accent); }
   <header class="top">
     <div class="brand">
       <button class="mark" type="button" data-menu aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="#0b0e0f" stroke-width="2.4" stroke-linecap="round"/><path d="M1 10l3-2v4z" fill="#0b0e0f"/></svg></button>
-      <a class="h1link" href="./" aria-label="Home"><h1>JDB<span>Bot</span></h1></a>
+      <a class="h1link" href="./" aria-label="Home"><h1>Tool<span>Bot</span></h1></a>
     </div>
     <span class="pill" id="cpPill">Loading</span>
   </header>
   <section class="cp-box">
     <h2 id="cpTitle">Find a channel</h2>
-    <p class="hint" id="cpLead">Type a Kick channel to see its JDBBot commands, or to add JDBBot to it.</p>
+    <p class="hint" id="cpLead">Type a Kick channel to see its ToolBot commands, or to add ToolBot to it.</p>
     <form class="row" id="cpFind">
       <input type="text" id="cpChan" placeholder="Kick channel name" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1 1 200px">
       <button class="btn primary" type="submit">Open</button>
@@ -826,7 +826,7 @@ a.btn.primary { color: var(--on-accent); }
     <div class="row"><a class="btn primary" id="cpAllow" href="#">Allow</a></div>
   </section>
   <section class="cp-box" id="cpAdd" hidden>
-    <h3>Add JDBBot</h3>
+    <h3>Add ToolBot</h3>
     <p class="hint" id="cpAddHint">Tap Add with Kick while you're logged in to Kick as this channel.</p>
     <form class="row" id="cpKeyForm">
       <button class="btn primary" type="submit">Add with Kick</button>
@@ -841,7 +841,7 @@ a.btn.primary { color: var(--on-accent); }
   </section>
   <section class="cp-box" id="cpCustomBox" hidden>
     <h3>This channel's commands</h3>
-    <p class="hint" id="cpCustomHint">Added by mods with <code>!jdb add</code>. Use {user}, {touser} or {count} in the text</p>
+    <p class="hint" id="cpCustomHint">Added by mods with <code>!tb add</code>. Use {user}, {touser} or {count} in the text</p>
     <form class="cmd-form" id="cmdForm" hidden>
       <div class="field"><label for="cmdName">Command</label><input type="text" id="cmdName" placeholder="!discord" maxlength="21" autocomplete="off" spellcheck="false" autocapitalize="off"></div>
       <div class="field"><label for="cmdText">Response</label><input type="text" id="cmdText" placeholder="Join the Discord: discord.gg/…" maxlength="400" autocomplete="off"></div>
@@ -906,8 +906,8 @@ a.btn.primary { color: var(--on-accent); }
           </div>
           <p class="hint" id="botMsg"></p>
           <div class="bot-opts" id="botOpts"></div>
-          <p class="hint">JDBBot posts in the channel typed in Kick chat above. That channel needs to have tapped Allow on its bot page.</p>
-          <p class="hint"><a id="botPageLink" style="color:var(--accent)" href="?c=">Your bot page</a> lists your commands and clip markers. Other streamers add JDBBot from their own page.</p>
+          <p class="hint">ToolBot posts in the channel typed in Kick chat above. That channel needs to have tapped Allow on its bot page.</p>
+          <p class="hint"><a id="botPageLink" style="color:var(--accent)" href="?c=">Your bot page</a> lists your commands and clip markers. Other streamers add ToolBot from their own page.</p>
         </div>
       </details>
       <details class="panel" id="chatPanel" open>
@@ -2940,9 +2940,9 @@ if (OVERLAY) {
 }
 
 // ---------- chat bot ----------
-// JDBBot runs on Cloudflare Workers (see the bot branch of the repo). The page sends an event name and a
-// few fields; the bot builds the chat line itself and posts it as JDBBot. Nothing to sign in to here.
-const BOT_LS = "kick-giveaway-bot", BOT_URL = "https://jdbbot.jdbbot.workers.dev";
+// ToolBot runs on Cloudflare Workers (see the bot branch of the repo). The page sends an event name and a
+// few fields; the bot builds the chat line itself and posts it as ToolBot. Nothing to sign in to here.
+const BOT_LS = "kick-giveaway-bot", BOT_URL = "https://toolbot.toolbott.workers.dev";
 
 // ---------- streamer sign-in ----------
 // Only a channel's own streamer can start GTB or slot calls. They log in with Kick once (the bot checks
@@ -2960,7 +2960,7 @@ if (!OVERLAY) {
     if (streamer.slug && !$("channel").value.trim()) { $("channel").value = streamer.slug; S.channel = streamer.slug; save(); }
   }
 }
-// The tools page is only for approved streamers (their channel has JDBBot, added with a key from Jay or an
+// The tools page is only for approved streamers (their channel has ToolBot, added with a key from Jay or an
 // approved request). Signed in, the channel box is locked to their own channel.
 const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && (params.has("tools") || !!location.hash);
 let meChecked = false;
@@ -3076,13 +3076,13 @@ function renderBot() {
 $("botOn").addEventListener("change", () => { bot.enabled = $("botOn").checked; saveBot(); renderBot(); });
 $("botTest").addEventListener("click", () => botSay("test"));
 if (!OVERLAY) fetchWithTimeout(BOT_URL + "/health", 10000).then(r => r.json()).then(j => {
-  $("botStatus").textContent = j.ok ? `${j.bot || "JDBBot"} is online.` : "The bot is offline right now.";
+  $("botStatus").textContent = j.ok ? `${j.bot || "ToolBot"} is online.` : "The bot is offline right now.";
 }).catch(() => { $("botStatus").textContent = "Couldn't reach the bot right now."; });
 renderBot();
 const botPageRefresh = () => { const c = chanSlug($("channel").value); $("botPageLink").href = "?c=" + encodeURIComponent(c); };
 $("channel").addEventListener("input", botPageRefresh); botPageRefresh();
 
-// Top-left menu: the site, your bot page, and adding JDBBot to a channel.
+// Top-left menu: the site, your bot page, and adding ToolBot to a channel.
 const menu = $("siteMenu");
 function setMenu(open) {
   menu.hidden = !open;
@@ -3093,18 +3093,18 @@ document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.t
 document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
 
 // ---------- channel bot pages (?c=channel) ----------
-// One page per channel that uses JDBBot: its commands and who can use them (what !commands links to), its
-// own commands added with !jdb add, its clip markers, and a way for the streamer to add the bot.
+// One page per channel that uses ToolBot: its commands and who can use them (what !commands links to), its
+// own commands added with !tb add, its clip markers, and a way for the streamer to add the bot.
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
 const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !location.hash;
-if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "JDBBot"; }
+if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "ToolBot"; }
 $("homeAdd").href = BOT_URL + "/allow"; $("menuAdd").href = BOT_URL + "/allow";
 if (HOME) {
   if (streamer.tok) { $("homeAdd").hidden = true; $("homeTools").hidden = false; }
   $("homeModIn").href = BOT_URL + "/modlogin";
   let ms = ""; try { ms = localStorage.getItem("kick-mod") || ""; } catch (e) {}
   if (ms) { $("homeModIn").hidden = true; $("homeModOpen").hidden = false; }
-  if (params.get("err") === "banned") { $("homeErr").textContent = "This channel can't use JDBBot."; $("homeErr").hidden = false; history.replaceState(null, "", location.pathname); }
+  if (params.get("err") === "banned") { $("homeErr").textContent = "This channel can't use ToolBot."; $("homeErr").hidden = false; history.replaceState(null, "", location.pathname); }
   if (params.get("err") === "notadded") { $("homeErr").textContent = "You have to add the bot to your Kick chat first, then you can sign in."; $("homeErr").hidden = false; history.replaceState(null, "", location.pathname); }
 }
 const CHANPAGE = params.has("c") ? chanSlug(params.get("c")).replace(/_/g, "-") : params.has("add") ? "" : null;
@@ -3126,13 +3126,13 @@ if (CHANPAGE !== null) {
   const hm = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
   async function loadChanPage() {
     if (!CHANPAGE) {
-      pill("", "JDBBot");
-      if (params.has("add")) { $("cpTitle").textContent = "Add JDBBot"; $("cpLead").textContent = "Type your Kick channel to start."; }
+      pill("", "ToolBot");
+      if (params.has("add")) { $("cpTitle").textContent = "Add ToolBot"; $("cpLead").textContent = "Type your Kick channel to start."; }
       return;
     }
-    document.title = CHANPAGE + " · JDBBot";
-    $("cpChan").value = CHANPAGE; $("cpTitle").innerHTML = `JDBBot in <span>${escapeHtml(CHANPAGE)}</span>`;
-    let d; try { d = await call("/channel?ch=" + encodeURIComponent(CHANPAGE)); } catch (e) { pill("err", "Offline"); $("cpLead").textContent = "Couldn't reach JDBBot right now. Try again in a minute."; return; }
+    document.title = CHANPAGE + " · ToolBot";
+    $("cpChan").value = CHANPAGE; $("cpTitle").innerHTML = `ToolBot in <span>${escapeHtml(CHANPAGE)}</span>`;
+    let d; try { d = await call("/channel?ch=" + encodeURIComponent(CHANPAGE)); } catch (e) { pill("err", "Offline"); $("cpLead").textContent = "Couldn't reach ToolBot right now. Try again in a minute."; return; }
     if (!d.ok) { pill("err", "Error"); $("cpLead").textContent = d.error || "Something went wrong."; return; }
     $("cpFind").hidden = true;
     $("cpCmds").hidden = false;
@@ -3150,7 +3150,7 @@ if (CHANPAGE !== null) {
     $("cpBadge").hidden = !!d.badge;
     $("cpCustomBox").hidden = false;
     owner = !!(streamer.tok && sameChan(streamer.slug, CHANPAGE));
-    if (owner) { $("cmdForm").hidden = false; $("cmdActHead").hidden = false; $("cpCustom").closest("table").classList.add("owner"); $("cpCustomHint").innerHTML = "Add and edit them here, or mods can use <code>!jdb add</code> in chat. Use {user}, {touser} or {count} in the text"; }
+    if (owner) { $("cmdForm").hidden = false; $("cmdActHead").hidden = false; $("cpCustom").closest("table").classList.add("owner"); $("cpCustomHint").innerHTML = "Add and edit them here, or mods can use <code>!tb add</code> in chat. Use {user}, {touser} or {count} in the text"; }
     renderCustom(d.custom);
     if (d.clips && d.clips.length) {
       $("cpClipsBox").hidden = false;
@@ -3185,7 +3185,7 @@ if (CHANPAGE !== null) {
       const j = await r.json().catch(() => ({}));
       if (!j.ok) { cmdErr(j.error || "Couldn't save that."); return false; }
       renderCustom(j.custom); return true;
-    } catch (e) { cmdErr("Couldn't reach JDBBot. Check your connection."); return false; }
+    } catch (e) { cmdErr("Couldn't reach ToolBot. Check your connection."); return false; }
   }
   $("cmdForm").addEventListener("submit", async e => {
     e.preventDefault();
@@ -3209,7 +3209,7 @@ if (CHANPAGE !== null) {
       if (d.enabled) { location.reload(); return; }
       if (!d.ok) { err(d.error); return; }
       $("cpReqRow").hidden = true; reqMsg("Access requested. Come back here once it's approved.");
-    } catch (e) { err("Couldn't reach JDBBot. Check your connection."); }
+    } catch (e) { err("Couldn't reach ToolBot. Check your connection."); }
     finally { $("cpRequest").disabled = false; }
   });
   loadChanPage();
@@ -3293,7 +3293,7 @@ if (!OVERLAY) {
       const b = await stakeCall(STAKE_BETS, { limit: 5, offset: 0 });
       const n = b.ok ? (((b.data || {}).user || {}).houseBetList || []).length : -1;
       msg(`Connected as ${a.data.user.name}. ` + (b.ok ? `Read ${n} recent bets.` : "But reading bets failed: " + stakeErr(b)));
-    } catch (er) { msg("Couldn't reach JDBBot."); }
+    } catch (er) { msg("Couldn't reach ToolBot."); }
     finally { stakeCfg = saved; }
   });
   setTimeout(stakeStart, 1500);   // after the sign-in check
@@ -3302,7 +3302,7 @@ if (!OVERLAY) {
 // ---------- settings (?settings) ----------
 // Account (your profile, and removing the bot), OBS overlay links for every tool, and presets (later).
 if (params.has("settings")) {
-  document.body.classList.add("settings"); $("settingsPage").hidden = false; document.title = "Settings · JDBBot";
+  document.body.classList.add("settings"); $("settingsPage").hidden = false; document.title = "Settings · ToolBot";
   const show = () => {
     const on = !!streamer.tok;
     $("setLogin").hidden = on; $("setBody").hidden = !on;
@@ -3337,14 +3337,14 @@ if (params.has("settings")) {
   }));
   $("setLeave").addEventListener("click", async () => {
     const b = $("setLeave");
-    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to remove JDBBot"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove JDBBot from my channel"; }, 3000); return; }
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tap again to remove ToolBot"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Remove ToolBot from my channel"; }, 3000); return; }
     b.disabled = true; $("setLeaveMsg").textContent = "Removing…";
     try {
       const r = await fetchWithTimeout(BOT_URL + "/leave", 20000, { method: "POST", headers: { authorization: "Bearer " + streamer.tok } });
       const j = await r.json().catch(() => ({}));
       if (!j.ok) { $("setLeaveMsg").textContent = j.error || "Couldn't remove the bot."; b.disabled = false; return; }
       streamer = { tok: "", slug: "" }; saveStreamer(); location.href = "./";
-    } catch (e) { $("setLeaveMsg").textContent = "Couldn't reach JDBBot. Check your connection."; b.disabled = false; }
+    } catch (e) { $("setLeaveMsg").textContent = "Couldn't reach ToolBot. Check your connection."; b.disabled = false; }
   });
   show(); addEventListener("streamer-updated", show);
   // Bot tab: thank-you switches and timed messages, saved on the bot.
@@ -3372,17 +3372,17 @@ if (params.has("settings")) {
   $("bcSave").addEventListener("click", async () => {
     $("bcSave").disabled = true; bcMsg("Saving…");
     try { const j = await botApi({ follow: $("bcFollow").checked, sub: $("bcSub").checked, gift: $("bcGift").checked, timers }); if (!j.ok) bcMsg(j.error || "Couldn't save.", true); else { fillBot(j.cfg); bcMsg("Saved."); } }
-    catch (e) { bcMsg("Couldn't reach JDBBot.", true); }
+    catch (e) { bcMsg("Couldn't reach ToolBot.", true); }
     finally { $("bcSave").disabled = false; }
   });
-  if (streamer.tok) botApi().then(j => { if (j.ok) fillBot(j.cfg); }).catch(() => bcMsg("Couldn't reach JDBBot.", true));
+  if (streamer.tok) botApi().then(j => { if (j.ok) fillBot(j.cfg); }).catch(() => bcMsg("Couldn't reach ToolBot.", true));
 }
 
 // ---------- owner dashboard (?admin) ----------
-// Only the Kick account that owns JDBBot can sign in (the bot checks it). Lists every channel with the bot,
+// Only the Kick account that owns ToolBot can sign in (the bot checks it). Lists every channel with the bot,
 // and a banned list: banned streamers can't add it.
 if (params.has("admin")) {
-  document.body.classList.add("admin"); $("adminPage").hidden = false; document.title = "Admin · JDBBot";
+  document.body.classList.add("admin"); $("adminPage").hidden = false; document.title = "Admin · ToolBot";
   const SESS_LS = "kick-admin-session";
   const hs = location.hash.match(/^#s=([\w-]+)/);
   if (hs) { try { localStorage.setItem(SESS_LS, hs[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
@@ -3439,14 +3439,14 @@ if (params.has("admin")) {
   $("dbBannedDlg").addEventListener("click", e => { if (e.target === $("dbBannedDlg")) $("dbBannedDlg").close(); });
   $("dbLogout").addEventListener("click", async () => { try { await api("logout", {}); } catch (e) {} try { localStorage.removeItem(SESS_LS); } catch (e) {} sess = ""; showLogin(); });
   if (!sess) showLogin();
-  else api("state").then(render).catch(e => { if (e.message !== "signin") showLogin("Couldn't reach JDBBot right now."); });
+  else api("state").then(render).catch(e => { if (e.message !== "signin") showLogin("Couldn't reach ToolBot right now."); });
 }
 
 // ---------- mod tools (?mod) ----------
 // Only Kick usernames on the access list (Admin page) can sign in; the bot checks it. Anyone else lands back home.
 // Nothing in it yet: the tools come later.
 if (params.has("mod") && !OVERLAY) {
-  document.body.classList.add("mod"); $("modPage").hidden = false; document.title = "Mod tools · JDBBot";
+  document.body.classList.add("mod"); $("modPage").hidden = false; document.title = "Mod tools · ToolBot";
   const MS_LS = "kick-mod", hm = location.hash.match(/^#ms=([\w-]+)/);
   if (hm) { try { localStorage.setItem(MS_LS, hm[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); }
   let tok = ""; try { tok = localStorage.getItem(MS_LS) || ""; } catch (e) {}
@@ -3458,7 +3458,7 @@ if (params.has("mod") && !OVERLAY) {
     $("modName").textContent = j.name;
     if (/^https:\/\//.test(j.pic || "")) { $("modPic").src = j.pic; $("modPic").hidden = false; }
     $("modBody").hidden = false; $("modTools").hidden = false; udbLoad();
-  }).catch(() => { $("modName").textContent = "Couldn't reach JDBBot right now."; $("modBody").hidden = false; });
+  }).catch(() => { $("modName").textContent = "Couldn't reach ToolBot right now."; $("modBody").hidden = false; });
   // ---- user database: Add user, Database (every entry editable), Search ----
   const F = [["kick", "Kick"], ["telegram", "Telegram"], ["discord", "Discord"], ["stake", "Stake"]];
   let entries = [];
@@ -3652,7 +3652,7 @@ if (params.has("mod") && !OVERLAY) {
 
 // ---------- raid thank-you ----------
 // Kick doesn't tell bots about raids, but its public chat feed shows a raid notice. The site (while connected)
-// and every OBS overlay (open whenever OBS is) watch for it and ask JDBBot to thank the raider; the bot only
+// and every OBS overlay (open whenever OBS is) watch for it and ask ToolBot to thank the raider; the bot only
 // posts the first one it hears about.
 function tellBotRoom(slug, id) {
   fetchWithTimeout(BOT_URL + "/room", 10000, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ch: slug, id }) }).catch(() => {});
