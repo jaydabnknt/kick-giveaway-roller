@@ -6,8 +6,15 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          B=https://toolbot.toolbott.workers.dev
-          echo "health:"; curl -s $B/health | head -c 800; echo
-          echo "setup:"; curl -s $B/setup | head -c 3000; echo
-          echo "health2:"; curl -s $B/health | head -c 800; echo
+      - env:
+          CID: ${{ secrets.KICK_CLIENT_ID }}
+          CS: ${{ secrets.KICK_CLIENT_SECRET }}
+        run: |
+          T=$(curl -s -X POST https://id.kick.com/oauth/token -d "grant_type=client_credentials&client_id=$CID&client_secret=$CS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).access_token||""))')
+          [ -n "$T" ] || { echo "no token"; exit 1; }
+          ID=$(curl -s -H "Authorization: Bearer $T" "https://api.kick.com/public/v1/channels?slug=xqc" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);console.log(d.data&&d.data[0]&&d.data[0].broadcaster_user_id||"")})')
+          echo "xqc id: $ID"
+          R=$(curl -s -X POST -H "Authorization: Bearer $T" -H "content-type: application/json" https://api.kick.com/public/v1/events/subscriptions -d "{\"broadcaster_user_id\":$ID,\"method\":\"webhook\",\"events\":[{\"name\":\"chat.message.sent\",\"version\":1}]}")
+          echo "subscribe: $R"
+          SID=$(echo "$R" | grep -oE '"subscription_id":"[^"]+"' | cut -d'"' -f4)
+          if [ -n "$SID" ]; then echo "cleanup:"; curl -s -X DELETE -H "Authorization: Bearer $T" "https://api.kick.com/public/v1/events/subscriptions?id=$SID" -w " %{http_code}"; echo; fi
