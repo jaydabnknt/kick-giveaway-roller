@@ -637,21 +637,60 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .marker { box-shadow: none; }
 @media (min-width: 861px) { .stage { top: 76px; } }
 #modTools .set-nav button[aria-selected="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-/* Motion, Kick-style: quick colour fades on buttons, a small press, pop-ups that fade and zoom in, menus that drop in */
-.btn, .roll, .tabs button, .set-nav button, .seg button, .menu a, .acct-menu a, .log-user, .dash-item .btn, .mark { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .1s ease, opacity .15s ease; }
-.btn:active:not(:disabled), .roll:active:not(:disabled), .mark:active { transform: scale(.97); }
+/* Motion, Kick-style (eased, not instant): colour fades and a soft press on buttons, pop-ups that zoom in and out,
+   menus that drop open and fold away, panels and tabs that slide in, lists that fade in, the page easing in on load. */
+:root { --ease: cubic-bezier(.16, 1, .3, 1); --ease-in: cubic-bezier(.4, 0, 1, 1); }
+.btn, .roll, .tabs button, .set-nav button, .seg button, .menu a, .acct-menu a, .log-user, .mark, .acct img, .acct button, .kline, .dash-item, .udb-card, .entry, .call, .guess, a.kn, .kmention, .kch, input, select, textarea, .sw input, .sw input::after {
+  transition: background-color .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease, transform .2s var(--ease), opacity .25s ease, filter .25s ease;
+}
+.btn:active:not(:disabled), .roll:active:not(:disabled), .mark:active, .acct img:active, .tabs button:active, .set-nav button:active, .seg button:active { transform: scale(.95); transition-duration: .1s; }
+.btn.primary:hover:not(:disabled), .roll:hover:not(:disabled) { filter: brightness(1.08); }
 .btn.primary:active:not(:disabled) { background: var(--accent-deep); }
-@keyframes kPopIn { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+.log-user:hover, .dash-item:hover, .udb-card:hover { background: #2c3036; }
+@keyframes kPopIn { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes kPopOut { to { opacity: 0; transform: translateY(6px) scale(.96); } }
 @keyframes kFadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes kDropIn { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
-dialog[open] { animation: kPopIn .2s cubic-bezier(.16, 1, .3, 1); }
-dialog[open]::backdrop { animation: kFadeIn .2s ease-out; background: rgb(0 0 0 / .7); }
-dialog.closing { animation: kFadeOut .12s ease-in forwards; }
-dialog.closing::backdrop { animation: kFadeOut .12s ease-in forwards; }
-@keyframes kFadeOut { to { opacity: 0; transform: scale(.98); } }
-.menu:not([hidden]), .acct-menu:not([hidden]) { animation: kDropIn .16s cubic-bezier(.16, 1, .3, 1); transform-origin: top left; }
+@keyframes kFadeOut { to { opacity: 0; } }
+@keyframes kDropIn { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes kDropOut { to { opacity: 0; transform: translateY(-8px) scale(.97); } }
+@keyframes kRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes kSlideIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes kOpen { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes kPop { 0% { opacity: 0; transform: scale(.85); } 60% { opacity: 1; transform: scale(1.04); } 100% { transform: none; } }
+dialog[open] { animation: kPopIn .35s var(--ease); }
+dialog[open]::backdrop { animation: kFadeIn .35s ease-out; background: rgb(0 0 0 / .7); }
+dialog.closing { animation: kPopOut .22s var(--ease-in) forwards; }
+dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
+.menu:not([hidden]), .acct-menu:not([hidden]) { animation: kDropIn .3s var(--ease); transform-origin: top left; }
 .acct-menu:not([hidden]) { transform-origin: top right; }
-[data-mpanel]:not([hidden]), [data-panel]:not([hidden]), .tab-panel:not([hidden]) { animation: kFadeIn .15s ease-out; }
+.menu.closing, .acct-menu.closing { animation: kDropOut .2s var(--ease-in) forwards; pointer-events: none; }
+.menu:not([hidden]) a, .acct-menu:not([hidden]) a { animation: kRise .35s var(--ease) backwards; }
+.menu:not([hidden]) a:nth-child(2), .acct-menu:not([hidden]) a:nth-child(2) { animation-delay: .03s; }
+.menu:not([hidden]) a:nth-child(3), .acct-menu:not([hidden]) a:nth-child(3) { animation-delay: .06s; }
+.menu:not([hidden]) a:nth-child(4), .acct-menu:not([hidden]) a:nth-child(4) { animation-delay: .09s; }
+.menu:not([hidden]) a:nth-child(5) { animation-delay: .12s; }
+/* page load: header, then content rises in */
+.wrap:not([hidden]) > *:not(.top) { animation: kRise .5s var(--ease) backwards; }
+.wrap:not([hidden]) > *:nth-child(3) { animation-delay: .06s; }
+.wrap:not([hidden]) > *:nth-child(4) { animation-delay: .12s; }
+.wrap:not([hidden]) > *:nth-child(n+5) { animation-delay: .18s; }
+.top { animation: kFadeIn .4s ease-out backwards; }
+/* tabs and sub-views slide/fade in when switched */
+[data-view]:not([hidden]), [data-setview]:not([hidden]), [data-mpanel]:not([hidden]), #logChansView:not([hidden]), #logUsersView:not([hidden]), #logUserView:not([hidden]) { animation: kSlideIn .35s var(--ease); }
+/* collapsible panels open smoothly; the arrow turns */
+.panel[open] > .panel-body { animation: kOpen .35s var(--ease); }
+.panel > summary::after { transition: transform .3s var(--ease), margin .3s var(--ease); }
+/* things that appear: winner, claim countdown, notices, entries, list rows, chat lines */
+.claim:not([hidden]), .notice:not([hidden]), .share-out:not([hidden]), #udbSame:not([hidden]), .cp-err:not([hidden]), .udb-msg:not([hidden]) { animation: kPop .4s var(--ease); }
+.result.won { animation: kPop .5s var(--ease); }
+.entry { animation: kPop .35s var(--ease) backwards; }
+.log-user, .dash-item, .udb-card { animation: kRise .4s var(--ease) backwards; }
+.log-list > :nth-child(2), .dash-list > :nth-child(2) { animation-delay: .03s; }
+.log-list > :nth-child(3), .dash-list > :nth-child(3) { animation-delay: .06s; }
+.log-list > :nth-child(4), .dash-list > :nth-child(4) { animation-delay: .09s; }
+.log-list > :nth-child(n+5), .dash-list > :nth-child(n+5) { animation-delay: .12s; }
+.kline { animation: kFadeIn .3s ease-out backwards; }
+.tabs button[aria-selected="true"], .set-nav button[aria-selected="true"] { transition-duration: .3s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after, dialog::backdrop { animation: none !important; transition: none !important; } }
 </style>
 <script>
@@ -662,7 +701,7 @@ dialog.closing::backdrop { animation: kFadeOut .12s ease-in forwards; }
     var d = this;
     if (!d.open || d.classList.contains("closing") || matchMedia("(prefers-reduced-motion: reduce)").matches) return close.call(d, v);
     d.classList.add("closing");
-    d._closeT = setTimeout(function () { d.classList.remove("closing"); close.call(d, v); }, 120);
+    d._closeT = setTimeout(function () { d.classList.remove("closing"); close.call(d, v); }, 220);
   };
   ["showModal", "show"].forEach(function (k) {   // reopening mid-fade: finish closing first
     var open = HTMLDialogElement.prototype[k];
@@ -3125,7 +3164,7 @@ function streamerGate() {
 // Top-right account button: the Kick profile picture, with Presets, My commands and Sign out.
 const acctMenu = $("acctMenu");
 function setAcctMenu(open, from) {
-  acctMenu.hidden = !open;
+  hideAnimated(acctMenu, open);
   document.querySelectorAll(".acct-btn").forEach(b => b.setAttribute("aria-expanded", String(open)));
   if (open && from) { const r = from.getBoundingClientRect(); acctMenu.style.top = (r.bottom + 8) + "px"; acctMenu.style.right = Math.max(12, innerWidth - r.right) + "px"; }
 }
@@ -3145,7 +3184,7 @@ function renderAcct() {
     b.setAttribute("aria-label", "Account menu for " + (streamer.name || streamer.slug)); b.setAttribute("aria-haspopup", "true"); b.setAttribute("aria-expanded", "false");
     const initial = () => { b.replaceChildren((streamer.name || streamer.slug || "?").charAt(0).toUpperCase()); };
     if (streamer.pic) { const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = streamer.pic; img.onerror = initial; b.append(img); } else initial();
-    b.addEventListener("click", e => { e.stopPropagation(); setAcctMenu(acctMenu.hidden, b); });
+    b.addEventListener("click", e => { e.stopPropagation(); setAcctMenu(acctMenu.hidden || acctMenu.classList.contains("closing"), b); });
     slot.replaceChildren(b);
   }
   $("acctName").textContent = streamer.name || streamer.slug || "";
@@ -3220,11 +3259,17 @@ $("channel").addEventListener("input", botPageRefresh); botPageRefresh();
 
 // Top-left menu: the site, your bot page, and adding ToolBot to a channel.
 const menu = $("siteMenu");
+function hideAnimated(el, open) {   // menus fold away instead of vanishing
+  clearTimeout(el._hideT); el.classList.remove("closing");
+  if (open) { el.hidden = false; return; }
+  if (el.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.hidden = true; return; }
+  el.classList.add("closing"); el._hideT = setTimeout(() => { el.hidden = true; el.classList.remove("closing"); }, 200);
+}
 function setMenu(open) {
-  menu.hidden = !open;
+  hideAnimated(menu, open);
   document.querySelectorAll("[data-menu]").forEach(b => b.setAttribute("aria-expanded", String(open)));
 }
-document.querySelectorAll("[data-menu]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setMenu(menu.hidden); }));
+document.querySelectorAll("[data-menu]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setMenu(menu.hidden || menu.classList.contains("closing")); }));
 document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) setMenu(false); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
 
