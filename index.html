@@ -478,17 +478,27 @@ body.mod .acct { display: none; }
 .udb-card .row .btn { min-height: 34px; padding: 6px 12px; font-size: 13px; }
 .udb-msg[hidden] { display: none; }
 #modTools .set-nav button { white-space: nowrap; padding: 0 8px; font-size: 13px; }
-.log-user { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
-.log-user b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.log-user span { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.log-av { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--panel); display: grid; place-items: center; font: 700 13px var(--mono); color: var(--accent); }
+.log-list { display: grid; border: 1px solid var(--line); border-radius: 10px; background: #0b0e0f; overflow: hidden; }
+.log-user { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; border-top: 1px solid rgb(255 255 255 / .06); background: none; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.log-user:first-child { border-top: 0; }
+.log-user:hover { background: rgb(255 255 255 / .04); }
+.log-user b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.log-user span { color: #8a9099; font-size: 12px; white-space: nowrap; }
+.log-av { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #24272c; display: grid; place-items: center; font: 700 13px var(--mono); color: var(--accent); }
 .log-av.big { width: 44px; height: 44px; font-size: 18px; }
 .log-head { display: flex; align-items: center; gap: 12px; }
 .log-head .meta { color: var(--muted); font-size: 13px; }
-.log-msg { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
-.log-msg .when { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
-.log-msg .ch { color: var(--accent); font: 700 12px var(--mono); }
-.log-msg p { margin: 0; overflow-wrap: anywhere; }
+.kchat { background: #0b0e0f; border: 1px solid var(--line); border-radius: 10px; max-height: 70vh; overflow-y: auto; padding: 6px 0; font: 500 14px/1.6 Inter, system-ui, sans-serif; color: #fff; }
+.kchat .kline { padding: 3px 12px; overflow-wrap: anywhere; }
+.kchat .kline:hover { background: rgb(255 255 255 / .04); }
+.kchat .kt { color: #8a9099; font-size: 12px; margin-right: 6px; }
+.kchat .kch { color: #8a9099; font-size: 12px; margin-right: 6px; }
+.kchat .kn { font-weight: 700; }
+.kchat .kb { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 3px; margin-right: 3px; vertical-align: -2px; font: 800 9px/1 Inter, system-ui, sans-serif; color: #0b0e0f; }
+.kchat .ke { height: 28px; vertical-align: middle; margin: -4px 1px; }
+.kchat .kday { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: #8a9099; font-size: 12px; font-weight: 600; }
+.kchat .kday::before, .kchat .kday::after { content: ""; flex: 1; height: 1px; background: rgb(255 255 255 / .08); }
+.kchat .kmore { display: block; margin: 4px auto 8px; }
 .mod-who img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--bg); }
 .feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; color: inherit; text-decoration: none; }
@@ -648,15 +658,14 @@ a.btn.primary { color: var(--on-accent); }
       <div id="logUsersView" style="display:grid;gap:12px">
         <h3>Chat logs <span class="badge" id="logTotal"></span></h3>
         <input type="search" id="logQ" placeholder="Find a Kick username" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <div id="logUsers" class="dash-list"></div>
+        <div id="logUsers" class="log-list"></div>
         <button class="btn" type="button" id="logMore" hidden>Load more</button>
         <p class="hint" id="logErr" hidden></p>
       </div>
       <div id="logUserView" style="display:grid;gap:12px" hidden>
         <div class="row"><button class="btn" type="button" id="logBack">← All users</button></div>
         <div class="log-head" id="logHead"></div>
-        <div id="logMsgs" class="dash-list"></div>
-        <button class="btn" type="button" id="logMsgMore" hidden>Load more</button>
+        <div id="logMsgs" class="kchat"><button class="btn kmore" type="button" id="logMsgMore" hidden>Load older messages</button><div id="logLines"></div></div>
       </div>
     </section>
   </div>
@@ -3568,7 +3577,7 @@ if (params.has("mod") && !OVERLAY) {
       if (j.total !== undefined) $("logTotal").textContent = j.total || "";
       const rows = j.users.map(u => {
         const b = document.createElement("button"); b.type = "button"; b.className = "log-user";
-        const n = document.createElement("b"); n.textContent = u.name; const t = document.createElement("span"); t.textContent = seen(u.last);
+        const n = document.createElement("b"); n.textContent = u.name; if (u.color) n.style.color = u.color; const t = document.createElement("span"); t.textContent = seen(u.last);
         b.append(avatar(u), n, t); b.addEventListener("click", () => logOpen(u.uid)); return b;
       });
       if (more) $("logUsers").append(...rows);
@@ -3577,26 +3586,53 @@ if (params.has("mod") && !OVERLAY) {
       $("logMore").hidden = !j.more;
     } catch (e) { if (e.message !== "signin" && seq === logSeq) logErr("Couldn't load the logs: " + e.message); }
   }
+  const BADGES = { broadcaster: ["#e9113c", "▶"], moderator: ["#00c7ff", "M"], vip: ["#ffc800", "V"], subscriber: ["#53fc18", "★"], og: ["#ff9d00", "OG"], founder: ["#ffb800", "F"], verified: ["#1475e1", "✓"], sub_gifter: ["#a46bff", "G"], staff: ["#53fc18", "K"] };
+  const kickText = (el, text) => {   // chat text with Kick emotes ([emote:id:name]) as images
+    const re = /\[emote:(\d+):([^\]]*)\]/g; let i = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > i) el.append(text.slice(i, m.index));
+      const name = m[2], img = document.createElement("img"); img.className = "ke"; img.alt = img.title = name; img.loading = "lazy"; img.src = "https://files.kick.com/emotes/" + m[1] + "/fullsize";
+      img.addEventListener("error", () => img.replaceWith(name));
+      el.append(img); i = re.lastIndex;
+    }
+    if (i < text.length) el.append(text.slice(i));
+  };
+  const dayOf = t => new Date(t).toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+  const hhmm = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  let logUser = null, logMsgs = [];
+  function logDraw() {   // oldest at the top, newest at the bottom, a divider for each day, like Kick chat
+    const out = [], color = logUser && logUser.color || "#53fc18"; let day = "";
+    for (const x of logMsgs.slice().reverse()) {
+      const d = dayOf(x.at); if (d !== day) { day = d; const dv = document.createElement("div"); dv.className = "kday"; dv.textContent = d; out.push(dv); }
+      const line = document.createElement("div"); line.className = "kline";
+      const t = document.createElement("span"); t.className = "kt"; t.textContent = hhmm(x.at); t.title = stamp(x.at);
+      const ch = document.createElement("span"); ch.className = "kch"; ch.textContent = "#" + x.ch;
+      line.append(t, ch);
+      for (const b of String(x.badges || "").split(",").filter(k => BADGES[k])) { const e = document.createElement("span"); e.className = "kb"; e.style.background = BADGES[b][0]; e.textContent = BADGES[b][1]; e.title = b.replace("_", " "); line.append(e); }
+      const n = document.createElement("span"); n.className = "kn"; n.style.color = color; n.textContent = (logUser ? logUser.name : "?");
+      const body = document.createElement("span"); kickText(body, x.text);
+      line.append(n, ": ", body); out.push(line);
+    }
+    $("logLines").replaceChildren(...(out.length ? out : [empty("No messages.")]));
+  }
   async function logOpen(uid, more) {
-    if (!more) { logUid = uid; msgCursor = 0; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logMsgs").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
+    const box = $("logMsgs");
+    if (!more) { logUid = uid; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
     try {
       const j = await logApi("?uid=" + logUid + (more ? "&before=" + msgCursor : ""));
       if (uid !== logUid) return;
       if (!more && j.user) {
+        logUser = j.user;
         const info = document.createElement("div"), n = document.createElement("b"), m = document.createElement("div");
-        n.textContent = j.user.name; m.className = "meta"; m.textContent = (j.count || 0) + " messages · first seen " + stamp(j.user.first);
+        n.textContent = j.user.name; if (j.user.color) n.style.color = j.user.color; m.className = "meta"; m.textContent = (j.count || 0) + " messages · first seen " + stamp(j.user.first);
         info.append(n, m); $("logHead").replaceChildren(avatar(j.user, true), info);
       }
-      const rows = j.msgs.map(x => {
-        const d = document.createElement("div"); d.className = "log-msg";
-        const w = document.createElement("div"); w.className = "when";
-        const c = document.createElement("span"); c.className = "ch"; c.textContent = x.ch; const t = document.createElement("span"); t.textContent = stamp(x.at);
-        w.append(c, t); const p = document.createElement("p"); p.textContent = x.text; d.append(w, p); return d;
-      });
-      if (more) $("logMsgs").append(...rows); else $("logMsgs").replaceChildren(...(rows.length ? rows : [empty("No messages.")]));
+      const keep = box.scrollHeight - box.scrollTop;   // loading older ones keeps your place
+      logMsgs = logMsgs.concat(j.msgs); logDraw();
       if (j.msgs.length) msgCursor = j.msgs[j.msgs.length - 1].id;
       $("logMsgMore").hidden = !j.more;
-    } catch (e) { if (e.message !== "signin") $("logMsgs").replaceChildren(empty("Couldn't load: " + e.message)); }
+      box.scrollTop = more ? box.scrollHeight - keep : box.scrollHeight;
+    } catch (e) { if (e.message !== "signin") $("logLines").replaceChildren(empty("Couldn't load: " + e.message)); }
   }
   let logT = 0;
   $("logQ").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => logList(false), 350); });
