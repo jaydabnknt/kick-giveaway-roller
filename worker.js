@@ -635,7 +635,13 @@ export default {
       const m = await modSession(req, env); if (!m) return json({ ok: false, error: "signin" }, 401);
       const db = await chatDb(env).catch(() => null);
       if (!db) return json({ ok: false, error: "The chat log database isn't set up yet." }, 503);
-      const uid = Number(url.searchParams.get("uid")) || 0, before = Number(url.searchParams.get("before")) || 0;
+      let uid = Number(url.searchParams.get("uid")) || 0; const before = Number(url.searchParams.get("before")) || 0;
+      const byName = String(url.searchParams.get("name") || "").trim().replace(/^@/, "").toLowerCase().slice(0, 40);
+      if (byName) {   // a tapped @name: that person's id, if they've ever typed in a channel with the bot
+        const u = await db.prepare("SELECT uid FROM users WHERE lower(name) = ? OR lower(name) = ?").bind(byName, "@" + byName).first();
+        if (!u) return json({ ok: true, user: null, msgs: [], count: 0, more: false });
+        uid = u.uid;
+      }
       if (uid) {
         const user = await db.prepare("SELECT uid, name, pic, first, last, color FROM users WHERE uid = ?").bind(uid).first();
         const msgs = (await db.prepare("SELECT id, ch, text, at, badges FROM msgs WHERE uid = ? AND id < ? ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15).all()).results;
