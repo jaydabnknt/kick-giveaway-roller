@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin: 0; width: 320px; background: #191b1f; color: #e8eaed; font: 13px/1.45 system-ui, sans-serif; }
+  .wrap { padding: 14px; display: grid; gap: 12px; }
+  h1 { font-size: 15px; margin: 0; } h1 b { color: #53fc18; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .st { background: #24272c; border-radius: 4px; padding: 8px 10px; display: grid; gap: 4px; }
+  .st span { color: #9aa0a6; } .ok { color: #53fc18; } .bad { color: #ff6b6b; }
+  button { background: #2f3238; color: #e8eaed; border: 0; border-radius: 4px; padding: 7px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:hover { background: #3a3e45; } button.pri { background: #53fc18; color: #0b0e0f; }
+  label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; max-height: 200px; overflow: auto; }
+  li { color: #c4c7cc; } li time { color: #7b8087; margin-right: 6px; }
+</style></head>
+<body><div class="wrap">
+  <h1>Tool<b>Bot</b> Stake Hunt</h1>
+  <label><input type="checkbox" id="on"> Add unfinished bets to the bonus hunt</label>
+  <div class="st">
+    <div><span>Active bets request:</span> <b id="learned"></b></div>
+    <div><span>Playing:</span> <b id="playing">nothing yet</b></div>
+    <div><span>Waiting to send:</span> <b id="queue">0</b> <span id="err" class="bad"></span></div>
+  </div>
+  <div class="row"><button class="pri" id="check">Check Active bets now</button><button id="learn">Learn again</button></div>
+  <ol id="log"></ol>
+</div><script src="popup.js"></script></body></html>

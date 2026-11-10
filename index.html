@@ -3458,6 +3458,43 @@ function stakeBonus(game, why) {
   saveCalls(); renderCalls();
   feedLine(null, `Stake: ${game} looks like a bonus (${why}), added to the hunt.`);
 }
+// ---------- ToolBot Stake extension (owner only) ----------
+// The browser extension watches Jay's own Stake tab. When he leaves a game it checks his Active (unfinished) bets
+// and sends each new one here, which adds the slot to the bonus hunt. It also says which game he has open.
+// Messages come in through window.postMessage from the extension's script on this page; each one is answered with an ack.
+const EXT_SEEN_LS = "kick-ext-seen";
+let extSeen = []; try { extSeen = JSON.parse(localStorage.getItem(EXT_SEEN_LS) || "[]"); } catch (e) {}
+function extHandle(d) {
+  if (d.type === "hello") return { ok: true, owner: isOwner(), tools: ON_TOOLS };
+  if (!isOwner()) return { ok: false, error: "Sign in to ToolBot as jaydab4ngnt on this tab." };
+  if (!ON_TOOLS) return { ok: false, error: "Open the Tools page (Slot Calls) on ToolBot." };
+  const game = String(d.game || "").slice(0, 120).trim();
+  if (d.type === "playing") {
+    if (game && game !== stake.game) { stake.game = game; $("stakeNow").hidden = false; $("stakeNow").textContent = "Stake: playing " + game; feedLine(null, "Stake: now playing " + game); }
+    return { ok: true };
+  }
+  if (d.type === "bonus") {
+    const id = String(d.betId || "");
+    if (!game) return { ok: false, error: "no game name" };
+    if (id && (extSeen.includes(id) || calls.hunt.some(h => h.stakeBet === id))) return { ok: true, dup: true };
+    const call = calls.list.find(c => c.slot.toLowerCase() === game.toLowerCase());
+    const h = { callId: call ? call.id : "stake-" + Date.now(), name: call ? call.name : "Stake (auto)", slot: game, type: calls.bonusType || "normal", at: Date.now(), auto: true };
+    if (id) h.stakeBet = id;
+    if (d.amount != null && d.amount !== "") h.bet = String(d.amount);
+    calls.hunt.push(h);
+    if (id) { extSeen.push(id); extSeen = extSeen.slice(-300); try { localStorage.setItem(EXT_SEEN_LS, JSON.stringify(extSeen)); } catch (e) {} }
+    saveCalls(); renderCalls();
+    feedLine(null, `Stake: ${game} has an unfinished bet, added to the bonus hunt.`);
+    return { ok: true };
+  }
+  return { ok: false, error: "unknown message" };
+}
+if (!OVERLAY) window.addEventListener("message", e => {
+  const d = e.data;
+  if (e.source !== window || !d || d.from !== "toolbot-ext" || !d.id) return;
+  let res; try { res = extHandle(d); } catch (er) { res = { ok: false, error: String(er && er.message || er) }; }
+  window.postMessage({ from: "toolbot-page", ack: d.id, ...res }, location.origin);
+});
 function stakeStart() { clearInterval(stake.timer); stake.timer = null; if (exp("stakeHunt") && stakeCfg.key && ON_TOOLS) { stake.timer = setInterval(stakePoll, 8000); stakePoll(); } }
 if (!OVERLAY) {
   const msg = t => { $("stakeMsg").textContent = t; };
