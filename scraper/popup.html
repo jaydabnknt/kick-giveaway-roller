@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin: 0; width: 340px; background: #191b1f; color: #e8eaed; font: 13px/1.45 system-ui, sans-serif; }
+  .wrap { padding: 14px; display: grid; gap: 12px; }
+  h1 { font-size: 15px; margin: 0; } h1 b { color: #53fc18; }
+  ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; } li.ok::marker { color: #53fc18; }
+  .ok b { color: #53fc18; } .st { background: #24272c; border-radius: 4px; padding: 8px 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: #2f3238; color: #e8eaed; border: 0; border-radius: 4px; padding: 7px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:hover { background: #3a3e45; } button.pri { background: #53fc18; color: #0b0e0f; } button:disabled { opacity: .45; cursor: default; }
+  .muted { color: #9aa0a6; }
+</style></head>
+<body><div class="wrap">
+  <h1>Tool<b>Bot</b> Slot Scraper</h1>
+  <ol>
+    <li id="s1">Open Stake's <b>Slots</b> page and tap <b>Load more</b> once. <span class="muted" id="s1x"></span></li>
+    <li id="s2">Open any slot. <span class="muted" id="s2x"></span></li>
+    <li>Keep that Stake tab open and tap Start.</li>
+  </ol>
+  <div class="st" id="st">Not started.</div>
+  <div class="row"><button class="pri" id="start">Start</button><button id="pause">Pause</button><button id="dl">Download file</button></div>
+  <div class="row"><button id="reset">Start over</button></div>
+</div><script src="popup.js"></script></body></html>
