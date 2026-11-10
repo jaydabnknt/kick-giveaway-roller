@@ -264,7 +264,7 @@ body.ov .about { display: none !important; }
 .list-head h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
 .list-head .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #slotsMeta { margin-left: auto; }
-#slotsRefresh { padding: 5px 10px; font-size: 12.5px; min-height: 0; }
+#slotsUpload { padding: 5px 10px; font-size: 12.5px; min-height: 0; }
 
 /* Slot calls */
 .now { display: grid; gap: 4px; }
@@ -1411,11 +1411,11 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
         <div class="list-head">
           <h2 id="slotsTitle">Slots</h2>
           <span class="meta" id="slotsMeta"></span>
-          <button class="btn ghost" id="slotsRefresh" type="button">Refresh</button>
+          <button class="btn ghost" id="slotsUpload" type="button">Upload file</button>
+          <input type="file" id="slotsFile" accept=".json,application/json" hidden>
         </div>
-        <p class="hint">Slot data comes from slot.report and this page refreshes it once a day. Tap Refresh to get the newest list now. Only on Stake uses the exclusives Stake names on its own Only on Stake page, so it may miss some. RTP is the provider's default; some casinos run lower versions.</p>
+        <p class="hint">Your Stake slot list. Upload the <b>stake-slots.json</b> file from the ToolBot Slot Scraper; a new upload replaces the old list.</p>
         <div class="notice" id="slotsErr" hidden></div>
-        <div class="toggles"><label class="sw"><input type="checkbox" id="slotsStake"> Only on Stake games</label></div>
         <div class="row">
           <button class="btn primary" id="slotsRandom" type="button">Random slot from these</button>
           <span class="meta hint" id="slotsCount" style="margin-left:auto"></span>
@@ -1439,10 +1439,7 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
               <label for="slotsSort">Sort by</label>
               <select id="slotsSort">
                 <option value="rtp">RTP</option>
-                <option value="release">Release date</option>
                 <option value="maxwin">Max win</option>
-                <option value="vol">Volatility</option>
-                <option value="hit">How often it hits</option>
                 <option value="name">Name</option>
                 <option value="provider">Provider</option>
               </select>
@@ -1450,8 +1447,8 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
             <div class="field">
               <label for="slotsDir">Order</label>
               <select id="slotsDir">
-                <option value="desc">Highest / newest first</option>
-                <option value="asc">Lowest / oldest first</option>
+                <option value="desc">Highest first</option>
+                <option value="asc">Lowest first</option>
               </select>
             </div>
           </div>
@@ -1465,22 +1462,8 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
             <select id="slotsProvider"><option value="">All providers</option></select>
           </div>
           <div class="field">
-            <label>Volatility</label>
-            <div class="chips" id="slotsVol"></div>
-          </div>
-          <div class="field">
-            <label>Must have</label>
+            <label>Tags</label>
             <div class="chips" id="slotsFeat"></div>
-          </div>
-          <div class="two">
-            <div class="field">
-              <label for="slotsMech">Mechanic</label>
-              <select id="slotsMech"><option value="">Any</option></select>
-            </div>
-            <div class="field">
-              <label for="slotsTheme">Theme</label>
-              <select id="slotsTheme"><option value="">Any</option></select>
-            </div>
           </div>
           <div class="two">
             <div class="field">
@@ -1492,20 +1475,9 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
               <input type="number" id="slotsMinWin" min="0" step="100" inputmode="numeric" placeholder="e.g. 5000">
             </div>
           </div>
-          <div class="two">
-            <div class="field">
-              <label for="slotsFrom">Released from</label>
-              <input type="number" id="slotsFrom" min="1990" max="2100" step="1" inputmode="numeric" placeholder="year">
-            </div>
-            <div class="field">
-              <label for="slotsTo">Released to</label>
-              <input type="number" id="slotsTo" min="1990" max="2100" step="1" inputmode="numeric" placeholder="year">
-            </div>
-          </div>
           <div class="toggles">
             <label class="sw"><input type="checkbox" id="slotsBuy"> Bonus buy</label>
             <label class="sw"><input type="checkbox" id="slotsJackpot"> Jackpot</label>
-            <label class="sw"><input type="checkbox" id="slotsNew"> Last 90 days</label>
           </div>
         </div>
       </details>
@@ -1529,7 +1501,7 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
   </div>
 
   <section class="about">
-    <p>Giveaway Tools runs entirely in your browser. The roller, Guess the Balance and slot calls read your Kick chat directly, and slot RTP, volatility, max win and release figures come from the free slot database at <a href="https://slot.report/">slot.report</a>, which tracks thousands of games from dozens of providers and updates daily.</p>
+    <p>Giveaway Tools runs entirely in your browser. The roller, Guess the Balance and slot calls read your Kick chat directly.</p>
   </section>
 
   <footer data-view="roller">
@@ -2727,113 +2699,56 @@ cEl.reset.addEventListener("click", () => {
 });
 renderCalls();
 
-// ---------- slot browser ----------
-// Loads slot.report's slot list once a day, keeps a copy in the browser, and filters and sorts it here.
-const SLOTS_URL = "https://slot.report/api/v1/slots.json";
-const SLOTS_LS = "kick-giveaway-slots-cache", SLOTF_LS = "kick-giveaway-slots-filters";
-const VOL_ORDER = ["low", "low-medium", "medium", "medium-high", "high", "very high", "extreme"];
+// ---------- slot browser (owner only) ----------
+// Jay's Stake slot list: the file from the ToolBot Slot Scraper, uploaded here and kept by ToolBot (one KV key).
+const SLOTF_LS = "kick-giveaway-slots-filters";
+try { localStorage.removeItem("kick-giveaway-slots-cache"); } catch (e) {}   // the old cached slot list
 const sl = { all: [], shown: 60, loaded: false, open: null };
-const sf = { q: "", sort: "rtp", dir: "desc", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false, stake: false };
-try { Object.assign(sf, JSON.parse(localStorage.getItem(SLOTF_LS) || "{}")); } catch (e) {}
+const sf = { q: "", sort: "rtp", dir: "desc", provider: "", feat: [], minRtp: "", minWin: "", buy: false, jackpot: false };
+try { const saved = JSON.parse(localStorage.getItem(SLOTF_LS) || "{}"); for (const k of Object.keys(sf)) if (k in saved) sf[k] = saved[k]; } catch (e) {}
+if (!["rtp", "maxwin", "name", "provider"].includes(sf.sort)) sf.sort = "rtp";
 const saveSf = () => { if (OVERLAY) return; try { localStorage.setItem(SLOTF_LS, JSON.stringify(sf)); } catch (e) {} };
 const num = v => { if (v === null || v === undefined || v === "") return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : null; };
 const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
 const title = t => t.replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-// slot.report merges several sources, so the same thing comes spelled many ways ("wilds", "Wild Symbol",
-// "free_spins", "multiplikatoren"). These fold them into one label each.
-const VOL_ALIASES = { "med": "medium", "medium-low": "low-medium", "med-high": "medium-high", "very-high": "very high", "insane": "extreme" };
-const FEAT_ALIASES = [
-  [/^wild/, "Wilds"], [/^(multipli|multiplikator)/, "Multipliers"], [/^free ?spin/, "Free Spins"], [/^bonus ?buy|^feature buy/, "Bonus Buy"],
-  [/^scatter/, "Scatters"], [/^re ?spin/, "Respins"], [/^megaways/, "Megaways"], [/hold (and|&|n)? ?win|hold ?& ?win/, "Hold & Win"],
-  [/^cash ?collect|^collect/, "Cash Collect"], [/^sticky/, "Sticky Symbols"], [/^expanding/, "Expanding"], [/cluster/, "Cluster Pays"],
-  [/^(tumble|cascad|avalanche|drop)/, "Tumble"], [/^(gamble|risk)/, "Gamble"], [/^bonus game|^pick/, "Bonus Game"], [/jackpot/, "Jackpot"],
-  [/^mystery/, "Mystery Symbols"], [/^(increasing|progressive) multi/, "Multipliers"], [/^(stacked)/, "Stacked Symbols"]
-];
-const FEAT_SKIP = /volatility|^high rtp|^rtp/;
-function normFeat(f) {
-  const k = txt(f).toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-  if (!k || FEAT_SKIP.test(k)) return "";
-  for (const [re, label] of FEAT_ALIASES) if (re.test(k)) return label;
-  return title(k);
-}
 function normSlot(r) {
-  const feats = Array.isArray(r.features) ? r.features : typeof r.features === "string" ? r.features.split(/[,;|]/) : [];
-  const themes = (Array.isArray(r.theme) ? r.theme : txt(r.theme) ? [r.theme] : []).map(t => title(txt(t))).filter(Boolean);
-  let vol = txt(r.volatility).toLowerCase(); vol = VOL_ALIASES[vol] || vol;
-  const featList = [...new Set(feats.map(normFeat).filter(Boolean))];
-  const rel = txt(r.release_date), year = num(r.year) || (rel ? num(rel.slice(0, 4)) : null);
+  const tags = [...new Set((Array.isArray(r.tags) ? r.tags : []).map(t => txt(t)).filter(Boolean))];
   const rtp = num(r.rtp);
   return {
-    name: txt(r.name), slug: txt(r.slug), provider: txt(r.provider), rtp: rtp !== null && rtp <= 1 ? rtp * 100 : rtp,
-    vol, volScore: num(r.volatility_score), maxWin: num(r.max_win),
-    feats: featList, mech: normFeat(r.mechanic), themes, theme: themes.join(", "),
-    grid: txt(r.grid), paylines: num(r.paylines), paylinesRaw: txt(r.paylines),
-    buy: r.has_bonus_buy === true || r.has_bonus_buy === 1 || r.has_bonus_buy === "true" || featList.includes("Bonus Buy"),
-    jackpot: r.has_jackpot === true || r.has_jackpot === 1 || r.has_jackpot === "true" || featList.includes("Jackpot"),
-    release: rel, relTime: rel ? Date.parse(rel) || null : null, year, hit: num(r.hit_frequency), minBet: num(r.min_bet), maxBet: num(r.max_bet)
+    name: txt(r.name) || title(txt(r.slug)), slug: txt(r.slug), provider: txt(r.provider), type: txt(r.type),
+    rtp: rtp !== null && rtp <= 1 ? rtp * 100 : rtp, maxWin: num(r.maxWin), feats: tags,
+    buy: tags.some(t => /bonus ?buy|feature ?buy/i.test(t)), jackpot: tags.some(t => /jackpot/i.test(t))
   };
 }
-// Stake has no public game list we can read from a browser, and slot.report has no "exclusive" flag.
-// These are the Only on Stake games Stake names on its own Only on Stake page (checked 2026-10-16),
-// plus its exclusive studios. Games slot.report doesn't know still show, just without stats.
-const STAKE_ONLY = [
-  ["Zeus' Sanctuary", "BGaming", "bgaming-zeus-sanctuary"], ["Big Bank Bust", "OneTouch", "onetouch-big-bank-bust"],
-  ["Snack Attack Megaways", "OneTouch", "onetouch-snack-attack-megaways"], ["Aladdin's Treasure", "Pragmatic Play", "pragmatic-play-aladdins-treasure"],
-  ["Bison Spirit", "Pragmatic Play", "pragmatic-play-bison-spirit"], ["Gates of Heaven", "Pragmatic Play", "pragmatic-play-gates-of-heaven"],
-  ["Jewel Bonanza", "Pragmatic Play", "pragmatic-play-jewel-bonanza"], ["Lucky Phoenix Megaways", "Pragmatic Play", "pragmatic-play-lucky-phoenix-megaways"],
-  ["Madame Mystique Megaways", "Pragmatic Play", "pragmatic-play-madame-mystique-megaways"], ["Slushie Party", "Pragmatic Play", "pragmatic-play-slushie-party"],
-  ["Sugar Twist", "Pragmatic Play", "pragmatic-play-sugar-twist"], ["Sweet Fiesta", "Pragmatic Play", "pragmatic-play-sweet-fiesta"],
-  ["The Dog Mansion Megaways", "Pragmatic Play", "pragmatic-play-the-dog-mansion-megaways"], ["Wild Orbs", "Titan Gaming", "titan-gaming-wild-orbs"],
-  ["Carp Diem", "Twist Gaming", "twist-gaming-carp-diem"], ["Festive Frost", "Twist Gaming", "twist-gaming-festive-frost"],
-  ["Jade Fate", "Twist Gaming", "twist-gaming-jade-fate"], ["Lab of Lunacy", "Twist Gaming", "twist-gaming-lab-of-lunacy"],
-  ["Mining Mayhem", "Twist Gaming", "twist-gaming-mining-mayhem"], ["Samurai Dogs", "Twist Gaming", "twist-gaming-samurai-dogs"],
-  ["Spin Reaper", "Twist Gaming", "twist-gaming-spin-reaper"], ["Wallaby Wilds", "Twist Gaming", "twist-gaming-wallaby-wilds"],
-  ["Wild Savannah", "Twist Gaming", "twist-gaming-wild-savannah"]
-];
-const STAKE_STUDIOS = /^(twist gaming|massive studios|titan gaming|shady lady|mirror image gaming|paperclip gaming|uppercut gaming|stake( originals)?)$/i;
-const stakeKey = n => n.toLowerCase().replace(/^the /, "").replace(/[^a-z0-9]/g, "");
-function markStake(list) {
-  const want = new Map(STAKE_ONLY.map(g => [stakeKey(g[0]), g]));
-  const found = new Set();
-  for (const s of list) {
-    const g = want.get(stakeKey(s.name));
-    s.onStake = !!g || STAKE_STUDIOS.test(s.provider);
-    if (g) { s.stakeSlug = g[2]; found.add(g); }
-  }
-  sl.stubs = STAKE_ONLY.filter(g => !found.has(g)).map(([name, provider, stakeSlug]) => ({
-    name, slug: "", provider, rtp: null, vol: "", volScore: null, maxWin: null, feats: [], mech: "", themes: [], theme: "", grid: "", paylines: null, paylinesRaw: "",
-    buy: false, jackpot: false, release: "", relTime: null, year: null, hit: null, minBet: null, maxBet: null, onStake: true, stakeSlug, stub: true }));
-}
-const volRank = s => { const i = VOL_ORDER.indexOf(s.vol); return s.volScore !== null ? s.volScore : i >= 0 ? i : null; };
-async function loadSlots(force) {
+const slotsApi = (opts = {}) => fetchWithTimeout(BOT_URL + "/slotsdb", 30000, { ...opts, headers: { ...(opts.headers || {}), authorization: "Bearer " + streamer.tok } }).then(r => r.json());
+async function loadSlots() {
   const err = $("slotsErr");
-  let cached = null; try { cached = JSON.parse(localStorage.getItem(SLOTS_LS) || "null"); } catch (e) {}
-  if (cached && cached.list && cached.list.length) { useSlots(cached.list, cached.at); if (!force && Date.now() - cached.at < 86400000) return; }
-  $("slotsMeta").textContent = sl.loaded ? $("slotsMeta").textContent : "Loading…";
+  $("slotsMeta").textContent = "Loading…";
   try {
-    const r = await fetchWithTimeout(SLOTS_URL, 20000);
-    const j = await r.json();
-    const rows = Array.isArray(j) ? j : j.results || j.slots || j.data || [];
-    if (!r.ok || !rows.length) throw Object.assign(new Error(j.message || "No slots came back"), { api: j });
-    const list = rows.map(normSlot).filter(x => x.name);
-    useSlots(list, Date.now()); err.hidden = true;
-    try { localStorage.setItem(SLOTS_LS, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
-    return true;
+    const j = await slotsApi();
+    if (!j.ok) throw new Error(j.error || "failed");
+    err.hidden = true;
+    if (!j.slots.length) { $("slotsMeta").textContent = ""; err.hidden = false; err.textContent = "No slot list yet. Upload the stake-slots.json file from the slot scraper."; return; }
+    useSlots(j.slots.map(normSlot).filter(x => x.name), j.at);
   } catch (e) {
-    if (sl.loaded) return false;                             // an older copy is already showing
-    err.hidden = false;
-    err.innerHTML = e.api && e.api.error === "backlink_required"
-      ? "slot.report hasn't switched this site on yet. It checks the site once a day for the link above, so the list should appear within a day. Nothing for you to do."
-      : "Couldn't load the slot list right now. Check your connection and open this tab again.";
+    err.hidden = false; err.textContent = "Couldn't load your slot list right now. Open this tab again in a moment.";
     $("slotsMeta").textContent = "";
   }
 }
-$("slotsRefresh").addEventListener("click", async () => {
-  const b = $("slotsRefresh"); if (b.disabled) return;
-  b.disabled = true; b.textContent = "Refreshing…";
-  const ok = await loadSlots(true);
-  b.textContent = ok ? "Updated" : ok === false ? "Couldn't refresh" : "Refresh";
-  setTimeout(() => { b.disabled = false; b.textContent = "Refresh"; }, 2500);
+$("slotsUpload").addEventListener("click", () => $("slotsFile").click());
+$("slotsFile").addEventListener("change", async () => {
+  const f = $("slotsFile").files[0]; $("slotsFile").value = ""; if (!f) return;
+  const err = $("slotsErr"), b = $("slotsUpload");
+  let data; try { data = JSON.parse(await f.text()); } catch (e) { err.hidden = false; err.textContent = "That file isn't the scraper's JSON file."; return; }
+  const slots = Array.isArray(data) ? data : data && Array.isArray(data.slots) ? data.slots : null;
+  if (!slots || !slots.length) { err.hidden = false; err.textContent = "That file has no slots in it. Use stake-slots.json (not the raw file)."; return; }
+  b.disabled = true; b.textContent = "Uploading…";
+  try {
+    const j = await slotsApi({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slots }) });
+    if (!j.ok) throw new Error(j.error);
+    b.textContent = `Uploaded ${j.count.toLocaleString()}`; sl.loaded = false; await loadSlots();
+  } catch (e) { err.hidden = false; err.textContent = "Upload failed: " + (e.message || "try again"); b.textContent = "Upload file"; }
+  setTimeout(() => { b.disabled = false; b.textContent = "Upload file"; }, 2500);
 });
 function fillSelect(sel, values, current) {
   const first = sel.options[0].outerHTML;
@@ -2842,14 +2757,10 @@ function fillSelect(sel, values, current) {
 }
 function countBy(list, f) { const m = new Map(); for (const s of list) for (const k of [].concat(f(s))) if (k) m.set(k, (m.get(k) || 0) + 1); return [...m]; }
 function useSlots(list, at) {
-  sl.all = list; sl.loaded = true; markStake(list);
+  sl.all = list; sl.loaded = true;
   fillSelect($("slotsProvider"), countBy(list, s => s.provider).sort((a, b) => a[0].localeCompare(b[0])), sf.provider);
-  fillSelect($("slotsMech"), countBy(list, s => s.mech).sort((a, b) => b[1] - a[1]), sf.mech);
-  fillSelect($("slotsTheme"), countBy(list, s => s.themes).sort((a, b) => b[1] - a[1]).slice(0, 60), sf.theme);
-  const vols = countBy(list, s => VOL_ORDER.includes(s.vol) ? s.vol : "").sort((a, b) => (VOL_ORDER.indexOf(a[0]) + 99 * (VOL_ORDER.indexOf(a[0]) < 0)) - (VOL_ORDER.indexOf(b[0]) + 99 * (VOL_ORDER.indexOf(b[0]) < 0)));
-  chipRow($("slotsVol"), vols.map(v => v[0]), sf.vol, v => title(v));
-  chipRow($("slotsFeat"), countBy(list, s => s.feats).sort((a, b) => b[1] - a[1]).slice(0, 20).map(v => v[0]), sf.feat, v => v);
-  const d = new Date(at);
+  chipRow($("slotsFeat"), countBy(list, s => s.feats).sort((a, b) => b[1] - a[1]).slice(0, 30).map(v => v[0]), sf.feat, v => v);
+  sl.at = at; const d = new Date(at);
   $("slotsMeta").textContent = `${list.length.toLocaleString()} slots · updated ${d.toLocaleDateString([], { month: "short", day: "numeric" })}`;
   renderSlots();
 }
@@ -2861,18 +2772,13 @@ function chipRow(box, values, chosen, label) {
   }));
 }
 function filteredSlots() {
-  const q = sf.q.trim().toLowerCase(), minRtp = num(sf.minRtp), minWin = num(sf.minWin), from = num(sf.from), to = num(sf.to);
-  const since = Date.now() - 90 * 86400000;
-  const base = sf.stake ? sl.all.filter(s => s.onStake).concat(sl.stubs || []) : sl.all;
-  const out = base.filter(s =>
-    (!sf.stake || s.onStake) &&
+  const q = sf.q.trim().toLowerCase(), minRtp = num(sf.minRtp), minWin = num(sf.minWin);
+  const out = sl.all.filter(s =>
     (!q || s.name.toLowerCase().includes(q) || s.provider.toLowerCase().includes(q)) &&
-    (!sf.provider || s.provider === sf.provider) && (!sf.mech || s.mech === sf.mech) && (!sf.theme || s.themes.includes(sf.theme)) &&
-    (!sf.vol.length || sf.vol.includes(s.vol)) && sf.feat.every(f => s.feats.includes(f)) &&
+    (!sf.provider || s.provider === sf.provider) && sf.feat.every(f => s.feats.includes(f)) &&
     (minRtp === null || (s.rtp !== null && s.rtp >= minRtp)) && (minWin === null || (s.maxWin !== null && s.maxWin >= minWin)) &&
-    (from === null || (s.year !== null && s.year >= from)) && (to === null || (s.year !== null && s.year <= to)) &&
-    (!sf.buy || s.buy) && (!sf.jackpot || s.jackpot) && (!sf.recent || (s.relTime !== null && s.relTime >= since)));
-  const key = { rtp: s => s.rtp, release: s => s.relTime, maxwin: s => s.maxWin, vol: volRank, hit: s => s.hit ? 1 / s.hit : null, name: s => s.name.toLowerCase(), provider: s => s.provider.toLowerCase() + "\u0000" + s.name.toLowerCase() }[sf.sort];
+    (!sf.buy || s.buy) && (!sf.jackpot || s.jackpot));
+  const key = { rtp: s => s.rtp, maxwin: s => s.maxWin, name: s => s.name.toLowerCase(), provider: s => s.provider.toLowerCase() + "\u0000" + s.name.toLowerCase() }[sf.sort];
   const textSort = sf.sort === "name" || sf.sort === "provider";
   const dir = (sf.dir === "asc") !== textSort ? 1 : -1;      // text sorts read A to Z under "highest first"
   return out.sort((a, b) => {
@@ -2886,23 +2792,20 @@ const fmtX = v => v === null ? "?" : v >= 10000 ? Math.round(v / 1000) + "k" : m
 function slotRow(s) {
   const row = document.createElement("div"); row.className = "slot-row";
   const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = s.name;
-  const pv = document.createElement("div"); pv.className = "pv"; pv.textContent = [s.provider, s.release ? s.release.slice(0, 10) : s.year].filter(Boolean).join(" · ");
+  const pv = document.createElement("div"); pv.className = "pv"; pv.textContent = s.provider;
   const st = document.createElement("div"); st.className = "stats";
   const stat = (label, val, hi) => { const d = document.createElement("div"); if (hi) d.className = "hi"; const sm = document.createElement("small"); sm.textContent = label; d.append(val, sm); return d; };
-  st.append(stat("RTP", s.rtp === null ? "?" : s.rtp.toFixed(2) + "%", sf.sort === "rtp"), stat("Max", fmtX(s.maxWin) + "x", sf.sort === "maxwin"), stat("Vol", s.vol ? title(s.vol) : "?", sf.sort === "vol"));
+  st.append(stat("RTP", s.rtp === null ? "?" : s.rtp.toFixed(2) + "%", sf.sort === "rtp"), stat("Max", fmtX(s.maxWin) + "x", sf.sort === "maxwin"));
   row.append(nm, st, pv);
   const tags = document.createElement("div"); tags.className = "tags";
   const seenTags = new Set();
-  for (const t of [s.onStake && "Only on Stake", s.buy && "Bonus Buy", s.jackpot && "Jackpot", s.mech, ...s.feats.slice(0, 5)].filter(Boolean)) {
+  for (const t of s.feats.slice(0, 6)) {
     if (seenTags.has(t.toLowerCase())) continue; seenTags.add(t.toLowerCase()); const g = document.createElement("span"); g.className = "tag"; g.textContent = t; tags.append(g); }
   if (tags.childElementCount) row.append(tags);
   if (sl.open === s) {
     const more = document.createElement("div"); more.className = "more";
-    const bits = [["Hits", s.hit ? `1 in ${s.hit.toFixed(2)} spins` : null], ["Grid", s.grid], ["Lines / ways", s.paylinesRaw], ["Theme", s.theme],
-      ["Bets", s.minBet !== null && s.maxBet !== null ? `${s.minBet} to ${s.maxBet}` : null], ["Released", s.release]];
-    for (const [k, v] of bits) if (v) { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; d.append(k + " ", b); more.append(d); }
-    if (s.stub) { const d = document.createElement("div"); d.textContent = "slot.report has no stats for this one yet."; more.append(d); }
-    if (s.stakeSlug) { const a = document.createElement("a"); a.href = "https://stake.com/casino/games/" + s.stakeSlug; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open on Stake"; a.addEventListener("click", e => e.stopPropagation()); more.append(a); }
+    if (s.feats.length > 6) { const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = s.feats.join(", "); d.append("Tags ", b); more.append(d); }
+    if (s.slug) { const a = document.createElement("a"); a.href = "https://stake.com/casino/games/" + encodeURIComponent(s.slug); a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open on Stake"; a.addEventListener("click", e => e.stopPropagation()); more.append(a); }
     row.append(more);
   }
   row.addEventListener("click", () => { sl.open = sl.open === s ? null : s; renderSlots(); });
@@ -2928,15 +2831,15 @@ $("slotsRandom").addEventListener("click", () => {
   const nm = document.createElement("div"); nm.className = "slot pop"; nm.textContent = s.name;
   card.append(lab, nm, slotRow(s));
 });
-const sfInputs = { slotsQ: "q", slotsSort: "sort", slotsDir: "dir", slotsProvider: "provider", slotsMech: "mech", slotsTheme: "theme", slotsMinRtp: "minRtp", slotsMinWin: "minWin", slotsFrom: "from", slotsTo: "to" };
+const sfInputs = { slotsQ: "q", slotsSort: "sort", slotsDir: "dir", slotsProvider: "provider", slotsMinRtp: "minRtp", slotsMinWin: "minWin" };
 for (const [id, k] of Object.entries(sfInputs)) { const el = $(id); el.value = sf[k]; el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { sf[k] = el.value; sl.shown = 60; saveSf(); renderSlots(); }); }
-for (const [id, k] of [["slotsStake", "stake"], ["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) { const el = $(id); el.checked = sf[k]; el.addEventListener("change", () => { sf[k] = el.checked; sl.shown = 60; saveSf(); renderSlots(); }); }
+for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"]]) { const el = $(id); el.checked = sf[k]; el.addEventListener("change", () => { sf[k] = el.checked; sl.shown = 60; saveSf(); renderSlots(); }); }
 $("slotsClear").addEventListener("click", e => {
   e.preventDefault();
-  Object.assign(sf, { q: "", provider: "", vol: [], feat: [], mech: "", theme: "", minRtp: "", minWin: "", from: "", to: "", buy: false, jackpot: false, recent: false, stake: false });
+  Object.assign(sf, { q: "", provider: "", feat: [], minRtp: "", minWin: "", buy: false, jackpot: false });
   for (const [id, k] of Object.entries(sfInputs)) $(id).value = sf[k];
-  for (const [id, k] of [["slotsStake", "stake"], ["slotsBuy", "buy"], ["slotsJackpot", "jackpot"], ["slotsNew", "recent"]]) $(id).checked = sf[k];
-  saveSf(); if (sl.loaded) useSlots(sl.all, JSON.parse(localStorage.getItem(SLOTS_LS) || "{}").at || Date.now());
+  for (const [id, k] of [["slotsBuy", "buy"], ["slotsJackpot", "jackpot"]]) $(id).checked = sf[k];
+  saveSf(); if (sl.loaded) useSlots(sl.all, sl.at);
 });
 
 // ---------- OBS overlay ----------
