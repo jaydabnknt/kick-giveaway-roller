@@ -6,7 +6,6 @@ async function show() {
   $("s1").className = s.listReq ? "ok" : ""; $("s1x").textContent = s.listReq ? `Got it: ${s.listReq.n} per page, like ${(s.listReq.sample || []).join(", ")}.` : "";
   $("s2").className = s.detailReq ? "ok" : ""; $("s2x").textContent = s.detailReq ? `Got it (${s.detailReq.slug}).` : "Optional, but gives RTP, max win and tags.";
   $("st").textContent = s.status ? s.status.note : "Not started.";
-  $("dl").disabled = !(s.slugs && s.slugs.length);
   $("start").disabled = !s.listReq;
 }
 $("start").addEventListener("click", async () => { const t = await stakeTab(); if (!t) { $("st").textContent = "Open Stake in a tab first."; return; } chrome.tabs.sendMessage(t.id, { cmd: "start" }); });
