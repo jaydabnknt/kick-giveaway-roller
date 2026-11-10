@@ -199,7 +199,8 @@
     const pretty = x => x.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     let quiet = 0;
     await wait(3000);
-    while (!stop && quiet < 3) {
+    let lastSig = "";
+    while (!stop && quiet < 4) {
       const put = {};
       for (const a of document.querySelectorAll('a[href*="/casino/games/"]')) {
         const m = a.getAttribute("href").match(/\/casino\/games\/([^/?#]+)/i); if (!m) continue;
@@ -212,13 +213,13 @@
       await S.set({ ...put, slugs, prog });
       await status({ state: "running", note: `Reading the Slots page: ${slugs.length} slots so far.` });
       const btn = [...document.querySelectorAll("button, a")].find(b => /^\s*(load|show|view) more/i.test(b.textContent || ""));
-      // Load the next page right away, then carry on the moment its slots show up (or after 10 seconds).
-      const before = document.querySelectorAll('a[href*="/casino/games/"]').length;
+      // Press Load more every 2 to 3 seconds. Stop when the page hasn't changed for 4 presses in a row.
+      const links = document.querySelectorAll('a[href*="/casino/games/"]');
+      const sig = links.length + "|" + (links[links.length - 1] ? links[links.length - 1].getAttribute("href") : "");
+      quiet = Object.keys(put).length || sig !== lastSig ? 0 : quiet + 1; lastSig = sig;
       if (btn) { btn.scrollIntoView({ block: "center" }); btn.click(); }
       else { scrollTo(0, document.body.scrollHeight); document.querySelectorAll("*").forEach(el => { if (el.scrollHeight > el.clientHeight + 200 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) el.scrollTop = el.scrollHeight; }); }
-      for (let t = 0; t < 50 && !stop && document.querySelectorAll('a[href*="/casino/games/"]').length <= before; t++) await wait(200);
-      quiet = document.querySelectorAll('a[href*="/casino/games/"]').length > before ? 0 : quiet + 1;   // stop once the page stops growing
-      await wait(150);
+      await wait(testFast ? 300 : 2000 + Math.random() * 1000);
     }
     if (stop) return false;
     if (!slugs.length && (await S.get("listReq")).listReq) return true;   // the page had no links, but its list request was learned: use that
