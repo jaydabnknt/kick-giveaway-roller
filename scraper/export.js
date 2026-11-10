@@ -50,6 +50,6 @@ function clean(slug, g) {
   document.getElementById("msg").textContent = `${slots.length} slots. ${withRtp} have an RTP, ${withMax} a max win, ${withTags} tags.`;
   const L = document.getElementById("links");
   const a = link("stake-slots.json", { ...meta, slots });
-  L.append(a, document.createElement("br"), link("stake-slots-raw.json", { ...meta, raw }));
+  L.append(a, document.createElement("br"), link("stake-slots-raw.json", { ...meta, listReq: all.listReq, detailReq: all.detailReq, seenLog: all.seenLog, raw }));
   a.click();
 })();

@@ -3,7 +3,7 @@ const isStake = u => { try { return /(^|\.)stake\d*\.[a-z]{2,}(\.[a-z]{2})?$/i.t
 const stakeTab = async () => (await chrome.tabs.query({})).find(t => isStake(t.url));
 async function show() {
   const s = await chrome.storage.local.get(["listReq", "detailReq", "status", "slugs", "prog"]);
-  $("s1").className = s.listReq ? "ok" : ""; $("s1x").textContent = s.listReq ? `Got it (${s.listReq.n} per page).` : "";
+  $("s1").className = s.listReq ? "ok" : ""; $("s1x").textContent = s.listReq ? `Got it: ${s.listReq.n} per page, like ${(s.listReq.sample || []).join(", ")}.` : "";
   $("s2").className = s.detailReq ? "ok" : ""; $("s2x").textContent = s.detailReq ? `Got it (${s.detailReq.slug}).` : "Optional, but gives RTP, max win and tags.";
   $("st").textContent = s.status ? s.status.note : "Not started.";
   $("dl").disabled = !(s.slugs && s.slugs.length);

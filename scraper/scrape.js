@@ -6,23 +6,44 @@
 (() => {
   if (!/(^|\.)stake\d*\.[a-z]{2,}(\.[a-z]{2})?$/i.test(location.hostname)) return;
   const S = chrome.storage.local;
+  // Version 1 could learn the provider list by mistake; start clean once after updating.
+  S.get("ver").then(({ ver }) => { if (ver !== 2) S.clear().then(() => S.set({ ver: 2 })); });
   const PAGE_KEYS = /^(offset|skip)$/i, SIZE_KEYS = /^(limit|first|take|size)$/i;
 
   // The biggest list of game-like objects (have a slug and a name) anywhere in an answer.
+  // The best list of games anywhere in an answer. Lists of providers, groups or tags (which also have a name and
+  // a slug) are skipped. Returns { items, gameish } where gameish counts signs that the items really are games.
+  const NOT_GAME = /provider|studio|group|categor|tag|collection|theme|feature|currency|user/i;
+  const isGame = x => x && typeof x === "object" && !Array.isArray(x) && typeof x.slug === "string" && (x.name || x.title) &&
+    !NOT_GAME.test(String(x.__typename || "")) && !NOT_GAME.test(String(x.type || ""));
+  const findGame = (x, d = 0) => {   // the item itself, or a game wrapped up to 3 levels down ({ node: { game: {...} } })
+    if (isGame(x)) return x;
+    if (!x || typeof x !== "object" || Array.isArray(x) || d >= 3) return null;
+    for (const v of Object.values(x)) { const g = findGame(v, d + 1); if (g) return g; }
+    return null;
+  };
+  const gameish = items => {
+    const one = items[0] || {}, keys = Object.keys(one).join(" ");
+    let n = 0;
+    if (/thumb|image|icon|cover|banner/i.test(keys)) n++;
+    if (/provider/i.test(keys)) n++;
+    if (/edge|rtp|volatil|multiplier|maxwin/i.test(keys)) n++;
+    if (/game/i.test(String(one.__typename || ""))) n++;
+    return n;
+  };
   function gamesIn(data) {
     let best = [];
     const walk = (v, d) => {
       if (!v || typeof v !== "object" || d > 14) return;
       if (Array.isArray(v)) {
-        const isGame = x => x && typeof x === "object" && typeof x.slug === "string" && (x.name || x.title);
-        // a list item is the game itself, or wraps it one level down (like { id, game: { slug, name } })
-        const g = v.map(x => isGame(x) ? x : x && typeof x === "object" ? Object.values(x).find(isGame) : null).filter(Boolean);
+        const g = v.map(x => findGame(x)).filter(Boolean);
         if (g.length > best.length) best = g;
         v.forEach(x => walk(x, d + 1)); return;
       }
       for (const k of Object.keys(v)) walk(v[k], d + 1);
     };
-    walk(data, 0); return best;
+    walk(data, 0);
+    return { items: best, gameish: gameish(best) };
   }
   // Finds the paging numbers in a request's variables: { path to offset, size }.
   function paging(vars) {
@@ -43,10 +64,14 @@
     if (e.source !== window || !d || d.from !== "tbs-main") return;
     if (d.type === "result" && waiting.has(d.nonce)) { waiting.get(d.nonce)(d); waiting.delete(d.nonce); return; }
     if (d.type !== "seen" || running) return;
-    const games = gamesIn(d.data), pg = paging(d.req.variables);
-    const st = await S.get(["listReq", "detailReq"]);
-    if (pg && games.length >= 5 && (!st.listReq || games.length >= st.listReq.n)) {
-      await S.set({ listReq: { req: d.req, off: pg.off, size: pg.size || games.length, n: games.length, op: d.req.operationName } });
+    const found = gamesIn(d.data), games = found.items, pg = paging(d.req.variables);
+    const st = await S.get(["listReq", "detailReq", "seenLog"]);
+    // keep a short note of what Stake's page asked for, so a failed run can be figured out from the file
+    const seenLog = (st.seenLog || []).concat({ page: location.pathname, op: d.req.operationName, vars: Object.keys(d.req.variables || {}), n: games.length, gameish: found.gameish, sample: games.slice(0, 3).map(g => g.name || g.title), keys: games[0] ? Object.keys(games[0]).slice(0, 20) : [] }).slice(-60);
+    await S.set({ seenLog });
+    const score = found.gameish * 100 + (/\/casino\/group\/slots/i.test(location.pathname) ? 50 : 0) + Math.min(games.length, 49);
+    if (pg && games.length >= 5 && found.gameish >= 1 && (!st.listReq || score >= (st.listReq.score || 0))) {
+      await S.set({ listReq: { req: d.req, off: pg.off, size: pg.size || games.length, n: games.length, op: d.req.operationName, score, sample: games.slice(0, 3).map(g => g.name || g.title) } });
     }
     const slug = slugHere();
     if (slug && JSON.stringify(d.req.variables).includes(JSON.stringify(slug))) {
@@ -92,7 +117,7 @@
       while (prog.phase === "list" && !stop) {
         const r = await call({ ...listReq.req, variables: setPath(listReq.req.variables, listReq.off, prog.offset) });
         if (!r.ok) { if (stop) break; await status({ state: "error", note: "Couldn't read the slot list: " + r.error }); return; }
-        const games = gamesIn(r.data); let fresh = 0;
+        const games = gamesIn(r.data).items; let fresh = 0;
         const put = {};
         for (const g of games) if (!have.has(g.slug)) { have.add(g.slug); slugs.push(g.slug); put["g:" + g.slug] = { list: g }; fresh++; }
         prog.offset += games.length || listReq.size;
