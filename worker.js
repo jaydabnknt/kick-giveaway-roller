@@ -757,6 +757,25 @@ export default {
       // approved = the channel has the bot (added with a key from Jay or an approved request)
       return me ? json({ ok: true, slug: me.slug, name: me.name || me.slug, pic: me.pic || "", approved: await isEnabled(env, me.slug) }) : json({ ok: false, error: "signin" }, 401);
     }
+    if (url.pathname === "/slotsdb") {   // owner-only: Jay's Stake slot list (uploaded from the slot scraper file), one KV key
+      const me = await streamerSession(req, env);
+      if (!me || me.uid !== Number(await broadcasterId(env, env.BOT_CHANNEL).catch(() => -1))) return json({ ok: false, error: "Owner only." }, 403);
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => null);
+        const rows = b && Array.isArray(b.slots) ? b.slots : null;
+        if (!rows || !rows.length) return json({ ok: false, error: "That file has no slots in it." }, 400);
+        const str = (v, n) => typeof v === "string" ? v.slice(0, n) : "";
+        const numOr = v => typeof v === "number" && isFinite(v) ? v : null;
+        const slots = rows.slice(0, 20000).filter(r => r && (r.name || r.slug)).map(r => ({
+          name: str(r.name, 120), slug: str(r.slug, 160), provider: str(r.provider, 80), rtp: numOr(r.rtp), maxWin: numOr(r.maxWin),
+          tags: Array.isArray(r.tags) ? r.tags.filter(t => typeof t === "string").slice(0, 20).map(t => t.slice(0, 40)) : [], type: str(r.type, 40) }));
+        const at = Date.now();
+        await env.STORE.put("slotsdb", JSON.stringify({ at, slots }));
+        return json({ ok: true, count: slots.length, at });
+      }
+      const db = await env.STORE.get("slotsdb", "json");
+      return json({ ok: true, ...(db || { at: 0, slots: [] }) });
+    }
     if (url.pathname === "/stake" && req.method === "POST") {   // owner-only experiment: pass Jay's own Stake API call through (the key is never stored here)
       const me = await streamerSession(req, env);
       if (!me || me.uid !== Number(await broadcasterId(env, env.BOT_CHANNEL).catch(() => -1))) return json({ ok: false, error: "Owner only." }, 403);
