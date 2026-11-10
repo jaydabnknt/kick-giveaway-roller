@@ -117,7 +117,7 @@
     try {
       let { listReq, detailReq, prog = { phase: "list", offset: 0, done: 0 }, slugs = [], testFast: tf } = await S.get(["listReq", "detailReq", "prog", "slugs", "testFast"]);
       testFast = !!tf;
-      if (!listReq && prog.phase === "list") { if (!(await domList(slugs, prog))) return; detailReq = (await S.get("detailReq")).detailReq; }
+      if (!listReq && prog.phase === "list") { if (!(await domList(slugs, prog))) return; ({ listReq, detailReq } = await S.get(["listReq", "detailReq"])); }
       const have = new Set(slugs);
       while (listReq && prog.phase === "list" && !stop) {
         const r = await call({ ...listReq.req, variables: setPath(listReq.req.variables, listReq.off, prog.offset) });
@@ -211,9 +211,11 @@
       const btn = [...document.querySelectorAll("button, a")].find(b => /^\s*(load|show|view) more/i.test(b.textContent || ""));
       if (btn) { btn.scrollIntoView({ block: "center" }); btn.click(); }
       else { scrollTo(0, document.body.scrollHeight); document.querySelectorAll("*").forEach(el => { if (el.scrollHeight > el.clientHeight + 200 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) el.scrollTop = el.scrollHeight; }); }
+      await wait(1500);   // let the new slots load
       await pace();
     }
     if (stop) return false;
+    if (!slugs.length && (await S.get("listReq")).listReq) return true;   // the page had no links, but its list request was learned: use that
     if (!slugs.length) { await S.set({ auto: false }); await status({ state: "error", note: "Couldn't find any slots on Stake's Slots page. Tap Download file and send Claude stake-slots-raw.json." }); return false; }
     prog.phase = "needDetail";   // run() learns the details request next (or uses the one it already knows)
     const { detailReq } = await S.get("detailReq"); if (detailReq) prog.phase = "detail";
