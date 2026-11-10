@@ -15,7 +15,7 @@ jobs:
           node-version: 22
       - name: Deploy to Cloudflare Pages
         run: |
-          mkdir dist && cp index.html dist/
+          mkdir dist && cp index.html toolbot-stake-*.zip dist/
           npx -y wrangler@4 pages project create toolbott --production-branch main 2>&1 | tail -3 || true
           npx -y wrangler@4 pages deploy dist --project-name toolbott --branch main --commit-dirty=true 2>&1 | tee out.txt
           echo "SITE URL: $(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' out.txt | head -1)"
