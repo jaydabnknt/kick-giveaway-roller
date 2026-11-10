@@ -187,6 +187,8 @@ function chatDb(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS msgs_uid ON msgs (uid, id)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS users_last ON users (last)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS shares (id TEXT PRIMARY KEY, uid INTEGER, name TEXT, color TEXT, pic TEXT, msgs TEXT, n INTEGER, by TEXT, at INTEGER)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS rolls (id TEXT PRIMARY KEY, ch TEXT, at INTEGER, keyword TEXT, luck INTEGER, pool TEXT, n INTEGER, seed TEXT, hash TEXT, ticket INTEGER, winner TEXT)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS rolls_ch ON rolls (ch, at)"),
   ]).then(async () => {   // columns added later (name colour, badges); "duplicate column" just means they're there
     for (const sql of ["ALTER TABLE users ADD COLUMN color TEXT", "ALTER TABLE msgs ADD COLUMN badges TEXT"]) await env.DB.prepare(sql).run().catch(() => {});
   }).catch(e => { dbReady = null; throw e; });
@@ -646,6 +648,34 @@ export default {
       return json({ ok: true, bot: env.BOT_USERNAME, kickKeys: !!(env.KICK_CLIENT_ID && env.KICK_CLIENT_SECRET), channels: (await channelList(env)).length, lastError: await env.STORE.get("lasterror"), lastRaidRaw: await env.STORE.get("lastraid") });
     }
 
+    if (url.pathname === "/roll") {   // verifiable giveaway rolls: ToolBot picks the seed, so the streamer can't
+      // choose the result; the winner is ticket (first 13 hex digits of SHA-256(seed)) mod pool size, in the sorted pool.
+      const db = await chatDb(env).catch(() => null);
+      if (!db) return json({ ok: false, error: "The roll database isn't set up yet." }, 503);
+      if (req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        const me = await streamerSession(req, env);
+        const mine = me && (me.slug === normSlug(b.channel) || me.uid === await broadcasterId(env, b.channel).catch(() => -1));
+        if (!mine) return json({ ok: false, error: "Only the streamer can roll for this channel." }, 403);
+        const pool = (Array.isArray(b.pool) ? b.pool : []).map(x => String(x == null ? "" : x).trim().slice(0, 40)).filter(Boolean)
+          .sort((x, y) => { const a = x.toLowerCase(), c = y.toLowerCase(); return a < c ? -1 : a > c ? 1 : 0; });
+        if (pool.length < 2 || pool.length > 5000) return json({ ok: false, error: "A roll needs 2 to 5000 tickets." }, 400);
+        const ch = normSlug(b.channel), at = Date.now();
+        const seed = `${Math.floor(at / 1000)}-${[...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, "0")).join("")}-${ch}`;
+        const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed)))].map(x => x.toString(16).padStart(2, "0")).join("");
+        const ticket = parseInt(hash.slice(0, 13), 16) % pool.length, winner = pool[ticket], id = randomString(9);
+        await db.prepare("INSERT INTO rolls (id, ch, at, keyword, luck, pool, n, seed, hash, ticket, winner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(id, ch, at, clean(b.keyword, 40), b.luck ? 1 : 0, JSON.stringify(pool), pool.length, seed, hash, ticket, winner).run();
+        return json({ ok: true, id, seed, hash, ticket, winner, n: pool.length });
+      }
+      const id = String(url.searchParams.get("id") || "");
+      const row = /^[A-Za-z0-9_-]{8,20}$/.test(id) ? await db.prepare("SELECT * FROM rolls WHERE id = ?").bind(id).first() : null;
+      if (!row) return json({ ok: false, error: "This roll doesn't exist." }, 404);
+      // every roll on the channel is numbered, so a re-roll can't be hidden
+      const no = (await db.prepare("SELECT COUNT(*) AS n FROM rolls WHERE ch = ? AND at <= ?").bind(row.ch, row.at).first()).n;
+      const near = (await db.prepare("SELECT id, at, winner FROM rolls WHERE ch = ? AND at BETWEEN ? AND ? ORDER BY at").bind(row.ch, row.at - 3600000, row.at + 3600000).all()).results;
+      return json({ ok: true, id: row.id, ch: row.ch, at: row.at, keyword: row.keyword, luck: !!row.luck, pool: JSON.parse(row.pool), n: row.n, seed: row.seed, hash: row.hash, ticket: row.ticket, winner: row.winner, no, near });
+    }
     if (url.pathname === "/share") {   // public: a shared pick of someone's chat messages (anyone with the link)
       const id = String(url.searchParams.get("id") || "");
       const db = /^[A-Za-z0-9_-]{8,20}$/.test(id) ? await chatDb(env).catch(() => null) : null;
@@ -853,7 +883,9 @@ export default {
         if (!mine) return json({ ok: false, error: "Only the streamer can run this. Log in with Kick on the site." }, 403);
       }
       const tpl = TEMPLATES[body.event];
-      const text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
+      let text = keyed && body.text ? String(body.text).replace(/\s+/g, " ").trim().slice(0, 500) : tpl ? clean(tpl(body.data || {}) || "", 500) : "";
+      const vid = body.data && String(body.data.verify || "");
+      if (text && body.event === "winner" && /^[A-Za-z0-9_-]{8,20}$/.test(vid)) text += " Verify this roll: " + env.SITE_URL + "?verify=" + vid;
       if (!keyed && !(await isEnabled(env, body.channel))) return json({ ok: false, error: "ToolBot isn't added to this channel yet" }, 403);
       if (!keyed && !(await rateOk(env, clean(body.channel).toLowerCase()))) return json({ ok: false, error: "slow down" }, 429);
       if (!text) return json({ ok: false, error: "empty" }, 400);
