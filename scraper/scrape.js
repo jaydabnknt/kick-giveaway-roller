@@ -63,20 +63,20 @@
     const d = e.data;
     if (e.source !== window || !d || d.from !== "tbs-main") return;
     if (d.type === "result" && waiting.has(d.nonce)) { waiting.get(d.nonce)(d); waiting.delete(d.nonce); return; }
-    if (d.type !== "seen" || running) return;
+    if (d.type !== "seen") return;
     const found = gamesIn(d.data), games = found.items, pg = paging(d.req.variables);
     const st = await S.get(["listReq", "detailReq", "seenLog"]);
     // keep a short note of what Stake's page asked for, so a failed run can be figured out from the file
     const seenLog = (st.seenLog || []).concat({ page: location.pathname, op: d.req.operationName, vars: Object.keys(d.req.variables || {}), n: games.length, gameish: found.gameish, sample: games.slice(0, 3).map(g => g.name || g.title), keys: games[0] ? Object.keys(games[0]).slice(0, 20) : [] }).slice(-60);
     await S.set({ seenLog });
     const score = found.gameish * 100 + (/\/casino\/group\/slots/i.test(location.pathname) ? 50 : 0) + Math.min(games.length, 49);
-    if (pg && games.length >= 5 && found.gameish >= 1 && (!st.listReq || score >= (st.listReq.score || 0))) {
+    if (pg && games.length >= 5 && found.gameish >= 1 && (!st.listReq || (!running && score >= (st.listReq.score || 0)))) {
       await S.set({ listReq: { req: d.req, off: pg.off, size: pg.size || games.length, n: games.length, op: d.req.operationName, score, sample: games.slice(0, 3).map(g => g.name || g.title) } });
     }
     const slug = slugHere();
     if (slug && JSON.stringify(d.req.variables).includes(JSON.stringify(slug))) {
       const size = JSON.stringify(d.data).length;
-      if (!st.detailReq || size > st.detailReq.bytes) await S.set({ detailReq: { req: d.req, slug, bytes: size, op: d.req.operationName } });
+      if (!st.detailReq || (!running && size > st.detailReq.bytes)) await S.set({ detailReq: { req: d.req, slug, bytes: size, op: d.req.operationName } });
     }
   });
 
@@ -112,19 +112,30 @@
     try {
       let { listReq, detailReq, prog = { phase: "list", offset: 0, done: 0 }, slugs = [], testFast: tf } = await S.get(["listReq", "detailReq", "prog", "slugs", "testFast"]);
       testFast = !!tf;
-      if (!listReq) { await status({ state: "idle", note: "Open Stake's Slots page and load more once first." }); return; }
+      if (!listReq) { if (!(await learnList())) return; listReq = (await S.get("listReq")).listReq; }
       const have = new Set(slugs);
       while (prog.phase === "list" && !stop) {
         const r = await call({ ...listReq.req, variables: setPath(listReq.req.variables, listReq.off, prog.offset) });
-        if (!r.ok) { if (stop) break; await status({ state: "error", note: "Couldn't read the slot list: " + r.error }); return; }
+        if (!r.ok) { if (stop) break; await S.set({ auto: false }); await status({ state: "error", note: "Couldn't read the slot list: " + r.error }); return; }
         const games = gamesIn(r.data).items; let fresh = 0;
         const put = {};
         for (const g of games) if (!have.has(g.slug)) { have.add(g.slug); slugs.push(g.slug); put["g:" + g.slug] = { list: g }; fresh++; }
         prog.offset += games.length || listReq.size;
-        if (!games.length || !fresh) prog.phase = detailReq ? "detail" : "done";
+        if (!games.length || !fresh) prog.phase = detailReq ? "detail" : "needDetail";
         await S.set({ ...put, slugs, prog });
         await status({ state: "running", note: `Reading the slot list: ${slugs.length} slots so far.` });
         await pace();
+      }
+      if (prog.phase === "needDetail" && !stop) {
+        // Learn how Stake loads one slot's details by opening a slot page, then carry on there.
+        const slug = slugHere();
+        if (!slug) { await S.set({ prog }); await status({ state: "running", note: "Opening a slot to learn how its details load…" }); go("/casino/games/" + slugs[0]); return; }
+        await status({ state: "running", note: "Learning how slot details load…" });
+        for (let i = 0; i < 15 && !(await S.get("detailReq")).detailReq; i++) await wait(1000);
+        detailReq = (await S.get("detailReq")).detailReq;
+        prog.phase = detailReq ? "detail" : "done";
+        if (!detailReq) stopNote = "Got the slot list, but couldn't learn how slot details load, so there's no RTP or max win.";
+        await S.set({ prog });
       }
       while (prog.phase === "detail" && !stop) {
         if (prog.done >= slugs.length) { prog.phase = "done"; break; }
@@ -139,12 +150,35 @@
         await status({ state: "running", note: `Reading slot details: ${prog.done} of ${slugs.length}.` });
         await pace();
       }
-      await S.set({ prog });
-      await status(prog.phase === "done" ? { state: "done", note: `Finished: ${slugs.length} slots. Download the file.` } : { state: "paused", note: stopNote || "Paused. Tap Start to carry on." });
+      await S.set({ prog, auto: false });
+      await status(prog.phase === "done" ? { state: "done", note: `Finished: ${slugs.length} slots. ${stopNote ? stopNote + " " : ""}Download the file.` } : { state: "paused", note: stopNote || "Paused. Tap Start to carry on." });
     } finally { running = false; }
   }
+  // Goes to another Stake page. The scraper picks up again there by itself (the "auto" flag).
+  const go = path => location.assign(location.origin + path);
+  const onSlotsPage = () => /\/casino\/group\/slots/i.test(location.pathname);
+  // Learns the slot list request: opens the Slots page and presses its "Load more" button.
+  async function learnList() {
+    if (!onSlotsPage()) { await status({ state: "running", note: "Opening Stake's Slots page…" }); go("/casino/group/slots"); return false; }
+    await status({ state: "running", note: "Learning how Stake loads the slot list…" });
+    for (let i = 0; i < 6; i++) {
+      await wait(4000);
+      if ((await S.get("listReq")).listReq) return true;
+      scrollTo(0, document.body.scrollHeight);
+      const btn = [...document.querySelectorAll("button, a")].find(b => /^\s*(load|show) more/i.test(b.textContent || ""));
+      if (btn) btn.click();
+      if (stop) return false;
+    }
+    await wait(4000);
+    if ((await S.get("listReq")).listReq) { run(); return; }
+    await S.set({ auto: false });
+    await status({ state: "error", note: "Couldn't find the slot list on Stake's Slots page. Tap Download file and send Claude stake-slots-raw.json." });
+    return false;
+  }
   chrome.runtime.onMessage.addListener((m, _s, reply) => {
-    if (m.cmd === "start") { run(); reply({ ok: true }); }
-    if (m.cmd === "pause") { stop = true; reply({ ok: true }); }
+    if (m.cmd === "start") { S.set({ auto: true }).then(run); reply({ ok: true }); }
+    if (m.cmd === "pause") { stop = true; S.set({ auto: false }); reply({ ok: true }); }
   });
+  // After the scraper moved to another page, carry on by itself once the page has loaded.
+  S.get("auto").then(({ auto }) => { if (auto) setTimeout(run, 4000); });
 })();
