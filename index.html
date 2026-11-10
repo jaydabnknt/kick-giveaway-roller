@@ -692,6 +692,11 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
 .kline { animation: kFadeIn .3s ease-out backwards; }
 .tabs button[aria-selected="true"], .set-nav button[aria-selected="true"] { transition-duration: .3s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after, dialog::backdrop { animation: none !important; transition: none !important; } }
+/* search box in a user's chat logs: drops in when the logs open */
+.log-find { display: flex; align-items: center; gap: 10px; animation: kDropIn .45s var(--ease, cubic-bezier(.16,1,.3,1)) both; }
+.log-find input { flex: 1; min-width: 0; }
+.log-find .meta { white-space: nowrap; }
+.kline mark { background: rgba(83,252,24,.28); color: inherit; border-radius: 2px; padding: 0 1px; }
 </style>
 <script>
 // Pop-ups fade out for a moment when closed, like Kick's.
@@ -838,6 +843,7 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
       <div id="logUserView" style="display:grid;gap:12px" hidden>
         <div class="row"><button class="btn" type="button" id="logBack">← All users</button></div>
         <div class="log-head" id="logHead"></div>
+        <div class="log-find" id="logFind"><input type="search" id="logFindQ" placeholder="Search this user's messages" autocomplete="off" spellcheck="false" aria-label="Search this user's messages"><span class="meta" id="logFindN"></span></div>
         <div id="logMsgs" class="kchat"><button class="btn kmore" type="button" id="logMsgMore" hidden>Load older messages</button><div id="logLines"></div></div>
         <div class="row" id="logShareBar" hidden><button class="btn primary" type="button" id="logShareBtn" disabled>Tap messages to pick them</button></div>
         <div class="row share-out" id="logShareOut" hidden></div>
@@ -3773,10 +3779,26 @@ if (params.has("mod") && !OVERLAY) {
   }
   let logUser = null, logMsgs = [];
   let picking = false; const picked = new Set();
+  let findTerm = "";
+  // marks every place the search words appear in a line's message text
+  function markFind(el, term) {
+    if (!term) return;
+    const lower = term.toLowerCase(), walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const t = node.nodeValue, tl = t.toLowerCase(); let i = tl.indexOf(lower); if (i < 0) continue;
+      const frag = document.createDocumentFragment(); let at = 0;
+      while (i >= 0) { frag.append(t.slice(at, i)); const m = document.createElement("mark"); m.textContent = t.slice(i, i + term.length); frag.append(m); at = i + term.length; i = tl.indexOf(lower, at); }
+      frag.append(t.slice(at)); node.replaceWith(frag);
+    }
+  }
   function logDraw() {   // oldest at the top, newest at the bottom
     const out = kickLines(logMsgs.slice().reverse(), logUser, logOpenName);
-    for (const l of out) if (l.dataset.id && picked.has(Number(l.dataset.id))) l.classList.add("sel");
-    $("logLines").replaceChildren(...(out.length ? out : [empty("No messages.")]));
+    for (const l of out) {
+      if (l.dataset.id && picked.has(Number(l.dataset.id))) l.classList.add("sel");
+      if (findTerm && l.classList.contains("kline")) markFind(l.lastElementChild, findTerm);
+    }
+    $("logLines").replaceChildren(...(out.length ? out : [empty(findTerm ? "No messages with that." : "No messages.")]));
   }
   // Select mode: tap messages to pick them, then the green button makes a public link with just those.
   const pickUi = () => {
@@ -3819,14 +3841,17 @@ if (params.has("mod") && !OVERLAY) {
       logOpen(j.user.uid);
     } catch (e) { if (e.message !== "signin") alert("Couldn't load: " + e.message); }
   }
-  async function logOpen(uid, more, back) {
+  async function logOpen(uid, more, back, refind) {
     const box = $("logMsgs");
-    if (!more && !back && logUid && logUid !== uid) logStack.push(logUid);
-    if (!more) { $("logSeg").hidden = true; picking = false; picked.clear(); $("logShareBar").hidden = true; $("logShareOut").hidden = true; $("logMsgs").classList.remove("picking"); logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
+    if (!more && !back && !refind && logUid && logUid !== uid) logStack.push(logUid);
+    if (!more && !refind) { findTerm = ""; $("logFindQ").value = ""; $("logFindN").textContent = ""; const f = $("logFind"); f.style.animation = "none"; void f.offsetWidth; f.style.animation = ""; }   // a new person: empty search, and it drops in again
+    if (!more) { $("logSeg").hidden = true; picking = false; picked.clear(); $("logShareBar").hidden = true; $("logShareOut").hidden = true; $("logMsgs").classList.remove("picking"); logUid = uid; $("logBack").textContent = logStack.length ? "← Back" : "← All users"; msgCursor = 0; logMsgs = []; if (!refind) logUser = null; $("logUsersView").hidden = true; $("logUserView").hidden = false; if (!refind) $("logHead").replaceChildren(); $("logLines").replaceChildren(empty("Loading…")); $("logMsgMore").hidden = true; }
     try {
-      const j = await logApi("?uid=" + logUid + (more ? "&before=" + msgCursor : ""));
-      if (uid !== logUid) return;
-      if (!more && j.user) {
+      const term = findTerm;
+      const j = await logApi("?uid=" + logUid + (term ? "&s=" + encodeURIComponent(term) : "") + (more ? "&before=" + msgCursor : ""));
+      if (uid !== logUid || term !== findTerm) return;   // you typed more while this was loading
+      if (!more) $("logFindN").textContent = term ? (j.count || 0).toLocaleString() + (j.count === 1 ? " match" : " matches") : "";
+      if (!more && !refind && j.user) {
         logUser = j.user;
         const info = document.createElement("div"), n = document.createElement("b"), m = document.createElement("div");
         n.textContent = j.user.name; if (j.user.color) n.style.color = j.user.color; m.className = "meta"; m.textContent = (j.count || 0) + " messages · first seen " + stamp(j.user.first);
@@ -3844,6 +3869,11 @@ if (params.has("mod") && !OVERLAY) {
   $("logQ").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => logList(false), 350); });
   $("logMore").addEventListener("click", () => logList(true));
   $("logMsgMore").addEventListener("click", () => logOpen(logUid, true));
+  let findT = 0;
+  $("logFindQ").addEventListener("input", () => {
+    clearTimeout(findT);
+    findT = setTimeout(() => { const v = $("logFindQ").value.trim().slice(0, 80); if (v === findTerm) return; findTerm = v; logOpen(logUid, false, false, true); }, 350);
+  });
   $("logBack").addEventListener("click", () => { if (logStack.length) { logOpen(logStack.pop(), false, true); return; } logUid = 0; $("logUserView").hidden = true; $("logUsersView").hidden = false; $("logSeg").hidden = false; logList(false); });
   // ---- Channels subcategory: every chat that's logged; add log-only channels by name ----
   const lview = v => {
