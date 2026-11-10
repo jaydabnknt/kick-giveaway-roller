@@ -24,14 +24,17 @@ function names(o, re, out = new Set(), d = 0) {   // names inside arrays/objects
   return out;
 }
 function clean(slug, g) {
-  const L = g.list || {}, D = g.detail || {}, both = { L, D };
-  const prov = findKey(both, /^provider$|providerName|^studio$/i);
+  const L = g.list || {}, D = g.detail || {}, H = g.html || {}, both = { L, D };
+  let prov = findKey(both, /^provider$|providerName|^studio$/i);
+  if (!prov) { const m = strings(H).join("\n").match(/"provider"\s*:\s*\{[^}]*?"name"\s*:\s*"([^"]+)"/i) || strings(H).join("\n").match(/\bby ([A-Z][\w&' .-]{2,40}?)(?: -|\.|,| \|)/); if (m) prov = m[1]; }
   let rtp = num(findKey(both, /rtp/i)), maxWin = num(findKey(both, /max.?(win|multiplier|payout|exposure)/i));
-  const txt = strings(both).join("\n");
+  const txt = strings({ both, H }).join("\n");
   if (rtp == null) { const m = txt.match(/RTP[^0-9]{0,30}(\d{2}(?:[.,]\d+)?)\s*%/i); if (m) rtp = num(m[1].replace(",", ".")); }
   if (maxWin == null) { const m = txt.match(/max(?:imum)?\.?\s*win[^0-9x]{0,30}x?\s*([\d,.]+)\s*x?/i); if (m) maxWin = num(m[1]); }
   if (rtp != null && rtp <= 1) rtp = +(rtp * 100).toFixed(2);
-  const tags = [...names(both, /tag|categor|theme|feature|group|mechanic/i)].filter(t => t.length < 40);
+  const tagSet = names(both, /tag|categor|theme|feature|group|mechanic/i);
+  for (const bit of (H.bits || [])) { const m = bit.match(/"(?:tags?|categor\w*)"\s*:\s*\[([^\]]*)/i); if (m) for (const t of m[1].matchAll(/"name"\s*:\s*"([^"]+)"/g)) tagSet.add(t[1]); }
+  const tags = [...tagSet].filter(t => t.length < 40);
   return {
     name: L.name || L.title || D.name || slug, slug,
     provider: typeof prov === "string" ? prov : prov && (prov.name || prov.title) || "",

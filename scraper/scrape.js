@@ -117,9 +117,9 @@
     try {
       let { listReq, detailReq, prog = { phase: "list", offset: 0, done: 0 }, slugs = [], testFast: tf } = await S.get(["listReq", "detailReq", "prog", "slugs", "testFast"]);
       testFast = !!tf;
-      if (!listReq) { if (!(await learnList())) return; listReq = (await S.get("listReq")).listReq; }
+      if (!listReq && prog.phase === "list") { if (!(await domList(slugs, prog))) return; detailReq = (await S.get("detailReq")).detailReq; }
       const have = new Set(slugs);
-      while (prog.phase === "list" && !stop) {
+      while (listReq && prog.phase === "list" && !stop) {
         const r = await call({ ...listReq.req, variables: setPath(listReq.req.variables, listReq.off, prog.offset) });
         if (!r.ok) { if (stop) break; await S.set({ auto: false }); await status({ state: "error", note: "Couldn't read the slot list: " + r.error }); return; }
         const games = gamesIn(r.data).items; let fresh = 0;
@@ -138,8 +138,7 @@
         await status({ state: "running", note: "Learning how slot details load…" });
         for (let i = 0; i < 15 && !(await S.get("detailReq")).detailReq; i++) await wait(1000);
         detailReq = (await S.get("detailReq")).detailReq;
-        prog.phase = detailReq ? "detail" : "done";
-        if (!detailReq) stopNote = "Got the slot list, but couldn't learn how slot details load, so there's no RTP or max win.";
+        prog.phase = detailReq ? "detail" : "html";   // no request to repeat: read each slot's page instead
         await S.set({ prog });
       }
       while (prog.phase === "detail" && !stop) {
@@ -155,13 +154,72 @@
         await status({ state: "running", note: `Reading slot details: ${prog.done} of ${slugs.length}.` });
         await pace();
       }
+      while (prog.phase === "html" && !stop) {
+        if (prog.done >= slugs.length) { prog.phase = "done"; break; }
+        const slug = slugs[prog.done], k = "g:" + slug;
+        let html = "", st = 0;
+        try { const res = await fetch(location.origin + "/casino/games/" + encodeURIComponent(slug), { credentials: "include" }); st = res.status; html = await res.text(); } catch (e) {}
+        if (st === 403 || st === 429) { stopNote = `Stake asked us to slow down (status ${st}), so it stopped. Wait an hour, then tap Start to carry on.`; break; }
+        const cur = (await S.get(k))[k] || {};
+        cur.html = pagePick(html);
+        prog.done++;
+        await S.set({ [k]: cur, prog });
+        await status({ state: "running", note: `Reading slot pages: ${prog.done} of ${slugs.length}.` });
+        await pace();
+      }
       await S.set({ prog, auto: false });
       await status(prog.phase === "done" ? { state: "done", note: `Finished: ${slugs.length} slots. ${stopNote ? stopNote + " " : ""}Download the file.` } : { state: "paused", note: stopNote || "Paused. Tap Start to carry on." });
     } finally { running = false; }
   }
+  // Keeps only the useful bits of a slot's page: its title, description, and short pieces of text around words
+  // like RTP, max win, provider and tags (enough for the export to read them, and for Claude to check).
+  function pagePick(html) {
+    if (!html) return null;
+    const meta = n => { const m = html.match(new RegExp(`<meta[^>]+(?:name|property)="${n}"[^>]+content="([^"]*)"`, "i")); return m ? m[1] : ""; };
+    const bits = [];
+    for (const re of [/rtp/gi, /max(imum)?[ _-]?(win|multiplier|payout)/gi, /"provider"/gi, /volatil/gi, /"tags?"/gi, /"categor/gi, /"edge"/gi]) {
+      let m, c = 0;
+      while ((m = re.exec(html)) && c < 3) { bits.push(html.slice(Math.max(0, m.index - 80), m.index + 220).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")); c++; }
+    }
+    return { title: (html.match(/<title>([^<]*)/i) || [])[1] || "", description: meta("description") || meta("og:description"), bits };
+  }
   // Goes to another Stake page. The scraper picks up again there by itself (the "auto" flag).
   const go = path => location.assign(location.origin + path);
   const onSlotsPage = () => /\/casino\/group\/slots/i.test(location.pathname);
+  // Reads the slot list straight off Stake's Slots page: collects every game link, presses "Load more" (and
+  // scrolls, for pages that load as you scroll) until no new slots show up a few times in a row.
+  async function domList(slugs, prog) {
+    if (!onSlotsPage()) { await status({ state: "running", note: "Opening Stake's Slots page…" }); go("/casino/group/slots"); return false; }
+    const have = new Set(slugs);
+    const pretty = x => x.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    let quiet = 0;
+    await wait(3000);
+    while (!stop && quiet < 4) {
+      const put = {};
+      for (const a of document.querySelectorAll('a[href*="/casino/games/"]')) {
+        const m = a.getAttribute("href").match(/\/casino\/games\/([^/?#]+)/i); if (!m) continue;
+        const slug = decodeURIComponent(m[1]); if (have.has(slug)) continue;
+        const img = a.querySelector("img");
+        const name = (a.getAttribute("aria-label") || (img && img.alt) || a.textContent || "").trim() || pretty(slug);
+        have.add(slug); slugs.push(slug);
+        put["g:" + slug] = { list: { slug, name, thumbnailUrl: img ? img.currentSrc || img.src : "" } };
+      }
+      const n = Object.keys(put).length;
+      quiet = n ? 0 : quiet + 1;
+      await S.set({ ...put, slugs, prog });
+      await status({ state: "running", note: `Reading the Slots page: ${slugs.length} slots so far.` });
+      const btn = [...document.querySelectorAll("button, a")].find(b => /^\s*(load|show|view) more/i.test(b.textContent || ""));
+      if (btn) { btn.scrollIntoView({ block: "center" }); btn.click(); }
+      else { scrollTo(0, document.body.scrollHeight); document.querySelectorAll("*").forEach(el => { if (el.scrollHeight > el.clientHeight + 200 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) el.scrollTop = el.scrollHeight; }); }
+      await pace();
+    }
+    if (stop) return false;
+    if (!slugs.length) { await S.set({ auto: false }); await status({ state: "error", note: "Couldn't find any slots on Stake's Slots page. Tap Download file and send Claude stake-slots-raw.json." }); return false; }
+    prog.phase = "needDetail";   // run() learns the details request next (or uses the one it already knows)
+    const { detailReq } = await S.get("detailReq"); if (detailReq) prog.phase = "detail";
+    await S.set({ prog });
+    return true;
+  }
   // Learns the slot list request: opens the Slots page and presses its "Load more" button.
   async function learnList() {
     if (!onSlotsPage()) { await status({ state: "running", note: "Opening Stake's Slots page…" }); go("/casino/group/slots"); return false; }
