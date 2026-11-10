@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 rm -rf /tmp/tbscr && mkdir -p /tmp/tbscr/chrome /tmp/tbscr/firefox
-FILES="main.js scrape.js popup.html popup.js export.html export.js icon.png"
+FILES="main.js scrape.js popup.html popup.js export.html export.js icon.png seed.js"
 cp $FILES manifest.json /tmp/tbscr/chrome/
 cp $FILES /tmp/tbscr/firefox/
 python3 - <<'PY'

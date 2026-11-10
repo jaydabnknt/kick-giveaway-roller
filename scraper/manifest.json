@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "ToolBot Slot Scraper",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "One-time tool: reads Stake's slot list from your own logged-in tab and saves it as a file for ToolBot.",
   "permissions": ["storage", "unlimitedStorage", "tabs"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     { "matches": ["<all_urls>"], "js": ["main.js"], "run_at": "document_start", "world": "MAIN" },
-    { "matches": ["<all_urls>"], "js": ["scrape.js"], "run_at": "document_start" }
+    { "matches": ["<all_urls>"], "js": ["seed.js", "scrape.js"], "run_at": "document_start" }
   ],
   "action": { "default_popup": "popup.html", "default_title": "ToolBot Slot Scraper" },
   "icons": { "128": "icon.png" }

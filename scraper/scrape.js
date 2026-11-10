@@ -117,6 +117,11 @@
     try {
       let { listReq, detailReq, prog = { phase: "list", offset: 0, done: 0 }, slugs = [], testFast: tf } = await S.get(["listReq", "detailReq", "prog", "slugs", "testFast"]);
       testFast = !!tf;
+      if (!slugs.length) {   // slots Jay already collected in an earlier run come with the extension: they're kept and not collected again
+        const seed = typeof TB_SEED !== "undefined" ? TB_SEED : [];
+        const put = {}; for (const g of seed) if (!put["g:" + g.slug]) { slugs.push(g.slug); put["g:" + g.slug] = { list: g }; }
+        if (slugs.length) await S.set({ ...put, slugs });
+      }
       if (!listReq && prog.phase === "list") { if (!(await domList(slugs, prog))) return; ({ listReq, detailReq } = await S.get(["listReq", "detailReq"])); }
       const have = new Set(slugs);
       while (listReq && prog.phase === "list" && !stop) {
@@ -194,7 +199,7 @@
     const pretty = x => x.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     let quiet = 0;
     await wait(3000);
-    while (!stop && quiet < 4) {
+    while (!stop && quiet < 3) {
       const put = {};
       for (const a of document.querySelectorAll('a[href*="/casino/games/"]')) {
         const m = a.getAttribute("href").match(/\/casino\/games\/([^/?#]+)/i); if (!m) continue;
@@ -204,15 +209,16 @@
         have.add(slug); slugs.push(slug);
         put["g:" + slug] = { list: { slug, name, thumbnailUrl: img ? img.currentSrc || img.src : "" } };
       }
-      const n = Object.keys(put).length;
-      quiet = n ? 0 : quiet + 1;
       await S.set({ ...put, slugs, prog });
       await status({ state: "running", note: `Reading the Slots page: ${slugs.length} slots so far.` });
       const btn = [...document.querySelectorAll("button, a")].find(b => /^\s*(load|show|view) more/i.test(b.textContent || ""));
+      // Load the next page right away, then carry on the moment its slots show up (or after 10 seconds).
+      const before = document.querySelectorAll('a[href*="/casino/games/"]').length;
       if (btn) { btn.scrollIntoView({ block: "center" }); btn.click(); }
       else { scrollTo(0, document.body.scrollHeight); document.querySelectorAll("*").forEach(el => { if (el.scrollHeight > el.clientHeight + 200 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) el.scrollTop = el.scrollHeight; }); }
-      await wait(1500);   // let the new slots load
-      await pace();
+      for (let t = 0; t < 50 && !stop && document.querySelectorAll('a[href*="/casino/games/"]').length <= before; t++) await wait(200);
+      quiet = document.querySelectorAll('a[href*="/casino/games/"]').length > before ? 0 : quiet + 1;   // stop once the page stops growing
+      await wait(150);
     }
     if (stop) return false;
     if (!slugs.length && (await S.get("listReq")).listReq) return true;   // the page had no links, but its list request was learned: use that
