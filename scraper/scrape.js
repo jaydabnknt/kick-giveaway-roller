@@ -71,7 +71,8 @@
     const shape = (v, dep = 0) => dep > 9 ? "…" : Array.isArray(v) ? (v.length ? [`${v.length} items`, shape(v[0], dep + 1)] : []) :
       v && typeof v === "object" ? Object.fromEntries(Object.entries(v).slice(0, 30).map(([k, x]) => [k, shape(x, dep + 1)])) :
       typeof v === "string" ? v.slice(0, 60) : v;
-    const seenLog = (st.seenLog || []).concat({ page: location.pathname, op: d.req.operationName, vars: d.req.variables || {}, query: String(d.req.query).slice(0, 1500), shape: shape(d.data), n: games.length, gameish: found.gameish, sample: games.slice(0, 3).map(g => g.name || g.title), keys: games[0] ? Object.keys(games[0]).slice(0, 20) : [] }).slice(-40);
+    const aboutGames = /game|slug|group|kurator|provider/i.test(String(d.req.query)) && !/balance|houseBetList|deposit/i.test(String(d.req.query));
+    const seenLog = !aboutGames ? (st.seenLog || []) : (st.seenLog || []).concat({ page: location.pathname, op: d.req.operationName, vars: d.req.variables || {}, query: String(d.req.query).slice(0, 1500), shape: shape(d.data), n: games.length, gameish: found.gameish, sample: games.slice(0, 3).map(g => g.name || g.title), keys: games[0] ? Object.keys(games[0]).slice(0, 20) : [] }).slice(-40);
     await S.set({ seenLog });
     const score = found.gameish * 100 + (/\/casino\/group\/slots/i.test(location.pathname) ? 50 : 0) + Math.min(games.length, 49);
     if (pg && games.length >= 5 && found.gameish >= 1 && (!st.listReq || (!running && score >= (st.listReq.score || 0)))) {

@@ -28,7 +28,7 @@
     const walk = (v, depth) => {
       if (!v || typeof v !== "object" || depth > 12) return;
       if (Array.isArray(v)) { v.forEach(x => walk(x, depth + 1)); return; }
-      const g = gameOf(v), id = v.id || v.iid || (v.bet && v.bet.id);
+      const g = gameOf(v), id = v.betId || v.id || v.iid || (v.bet && v.bet.id);
       if (g && id && !ids.has(String(id))) {
         ids.add(String(id));
         const amt = v.amount ?? (v.bet && v.bet.amount) ?? v.betAmount ?? null;
@@ -38,7 +38,13 @@
       }
       for (const k of Object.keys(v)) walk(v[k], depth + 1);
     };
-    walk(json, 0);
+    // Stake's bet list answer also carries your recent finished bets (houseBetList). When it has lists named
+    // "active" (userActiveBetsOnActiveGames and the like), read only those, so finished bets never count.
+    const activeLists = [];
+    const findActive = (v, d) => { if (!v || typeof v !== "object" || d > 8) return;
+      for (const k of Object.keys(v)) { if (/active/i.test(k) && Array.isArray(v[k])) activeLists.push(v[k]); else findActive(v[k], d + 1); } };
+    findActive(json, 0);
+    if (activeLists.length) activeLists.forEach(l => walk(l, 1)); else walk(json, 0);
     return out;
   }
 
