@@ -712,8 +712,11 @@ export default {
       }
       if (uid) {
         const user = await db.prepare("SELECT uid, name, pic, first, last, color FROM users WHERE uid = ?").bind(uid).first();
-        const msgs = (await db.prepare("SELECT id, ch, text, at, badges FROM msgs WHERE uid = ? AND id < ? ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15).all()).results;
-        const count = before ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM msgs WHERE uid = ?").bind(uid).first()).n;
+        // ?s= searches this user's messages (any part of the text, any case); count is then the number of matches
+        const sq = String(url.searchParams.get("s") || "").trim().toLowerCase().replace(/[%_\\]/g, "\\$&").slice(0, 80);
+        const like = "%" + sq + "%";
+        const msgs = (await db.prepare("SELECT id, ch, text, at, badges FROM msgs WHERE uid = ? AND id < ? AND (? = '' OR lower(text) LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 100").bind(uid, before || 9e15, sq, like).all()).results;
+        const count = before ? undefined : (await db.prepare("SELECT COUNT(*) AS n FROM msgs WHERE uid = ? AND (? = '' OR lower(text) LIKE ? ESCAPE '\\')").bind(uid, sq, like).first()).n;
         return json({ ok: true, user, msgs, count, more: msgs.length === 100 });
       }
       const q = String(url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase().replace(/[%_\\]/g, "\\$&").slice(0, 40);
