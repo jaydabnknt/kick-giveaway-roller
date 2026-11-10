@@ -1046,6 +1046,7 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
     <button type="button" role="tab" data-tab="roller" aria-selected="true">Roller</button>
     <button type="button" role="tab" data-tab="gtb" aria-selected="false"><span>GTB</span> <span class="badge" id="gtbBadge"></span></button>
     <button type="button" role="tab" data-tab="calls" aria-selected="false"><span><span class="long">Slot </span>Calls</span> <span class="badge" id="callsBadge"></span></button>
+    <button type="button" role="tab" data-tab="slots" aria-selected="false" id="slotsTabBtn" hidden>Slots</button>
   </nav>
 
   <div class="grid" data-view="roller">
@@ -3172,6 +3173,11 @@ function renderAcct() {
   if (OVERLAY) return;
   $("menuAdmin").hidden = !(streamer.tok && streamer.slug === "jaydab4ngnt");   // only the owner sees Admin in the menu
   $("menuAdd").hidden = !!streamer.tok;   // signed in means the bot is already in their chat
+  if ($("slotsTabBtn")) {   // the Slots tab is only on the owner's account
+    const own = !!(streamer.tok && streamer.slug === "jaydab4ngnt");
+    $("slotsTabBtn").hidden = !own;
+    try { if (own ? slotsWanted : activeTab === "slots") showTab(own ? "slots" : "roller"); } catch (e) {}   // sign-in can land before or after the tabs are set up
+  }
   for (const top of document.querySelectorAll("header.top")) {
     let slot = top.querySelector(".acct");
     if (!slot) { slot = document.createElement("div"); slot.className = "acct"; top.append(slot); }
@@ -4037,10 +4043,12 @@ if (OVERLAY && params.get("ch") && params.get("raids") !== "0") watchRaids(chanS
 // ---------- tabs ----------
 // One chat connection serves both tabs; the Kick chat panel moves to whichever tab is showing.
 const TAB_KEY = "kick-giveaway-tab";
-let activeTab = "roller";
+let activeTab = "roller"; var slotsWanted = false;
 const tabBtns = document.querySelectorAll(".tabs [data-tab]");
 function showTab(name) {
-  activeTab = ["gtb", "calls"].includes(name) && !document.body.classList.contains("guest") ? name : "roller";   // Slots tab is switched off for now; its code is kept
+  const okTab = ["gtb", "calls"].includes(name) || (name === "slots" && isOwner() && !OVERLAY);   // Slots is owner-only
+  activeTab = okTab && !document.body.classList.contains("guest") ? name : "roller";
+  slotsWanted = name === "slots" && activeTab !== "slots";   // asked for Slots before the owner's sign-in was known: open it once it is
   if (activeTab === "slots" && !sl.loaded && !OVERLAY) loadSlots();
   tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === activeTab)));
   document.querySelectorAll("[data-view]").forEach(v => (v.hidden = v.dataset.view !== activeTab));
@@ -4052,7 +4060,7 @@ function showTab(name) {
 }
 tabBtns.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
-let startTab = location.hash.slice(1); if (!["gtb", "calls", "roller"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
+let startTab = location.hash.slice(1); if (!["gtb", "calls", "roller", "slots"].includes(startTab)) { try { startTab = localStorage.getItem(TAB_KEY); } catch (e) {} }
 showTab(OVERLAY === "calls" ? "calls" : OVERLAY ? "roller" : startTab);
 renderGtb(); showFinalRead();
 
