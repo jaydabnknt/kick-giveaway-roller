@@ -508,6 +508,21 @@ body.mod .acct { display: none; }
 .kchat .kday::before, .kchat .kday::after { content: ""; flex: 1; height: 1px; background: rgb(255 255 255 / .08); }
 .kchat .kmore { display: block; margin: 4px auto 8px; }
 body.sharepage > .wrap:not(#sharePage) { display: none !important; }
+body.verifypage > .wrap:not(#verifyPage) { display: none !important; }
+body.verifypage .acct { display: none; }
+#verifyPage { max-width: 760px; }
+.vf { display: grid; gap: 14px; }
+.vf-head { display: flex; align-items: flex-start; gap: 12px; } .vf-head h2 { margin: 0 0 2px; } .vf-head .btn { margin-left: auto; }
+.vf-status { padding: 12px 14px; border-radius: 4px; border: 1px solid #3a3e45; color: #c4c7cc; font-weight: 600; }
+.vf-status.ok { border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+.vf-status.bad { border-color: #ff6b6b80; background: #ff6b6b14; color: #ff8a8a; }
+.vf-rows { display: grid; border: 1px solid rgb(255 255 255 / .08); border-radius: 4px; }
+.vf-row { display: grid; gap: 4px; padding: 12px 14px; border-top: 1px solid rgb(255 255 255 / .08); min-width: 0; } .vf-row:first-child { border-top: 0; }
+.vf-row small { color: #8a9099; font-size: 12.5px; } .vf-row b { overflow-wrap: anywhere; font-weight: 600; } .vf-row .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+.vf-row .win { color: var(--accent); font-size: 17px; }
+.vf-more { border: 1px solid rgb(255 255 255 / .08); border-radius: 4px; padding: 10px 14px; } .vf-more summary { cursor: pointer; font-weight: 600; }
+.vf-more ol, .vf-more ul { margin: 10px 0 0; padding-left: 22px; display: grid; gap: 4px; color: #c4c7cc; overflow-wrap: anywhere; }
+.vf-pool li.win { color: var(--accent); font-weight: 700; }
 #sharePage { max-width: 760px; }
 #sharePage .kchat { max-height: none; }
 .log-head .btn { margin-left: auto; min-height: 34px; padding: 6px 14px; font-size: 13px; }
@@ -767,6 +782,22 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
   <section class="cp-box">
     <div class="log-head" id="shareHead"></div>
     <div class="kchat"><div id="shareLines"><p class="hint" style="padding:12px">Loading…</p></div></div>
+  </section>
+</div>
+
+<div class="wrap" id="verifyPage" hidden>
+  <header class="top">
+    <div class="brand">
+      <a class="h1link" href="./" aria-label="Home"><h1>Tool<span>Bot</span></h1></a>
+    </div>
+  </header>
+  <section class="cp-box vf">
+    <div class="vf-head"><div><h2 id="vfTitle">Giveaway roll</h2><div class="meta" id="vfWhen"></div></div><button class="btn" type="button" id="vfCopy">Copy link</button></div>
+    <div class="vf-status" id="vfStatus">Checking…</div>
+    <div class="vf-rows" id="vfRows"></div>
+    <details class="vf-more"><summary>How to check it yourself</summary><ol id="vfHow"></ol></details>
+    <details class="vf-more"><summary id="vfPoolSum">Ticket pool</summary><ol class="vf-pool" id="vfPool"></ol></details>
+    <details class="vf-more" id="vfNearBox" hidden><summary>Other rolls on this channel within an hour</summary><ul class="vf-near" id="vfNear"></ul></details>
   </section>
 </div>
 
@@ -1514,8 +1545,8 @@ dialog.closing::backdrop { animation: kFadeOut .22s ease-in forwards; }
     <details class="sub">
       <summary>How the roll stays fair</summary>
       <div class="how">
-        <p><b>Random push.</b> The launch speed and the starting slot both come from <code>crypto.getRandomValues</code>, the browser's cryptographic random source. Nothing about the result is chosen in advance.</p>
-        <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, and nothing nudges it toward a name. It stops wherever it stops, and the line picks the name it's touching. The fixed time step means a slow device changes how smooth it looks, never where it lands.</p>
+        <p><b>Checkable winner.</b> When you're signed in, ToolBot makes a random seed for each roll, and the winner is ticket number SHA-256(seed) mod the number of tickets, from the alphabetical ticket list. The streamer can't pick the seed, every roll is saved and numbered, and the chat message links to a page where anyone can check it. The reel then spins with real physics and a random launch speed and comes to rest on that winner. Signed out, the roll uses <code>crypto.getRandomValues</code> in your browser, with no verify link.</p>
+        <p><b>Real physics.</b> The reel is simulated at 480 steps per second with air drag and rolling friction, with no snapping. The fixed time step means a slow device changes how smooth it looks, never where it lands.</p>
         <p><b>No order bias.</b> Entries are reshuffled before every roll and the reel starts on a uniformly random slot, so join order or first letter can't tilt the odds. Each person gets one slot however often they type. With subscriber luck, subscribers get a second slot, placed randomly and kept apart from their first whenever possible.</p>
       </div>
     </details>
@@ -1853,10 +1884,41 @@ function buildReel(entries) {
   }
   return best;
 }
-function startRoll() {
-  if (OVERLAY || rolling || state.entries.size < 2) return;
+// Verifiable rolls (signed-in streamers): ToolBot picks a random seed and works out the winner from SHA-256(seed),
+// so the streamer can't pick the result, and anyone can check it later at ?verify=<id>. The reel still runs the
+// same real physics: a random launch speed, with the start placed so it comes to rest on the winner's slot.
+let rollReq = false, lastVerify = null;
+function aimRoll(reel, winner) {
+  const slots = reel.map((n, i) => n === winner ? i : -1).filter(i => i >= 0);
+  const target = slots[randInt(slots.length)];
+  const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
+  const s = { y: 0, v: v0, t: 0, done: false }; while (!s.done && s.t < 60) physStep(s);
+  const yEnd = (target + randFloat() * 0.8 - 0.4) * H;   // somewhere inside the slot, never on a divider
+  return { y0: yEnd - s.y, v0 };
+}
+async function startRoll() {
+  if (OVERLAY || rolling || rollReq || state.entries.size < 2) return;
   cancelClaim();
-  const reel = buildReel([...state.entries.values()]);
+  const entries = [...state.entries.values()];
+  const reel = buildReel(entries);
+  lastVerify = null;
+  const channel = $("channel").value.trim();
+  if (signedIn() && channel) {
+    rollReq = true; els.roll.disabled = true; els.roll.textContent = "Rolling…";
+    try {
+      const pool = []; for (const e of entries) { pool.push(e.name); if (S.luck && e.sub) pool.push(e.name); }
+      const r = await fetchWithTimeout(BOT_URL + "/roll", 10000, { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + streamer.tok },
+        body: JSON.stringify({ channel, pool, keyword: S.entryMode === "keyword" ? S.keyword : "anyone who chats", luck: !!S.luck }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.ok && reel.includes(j.winner)) {
+        lastVerify = j; rollReq = false;
+        const a = aimRoll(reel, j.winner);
+        beginRoll(reel, a.y0, a.v0); ovSendRoll(reel, a.y0, a.v0);
+        return;
+      }
+    } catch (e) {}
+    rollReq = false;   // ToolBot unreachable: roll here instead (no verify link this time)
+  }
   const startIdx = randInt(reel.length);
   const v0 = PHYS.vMin + (PHYS.vMax - PHYS.vMin) * randFloat();
   beginRoll(reel, startIdx * H, v0);
@@ -1902,12 +1964,17 @@ function finish() {
     `<span>start slot <b>${launch.startIdx + 1} of ${N}</b></span>` +
     `<span>travelled <b>${travelled.toFixed(1)} names</b></span>` +
     `<span>settled in <b>${sim.t.toFixed(2)} s</b></span>`;
+  if (!OVERLAY && lastVerify && lastVerify.winner === name) {
+    const a = document.createElement("a"); a.href = "?verify=" + encodeURIComponent(lastVerify.id); a.target = "_blank"; a.rel = "noopener"; a.textContent = "Verify this roll";
+    const sp = document.createElement("span"); sp.append(a); els.receipt.append(sp);
+  }
   if (OVERLAY) return;
   els.winnerActions.hidden = false;
   els.winnerActions.dataset.name = name;
   ovSendGiveaway();
-  botSay("winner", { name, n: N, claim: !!currentRoom, secs: 30 });   // with chat connected, the 30-second claim starts below
-  state.history.unshift({ name, of: N, at: launch.at.toISOString() }); renderHistory();
+  const verify = lastVerify && lastVerify.winner === name ? lastVerify.id : "";
+  botSay("winner", { name, n: N, claim: !!currentRoom, secs: 30, verify });   // with chat connected, the 30-second claim starts below
+  state.history.unshift({ name, of: N, at: launch.at.toISOString(), verify }); renderHistory();
   if (S.autoRemove) { removeEntry(name.toLowerCase()); save(); renderEntries(); }
   save(); updateRollBtn();
   startClaim(name);
@@ -2008,7 +2075,9 @@ function renderHistory() {
   els.history.replaceChildren(...state.history.slice(0, 20).map(h => {
     const d = document.createElement("div"); const n = document.createElement("span"); n.textContent = `${h.name}  ·  1 of ${h.of}`;
     const t = document.createElement("time"); const dt = new Date(h.at); t.dateTime = h.at; t.textContent = dt.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    d.append(n, t); return d;
+    d.append(n);
+    if (h.verify) { const a = document.createElement("a"); a.href = "?verify=" + encodeURIComponent(h.verify); a.target = "_blank"; a.rel = "noopener"; a.textContent = "verify"; a.style.marginLeft = "8px"; d.append(a); }
+    d.append(t); return d;
   }));
 }
 els.clearHistory.addEventListener("click", () => { state.history = []; save(); renderHistory(); });
@@ -3047,7 +3116,7 @@ if (!OVERLAY) {
 }
 // The tools page is only for approved streamers (their channel has ToolBot, added with a key from Jay or an
 // approved request). Signed in, the channel box is locked to their own channel.
-const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && (params.has("tools") || !!location.hash);
+const ON_TOOLS = !OVERLAY && !params.has("c") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && !params.has("verify") && (params.has("tools") || !!location.hash);
 let meChecked = false;
 const loginUrl = () => BOT_URL + "/login?back=" + encodeURIComponent(location.search);
 let autoConnected = false;
@@ -3192,7 +3261,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") setMenu(fals
 // One page per channel that uses ToolBot: its commands and who can use them (what !commands links to), its
 // own commands added with !tb add, its clip markers, and a way for the streamer to add the bot.
 // Home page: the bare site address. The tools live at ?tools (and still open for old links that carry other params).
-const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && !location.hash;
+const HOME = !OVERLAY && !params.has("c") && !params.has("tools") && !params.has("add") && !params.has("admin") && !params.has("settings") && !params.has("mod") && !params.has("log") && !params.has("verify") && !location.hash;
 if (HOME) { document.body.classList.add("home"); $("homePage").hidden = false; document.title = "ToolBot"; }
 $("homeAdd").href = BOT_URL + "/allow"; $("menuAdd").href = BOT_URL + "/allow";
 if (HOME) {
@@ -3631,6 +3700,55 @@ if (params.has("log") && !OVERLAY) {
     $("shareHead").replaceChildren(av, info);
     $("shareLines").replaceChildren(...kickLines(j.msgs, user, null));
   }).catch(() => fail("Couldn't reach ToolBot right now. Try again in a minute."));
+}
+
+// ---------- verify a giveaway roll (?verify=<id>): public, recomputes everything in this browser ----------
+if (params.has("verify") && !OVERLAY) {
+  document.body.classList.add("verifypage"); $("verifyPage").hidden = false; document.title = "Verify roll · ToolBot";
+  const id = String(params.get("verify") || "").replace(/[^A-Za-z0-9_-]/g, "");
+  const st = (cls, t) => { $("vfStatus").className = "vf-status " + cls; $("vfStatus").textContent = t; };
+  $("vfCopy").addEventListener("click", () => { const u = location.href; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => { $("vfCopy").textContent = "Copied"; setTimeout(() => ($("vfCopy").textContent = "Copy link"), 1200); }).catch(() => prompt("Copy this link:", u)); });
+  const row = (label, value, cls) => {
+    const d = document.createElement("div"); d.className = "vf-row";
+    const s = document.createElement("small"); s.textContent = label;
+    const b = document.createElement("b"); b.textContent = value; if (cls) b.className = cls;
+    d.append(s, b); return d;
+  };
+  fetchWithTimeout(BOT_URL + "/roll?id=" + encodeURIComponent(id), 15000).then(async r => {
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) return st("bad", j.error || "This roll doesn't exist.");
+    const when = new Date(j.at);
+    $("vfTitle").textContent = j.ch + "'s giveaway";
+    $("vfWhen").textContent = when.toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " · roll #" + j.no + " on this channel";
+    // recompute: SHA-256 of the seed, then the first 13 hex digits as a number, mod the number of tickets
+    const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(j.seed)))].map(x => x.toString(16).padStart(2, "0")).join("");
+    const sorted = j.pool.slice().sort((a, b) => { const x = a.toLowerCase(), y = b.toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; });
+    const ticket = parseInt(hash.slice(0, 13), 16) % sorted.length;
+    const good = hash === j.hash && ticket === j.ticket && sorted[ticket] === j.winner && sorted.join("\n") === j.pool.join("\n");
+    st(good ? "ok" : "bad", good ? "✓ Verified: the winner matches the recomputed hash." : "✗ Doesn't match: the winner isn't what the seed gives.");
+    const people = new Set(sorted.map(n => n.toLowerCase())).size;
+    $("vfRows").replaceChildren(
+      row("Winner", j.winner, "win"),
+      row("Keyword", j.keyword || "—"),
+      row("Sub luck", j.luck ? "2x (subscribers get 2 tickets)" : "1x"),
+      row("Pool", `${people} ${people === 1 ? "entrant" : "entrants"}, ${sorted.length} tickets`),
+      row("Seed", j.seed, "mono"),
+      row("SHA-256 of the seed", hash, "mono"),
+      row("Winning ticket", `#${ticket + 1} of ${sorted.length}`));
+    const how = [
+      "Take the seed above exactly as written.",
+      "Work out its SHA-256 hash (any SHA-256 tool), and check it matches the one above.",
+      `Take the first 13 characters of the hash (${hash.slice(0, 13)}) as a hexadecimal number: ${parseInt(hash.slice(0, 13), 16).toLocaleString()}.`,
+      `Divide it by the number of tickets (${sorted.length}) and keep the remainder: ${ticket}. Add 1 for ticket #${ticket + 1}.`,
+      "Open the ticket pool below (sorted A to Z, subscribers twice with sub luck) and count to that ticket. That's the winner.",
+      "The seed starts with the time and ends with the channel. ToolBot makes it, not the streamer, and every roll on the channel is numbered, so re-rolls show up."];
+    $("vfHow").replaceChildren(...how.map(t => Object.assign(document.createElement("li"), { textContent: t })));
+    $("vfPoolSum").textContent = `Ticket pool (${sorted.length})`;
+    $("vfPool").replaceChildren(...sorted.map((n, i) => { const li = document.createElement("li"); li.textContent = n; if (i === ticket) li.className = "win"; return li; }));
+    const others = (j.near || []).filter(x => x.id !== j.id);
+    $("vfNearBox").hidden = !others.length;
+    $("vfNear").replaceChildren(...others.map(x => { const li = document.createElement("li"), a = document.createElement("a"); a.href = "?verify=" + encodeURIComponent(x.id); a.textContent = new Date(x.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " + x.winner; li.append(a); return li; }));
+  }).catch(() => st("bad", "Couldn't reach ToolBot right now. Try again in a minute."));
 }
 
 // ---------- mod tools (?mod) ----------
